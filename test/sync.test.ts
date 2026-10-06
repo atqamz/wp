@@ -63,6 +63,28 @@ test("rejects a body over the cap before parsing, with or without a content-leng
   assert.deepEqual(calls, []);
 });
 
+test("a streamed body one byte over the cap is rejected, exactly the cap is accepted", async () => {
+  const { db } = createDb();
+  const stream = (size: number) => {
+    const head = new TextEncoder().encode('{"mutations":[]}');
+    const bytes = new Uint8Array(size).fill(32);
+    bytes.set(head);
+    return new Request("https://wp.example.test/api/sync", { method: "POST", body: new ReadableStream({ start(c) { c.enqueue(bytes); c.close(); } }), duplex: "half" } as RequestInit);
+  };
+  assert.equal((await postSync(stream(MAX_BODY_BYTES + 1), db, "a")).status, 413);
+  assert.equal((await postSync(stream(MAX_BODY_BYTES), db, "a")).status, 200);
+});
+
+test("a body with an invalid UTF-8 byte inside a valid create is rejected, not repaired", async () => {
+  const { db, sqlite } = await fresh(project(1));
+  const text = JSON.stringify({ mutations: [task(4, 1, { title: "XX" })] });
+  const [head, tail] = text.split("XX");
+  const bytes = Buffer.concat([Buffer.from(head + "a"), Buffer.from([0xff]), Buffer.from("b" + tail)]);
+  const response = await postSync(new Request("https://wp.example.test/api/sync", { method: "POST", body: bytes }), db, "a");
+  assert.equal(response.status, 400);
+  assert.equal(count(sqlite, "items"), 1);
+});
+
 test("accepts a body of exactly the cap", async () => {
   const { db } = createDb();
   const padding = " ".repeat(MAX_BODY_BYTES - JSON.stringify({ mutations: [] }).length);
@@ -530,4 +552,57 @@ test("rows with data null or removed keys round-trip", async () => {
   assert.equal(stored(sqlite, "items", id(20))?.data, "{}");
   ok(await apply(db, [mutation("update", "items", id(20), { data: { pic: "Sam" } })]));
   assert.equal(stored(sqlite, "items", id(20))?.data, '{"pic":"Sam"}');
+});
+
+test("a later mutation of a request sees the earlier update of the same row", async () => {
+  const { db, sqlite } = await fresh(project(1), task(4, 1));
+  ok(await apply(db, [mutation("update", "items", id(4), { status: "done" }), mutation("update", "items", id(4), { status: "todo" })]));
+  assert.equal(stored(sqlite, "items", id(4))?.status, "todo");
+});
+
+test("removing a data key the row does not have is a no-op", async () => {
+  const { db, sqlite } = await fresh(project(1), vendor(20, 1, { data: { pic: "Sam" } }));
+  const rev = currentRev(sqlite);
+  ok(await apply(db, [mutation("update", "items", id(20), { data: { phone: null } })]));
+  assert.equal(currentRev(sqlite), rev);
+  assert.equal(stored(sqlite, "items", id(20))?.rev, rev);
+});
+
+test("a stored reference that is not loaded fails closed, and a stored reference in the same project passes", async () => {
+  const { db, sqlite } = await fresh(project(1), project(2), vendor(20, 1), planned(10, 1, { vendor_id: id(20) }), payment(30, 10, 1));
+  const moved = (await apply(db, [mutation("update", "budget_entries", id(10), { project_id: id(2) })])) as Rejection;
+  assert.equal(moved.status, 409);
+  assert.deepEqual(moved.errors, ["vendor_id: must belong to the same project"]);
+  ok(await apply(db, [mutation("update", "budget_entries", id(10), { currency: "USD" })]));
+  assert.equal(stored(sqlite, "budget_entries", id(10))?.currency, "USD");
+  const mismatch = (await apply(db, [mutation("update", "budget_entries", id(30), { amount: 5, currency: "EUR" })])) as Rejection;
+  assert.deepEqual(mismatch.errors, ["currency: must equal the currency of the planned row"]);
+});
+
+test("a stored reference whose target is gone fails closed", async () => {
+  const { db, sqlite } = await fresh(project(1), project(2), vendor(20, 1), planned(10, 1, { vendor_id: id(20) }));
+  sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.prepare("DELETE FROM items WHERE id = ?").run(id(20));
+  await rejected(apply(db, [mutation("update", "budget_entries", id(10), { project_id: id(2) })]), 409, 0, /vendor_id: must belong to the same project/);
+});
+
+test("a statement that fails inside the write batch leaves nothing written", async () => {
+  const { db, sqlite } = await fresh(project(1));
+  const before = { rev: currentRev(sqlite), items: count(sqlite, "items") };
+  let batches = 0;
+  const racing = {
+    ...db,
+    async batch(statements: Parameters<typeof db.batch>[0]) {
+      if (++batches === 2) sqlite.prepare("INSERT INTO items (id, kind, title, rev, created_at, updated_at) VALUES (?, 'task', 'raced', 9, ?, ?)").run(id(5), CLIENT_STAMP, CLIENT_STAMP);
+      return db.batch(statements);
+    },
+  };
+  await assert.rejects(apply(racing, [task(4, 1), task(5, 1), task(6, 1)]), /UNIQUE|PRIMARY|constraint/i);
+  assert.equal(stored(sqlite, "items", id(4)), undefined);
+  assert.equal(stored(sqlite, "items", id(6)), undefined);
+  assert.equal(stored(sqlite, "items", id(5))?.title, "raced");
+  assert.equal(currentRev(sqlite), before.rev);
+  assert.equal(count(sqlite, "items"), before.items + 1);
+  ok(await apply(db, [task(4, 1)]));
+  assert.equal(currentRev(sqlite), before.rev + 1);
 });

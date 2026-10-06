@@ -138,3 +138,13 @@ test("csv export rejects bad parameters with a Rejection and no index", async ()
     assert.equal("index" in body, false);
   }
 });
+
+test("imported rows may carry CR: it is quoted and a leading CR is guarded", async () => {
+  const { db, sqlite } = createDb();
+  await apply(db, [project(1), task(4, 1), task(5, 1, { sort: 1 })]);
+  sqlite.prepare("UPDATE items SET title = ? WHERE id = ?").run("a\rb", id(4));
+  sqlite.prepare("UPDATE items SET title = ? WHERE id = ?").run("\r=1", id(5));
+  const text = await (await get(db, "format=csv&table=items&kind=task")).text();
+  assert.ok(text.includes(`,"a\rb",`));
+  assert.ok(text.includes(`,"'\r=1",`));
+});

@@ -99,6 +99,7 @@ test("a token without an email string is rejected", async () => {
   const { authenticate } = setup();
   assert.equal(await authenticate(requestWith(await token({ email: null })), env), null);
   assert.equal(await authenticate(requestWith(await token({ email: 5 })), env), null);
+  assert.equal(await authenticate(requestWith(await token({ email: [emails.a] })), env), null);
 });
 
 for (const [name, secret] of [

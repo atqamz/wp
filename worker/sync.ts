@@ -29,7 +29,7 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
   Response.json(body, { status, headers: { "cache-control": "no-store", ...headers } });
 
 export const reject = (status: number, errors: string[], index?: number) =>
-  json({ status, errors, ...(index === undefined ? {} : { index }) }, status);
+  json({ status, errors, index } satisfies Rejection, status);
 
 const marks = (values: readonly unknown[]) => values.map(() => "?").join(", ");
 
@@ -92,12 +92,13 @@ const checkRefs = (world: World, name: TableName, before: Raw | undefined, after
   if (errors.length > 0 || name !== "budget_entries") return errors;
   if (!["project_id", "vendor_id", "budget_id", "currency"].some(changed)) return errors;
   for (const column of ["budget_id", "vendor_id"]) {
-    const [targetTable] = refs.budget_entries[column];
-    const target = after[column] === null ? undefined : world[targetTable].get(after[column] as string);
-    if (target && target.project_id !== after.project_id) errors.push(`${column}: must belong to the same project`);
+    if (after[column] === null) continue;
+    const target = world[refs.budget_entries[column][0]].get(after[column] as string);
+    if (target?.project_id !== after.project_id) errors.push(`${column}: must belong to the same project`);
   }
-  const planned = after.budget_id === null ? undefined : world.budget_entries.get(after.budget_id as string);
-  if (planned && planned.currency !== after.currency) errors.push("currency: must equal the currency of the planned row");
+  if (after.budget_id !== null && world.budget_entries.get(after.budget_id as string)?.currency !== after.currency) {
+    errors.push("currency: must equal the currency of the planned row");
+  }
   return errors;
 };
 
