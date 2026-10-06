@@ -23,7 +23,7 @@ Research and decisions as of 6 October 2026. This is a recommendation for you to
 | 11 | Sharing types | A `shared/` folder imported by relative path from `src/` and `worker/`; three `tsconfig` files | No package, no codegen (§5.5) |
 | 12 | D1 access | `prepare().bind()` and `batch()`, no ORM | Small queries, already written in brainstorm §5.3 |
 | 13 | Migrations | SQL files + `wrangler d1 migrations apply`, run in CI before the build and deploy | Built into D1; a failed migration is rolled back automatically |
-| 14 | Tests | `node --test` (TypeScript directly, Node 24) for `shared/`, `src/domain/` and the Worker's pure code; no component tests | Zero test framework; `vitest` only when views gain logic (§5.1) |
+| 14 | Tests | `node --test` (TypeScript directly, newest Node) for `shared/`, `src/domain/` and the Worker's pure code; no component tests | Zero test framework; `vitest` only when views gain logic (§5.1) |
 | 15 | PWA and service worker | A hand-written service worker (about 25 lines) + a 20-line Vite plugin that stamps its precache list. Not `vite-plugin-pwa` | 0 extra packages instead of +329; trigger to switch in §5.7 |
 | 16 | Auth | Access + Google IdP, hostname-based app, allow policy for two emails; the Worker verifies the JWT with `jose` | What you asked for, and zero login code |
 | 17 | The two emails | Local password store (source), Worker secret, and the Access policy. Not in the repo, not in GitHub secrets, **not in D1** (the Worker turns the verified email into `a` or `b`) | Fewer copies, smaller chance of a leak |
@@ -268,7 +268,7 @@ Assessment:
 | Aspect | Choice | Notes |
 |---|---|---|
 | Language | TypeScript everywhere (Worker, SPA, shared code) | wrangler and Vite bundle TS with no extra config; TS is [first-class on Workers](https://developers.cloudflare.com/workers/languages/typescript/) (3 July 2026). `typescript` 7.0.2, `tsc -b` ([§5.5](#55-sharing-types-and-code-between-the-worker-and-the-spa)) |
-| Frontend | React 19.3.0 + Vite 8.3.2 + `@vitejs/plugin-react` 6.1.2 | The operator's choice, and it is the layout of Cloudflare's own [React guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/) (5 September 2026). Details in [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker) |
+| Frontend | React 19.3.0 + Vite 8.3.3 + `@vitejs/plugin-react` 6.1.2 | The operator's choice, and it is the layout of Cloudflare's own [React guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/) (5 September 2026). Details in [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker) |
 | Serving | One Worker: static assets from `dist/client` + `/api/*` | `@cloudflare/vite-plugin` 1.62.5; `assets.not_found_handling = "single-page-application"`, `assets.run_worker_first = ["/api/*"]` |
 | Worker structure | One `fetch` handler with a `switch` on `${method} ${pathname}`, three files (`worker/index.ts`, `worker/auth.ts`, `worker/sync.ts`) | See [§5.3](#53-worker-structure-and-dev-auth) |
 | Router | No library; hash routing (`#/budget`) with a 10-line `useSyncExternalStore` hook in `src/router.ts` | Hash links are plain `<a>` tags, so no click interception and no history code; the service worker only ever sees navigations to `/`. Trigger for [`wouter`](https://www.npmjs.com/package/wouter) (3.13.0, 30 September 2026; peer `react >=16.8`, ships a hash-location hook in its package, `wouter/use-hash-location`; depends on `regexparam` and `use-sync-external-store`): path URLs are wanted (shareable deep links) or more than about 8 routes. Not `react-router` (8.4.0, 15 September 2026): a framework-sized API for 6 screens |
@@ -276,7 +276,7 @@ Assessment:
 | Validation | A hand-written function in `shared/validate.ts`, driven by the table specs and the `kind` registry in `shared/tables.ts`, which are also the SQL whitelist | Trigger: payload shape grows beyond a per-table patch → `valibot` ([1.5.0](https://www.npmjs.com/package/valibot), 9 September 2026) or `zod` ([4.6.5](https://www.npmjs.com/package/zod), 13 September 2026) |
 | D1 access | `env.DB.prepare(sql).bind(...)` and `env.DB.batch([...])`; SQL only from the whitelist | Trigger: many dynamic queries → Kysely (0.29.6). Drizzle is supported by wrangler through `migrations_pattern` ([docs](https://developers.cloudflare.com/d1/reference/migrations/)) but adds a toolchain |
 | Migrations | `migrations/NNNN_*.sql`, `wrangler d1 migrations apply wp --remote` in CI | Use the database name, not the binding name, so it doesn't hit the wrong target ([docs](https://developers.cloudflare.com/d1/reference/migrations/), 8 June 2026). In CI the confirmation is skipped, a backup is still taken, and a failed migration is rolled back ([docs](https://developers.cloudflare.com/workers/wrangler/commands/d1/)). `0001_init.sql` creates `sync_state`, `settings`, `items` and `budget_entries` (SQL in `docs/brainstorm.md` §7.2); **verified locally** that it applies to a local D1. D1 rejects `GLOB` patterns over 50 bytes ([limits](https://developers.cloudflare.com/d1/platform/limits/), 21 April 2026), which is why the instant checks in that SQL are short. Adding a kind of list later needs no migration; adding a column to `items` does The generated deploy config keeps `migrations_dir` pointing at the source folder (verified locally: `../../migrations` in `dist/wp/wrangler.json`; also in the [plugin changelog](https://newreleases.io/project/github/cloudflare/workers-sdk/release/@cloudflare%2Fvite-plugin@1.42.4), PR 14490) |
-| Tests | `node --test` for `shared/`, `src/domain/`, JWT verification and other pure Worker code. One optional integration test that starts `CLOUDFLARE_ENV=dev vite` and calls the API | Node 24 runs `.ts` directly: type stripping is stable since v24.12.0, needs `.ts` extensions in imports and `import type`, and doesn't run `.tsx` ([Node docs](https://nodejs.org/docs/latest-v24.x/api/typescript.html)), so `domain/` and `shared/` contain no JSX. **verified locally:** a `node --test` file importing `src/domain/*.ts`, which imports a type from `shared/*.ts`, passes. No component tests; trigger for `vitest` ([5.0.3](https://www.npmjs.com/package/vitest), 30 September 2026) + Testing Library: views gain logic that isn't in `domain/`. `@cloudflare/vitest-plugin` ([1.3.6](https://www.npmjs.com/package/@cloudflare/vitest-plugin), 2 October 2026) peers `vitest ^4.1.0`, so vitest would have to be pinned to 4.x; it is only worth it for per-test D1 isolation inside workerd |
+| Tests | `node --test` for `shared/`, `src/domain/`, JWT verification and other pure Worker code. One optional integration test that starts `CLOUDFLARE_ENV=dev vite` and calls the API | Node runs `.ts` directly: type stripping is stable since v24.12.0 and is on in every newer line, needs `.ts` extensions in imports and `import type`, and doesn't run `.tsx` ([Node docs](https://nodejs.org/docs/latest/api/typescript.html)), so `domain/` and `shared/` contain no JSX. **verified locally:** a `node --test` file importing `src/domain/*.ts`, which imports a type from `shared/*.ts`, passes. No component tests; trigger for `vitest` ([5.0.3](https://www.npmjs.com/package/vitest), 30 September 2026) + Testing Library: views gain logic that isn't in `domain/`. `@cloudflare/vitest-plugin` ([1.3.6](https://www.npmjs.com/package/@cloudflare/vitest-plugin), 2 October 2026) peers `vitest ^4.1.0`, so vitest would have to be pinned to 4.x; it is only worth it for per-test D1 isolation inside workerd |
 | PWA | Hand-written service worker + a small Vite plugin | [§5.7](#57-pwa-and-service-worker) |
 | Local dev | `npm run dev` = `CLOUDFLARE_ENV=dev vite`: HMR for the SPA, the Worker runs in workerd, D1 is local, seed `scripts/seed.sql` containing **fake data only** | Local D1 comes from `wrangler d1 migrations apply wp --local`; **verified locally** that the Vite dev server reads that database. Dev auth is described in [§5.3](#53-worker-structure-and-dev-auth) |
 | Worker types | `wrangler types` generates `worker-configuration.d.ts` (committed) | No need for `@cloudflare/workers-types`. **verified locally:** it includes the dev-only vars (`AUTH_MODE?`, `DEV_WHO?`) and lists the three secrets as optional `string`, so `authenticate` must treat them as possibly missing (fail closed) |
@@ -396,19 +396,19 @@ The `fetch` flow:
 
 ### 5.4 Each dependency and why
 
-Versions and publish dates are from the npm registry on 6 October 2026. A scratch install of the packages below (without `jose`, and with `@types/node` 26.6.4 instead of 24.x) resolved to **62 packages and 298 MB** in `node_modules` (`npm ls --all`; mostly `workerd` and `wrangler`), **verified locally**.
+Versions and publish dates are from the npm registry on 6 October 2026. The versions in this table are a snapshot: `package.json` and the lockfile are the source of truth, and the policy is the latest version of everything, kept current by Dependabot. A scratch install of the packages below (without `jose`, and with `@types/node` 26.6.4) resolved to **62 packages and 298 MB** in `node_modules` (`npm ls --all`; mostly `workerd` and `wrangler`), **verified locally**.
 
 | Package | Kind | Reason | Rejected alternatives |
 |---|---|---|---|
 | [`react`](https://www.npmjs.com/package/react) 19.3.0 (9 September 2026), [`react-dom`](https://www.npmjs.com/package/react-dom) 19.3.0 (9 September 2026) | runtime (browser) | The UI, the operator's choice. React supplies `useSyncExternalStore` itself, so no state library is needed | |
 | [`jose`](https://www.npmjs.com/package/jose) 6.2.12 (5 September 2026) | runtime (Worker) | Access JWT verification: signature, `iss`, `aud`, `exp`, remote JWKS with caching and key rotation. A security path, don't write it yourself. The [Cloudflare docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/) give a Workers example with `jose` | Manual WebCrypto (±40 lines, but key rotation and subtle mistakes become your burden); `hono/jwk` (pulls in Hono) |
-| [`vite`](https://www.npmjs.com/package/vite) 8.3.2 (1 October 2026) | dev | Dev server with HMR and the production build, for both the SPA and the Worker | Bundling by hand: no |
+| [`vite`](https://www.npmjs.com/package/vite) 8.3.3 (6 October 2026) | dev | Dev server with HMR and the production build, for both the SPA and the Worker | Bundling by hand: no |
 | [`@cloudflare/vite-plugin`](https://www.npmjs.com/package/@cloudflare/vite-plugin) 1.62.5 (2 October 2026) | dev | Runs the Worker in workerd inside the Vite dev server, builds Worker and assets together, writes the deploy config ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). Its npm dependencies include an alpha `miniflare` 5.x | Two toolchains (Vite for the SPA, plain `wrangler dev` for the Worker): two dev servers and no shared build |
 | [`wrangler`](https://www.npmjs.com/package/wrangler) 4.147.0 (2 October 2026) | dev | Deploy, D1 and migrations, `wrangler types`; a peer dependency of the plugin | |
 | [`@vitejs/plugin-react`](https://www.npmjs.com/package/@vitejs/plugin-react) 6.1.2 (5 October 2026) | dev | React Fast Refresh in dev. **verified locally** that `vite build` works without it (Vite compiles JSX itself); it is kept for the dev experience and because Cloudflare's React guide uses it. Drop it if you don't care about state-preserving reloads | |
 | [`typescript`](https://www.npmjs.com/package/typescript) 7.0.2 (8 July 2026) | dev | `tsc -b` checks the SPA, the Worker and the shared code | No type check: no |
 | [`@types/react`](https://www.npmjs.com/package/@types/react) 19.3.0, [`@types/react-dom`](https://www.npmjs.com/package/@types/react-dom) 19.3.0 (both 9 September 2026) | dev | Types for React | |
-| [`@types/node`](https://www.npmjs.com/package/@types/node) 24.19.1 (1 October 2026) | dev | Types for `node:test`, `node:assert` and `vite.config.ts`. Take the 24.x line to match `.node-version` 24 ([Node 24 is LTS "Krypton", 24.21.0 on 7 September 2026](https://nodejs.org/dist/index.json)); the `latest` tag is 26.6.4 | Write tests in JS: lose the types |
+| [`@types/node`](https://www.npmjs.com/package/@types/node) 26.6.4 (1 October 2026) | dev | Types for `node:test`, `node:assert` and `vite.config.ts`. It tracks the newest Node major, because `.node-version` is `latest` (Node 26.10.0 on 21 September 2026, [index](https://nodejs.org/dist/index.json)); Dependabot opens the major bump when Node 27 arrives | Write tests in JS: lose the types |
 
 Deliberately absent: Hono, zod/valibot, ORM, a router library, TanStack Query, Redux/Zustand, `idb`, Workbox and `vite-plugin-pwa` ([§5.7](#57-pwa-and-service-worker)), vitest, `@cloudflare/workers-types`, `wrangler-action`, a linter and a formatter (none was asked for yet).
 
@@ -603,10 +603,23 @@ jobs:
       - uses: actions/checkout@<sha>
       - uses: actions/setup-node@<sha>
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - run: npm run check
+  dependabot-merge:
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   deploy:
     if: github.event_name == 'push'
     needs: check
@@ -621,7 +634,7 @@ jobs:
       - uses: actions/checkout@<sha>
       - uses: actions/setup-node@<sha>
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - run: npx wrangler d1 migrations apply wp --remote
@@ -758,7 +771,7 @@ Do M5, M7 and M8 before the first push to `main` that contains `ci.yml`: that pu
 | A1 | `npm ci`, then `npm run check`: `tsc -b`, `node --test`, `vite build`, the output guards (§5.2) |
 | A2 | `wrangler d1 migrations apply wp --remote` (before the build) |
 | A3 | `vite build`, then `wrangler deploy`: Worker, static assets from `dist/client`, Custom Domain (DNS record + certificate), `secrets.required` validation |
-| A4 | Weekly Dependabot for `npm` and `github-actions` |
+| A4 | Daily Dependabot for `npm` and `github-actions`: minor and patch updates grouped per ecosystem, majors as separate pull requests, merged automatically after `check` passes (`dependabot-merge` job, pinned to the tested commit). A merge made with `GITHUB_TOKEN` does not start the `push` workflow, so the deploy job needs another trigger for these merges (decided with the deploy task) |
 
 ---
 
@@ -773,7 +786,7 @@ Do M5, M7 and M8 before the first push to `main` that contains `ci.yml`: that pu
 5. **A Google consent in Testing status may expire every 7 days** (Google exempts apps that request only `openid`, `email` and `profile`; whether Cloudflare's Google integration stays within those is unverified, [bootstrap M3](bootstrap.md#m3-google-oauth-client)) and **Zero Trust onboarding asks for a card**. Both are friction, not failures.
 6. **The dev `AUTH_MODE` leaks into production.** Mitigation: the flag only in the `npm run dev` command, checked in `npm run check`.
 7. **Account quota** (§2.5): a polling bug or another Worker in the same account.
-8. **Toolchain churn:** wrangler 4.x releases very often; `@cloudflare/vite-plugin` 1.62.5 pulls in an alpha `miniflare` 5.x ([npm](https://www.npmjs.com/package/@cloudflare/vite-plugin)); Vite is on major 8 and TypeScript on major 7; Node 24 LTS vs 26. Mitigation: lockfile and Dependabot.
+8. **Toolchain churn:** the policy is the latest version of everything, so a new release can turn a build red without a repo change. wrangler 4.x releases very often; `@cloudflare/vite-plugin` pulls in an alpha `miniflare` 5.x ([npm](https://www.npmjs.com/package/@cloudflare/vite-plugin)); Vite is on major 8 and TypeScript on major 7; CI installs the newest Node on every run (`.node-version` is `latest`). Mitigation: the lockfile, daily Dependabot with grouped minor and patch updates, and automatic merging only after `check` passes.
 9. **The temptation of excessive IaC/Effect.** Mitigation: the triggers in §3.4 and §4.
 10. **The hand-written service worker serves a stale or broken shell.** The cost is the wedding-day offline rundown. Mitigation: the cache name is stamped on every build, the M9 checklist tests offline start and update, and the switch triggers to `vite-plugin-pwa` are in §5.7.
 11. **React turns out to be the wrong choice.** Mitigation: the layer rules in brainstorm §6.1, enforced by the grep in `npm run check`; only `views/`, `ui/`, `hooks/` and `main.tsx` would change.
