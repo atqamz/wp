@@ -13,7 +13,7 @@ npm run dev
 npm run check
 ```
 
-`npm run dev` serves the SPA and `/api/health` with a local D1. `npm run preview` serves the production build.
+`npm run dev` serves the SPA and `/api/health` with a local D1. `npm run preview` serves the production build. The local D1 state lives in `.wrangler`; after a change to `migrations/0001_init.sql` (it is the initial schema and is edited in place) delete `.wrangler` so the migration is applied again.
 
 ## Bootstrap
 

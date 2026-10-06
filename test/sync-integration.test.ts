@@ -1,17 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const PORT = 54871;
 const base = `http://127.0.0.1:${PORT}`;
 const root = new URL("..", import.meta.url).pathname;
-const env = { ...process.env, CLOUDFLARE_ENV: "dev", WRANGLER_SEND_METRICS: "false" };
+const persist = mkdtempSync(join(tmpdir(), "wp-integration-"));
+const env = { ...process.env, CLOUDFLARE_ENV: "dev", WRANGLER_SEND_METRICS: "false", WP_PERSIST_TO: persist };
 
 const now = "2026-10-01T00:00:00Z";
 
 test("the dev Worker serves health and an authenticated sync round trip", { timeout: 120_000 }, async () => {
-  const migrate = spawnSync("node_modules/.bin/wrangler", ["d1", "migrations", "apply", "wp", "--local", "--env", "dev"], { cwd: root, env, encoding: "utf8" });
+  const migrate = spawnSync("node_modules/.bin/wrangler", ["d1", "migrations", "apply", "wp", "--local", "--env", "dev", "--persist-to", persist], { cwd: root, env, encoding: "utf8" });
   assert.equal(migrate.status, 0, migrate.stderr);
   const server = spawn("node_modules/.bin/vite", ["--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { cwd: root, env, stdio: "ignore" });
   let exited = false;
@@ -49,5 +53,6 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
   } finally {
     server.kill();
     if (!exited) await new Promise((resolve) => server.once("exit", resolve));
+    rmSync(persist, { recursive: true, force: true });
   }
 });
