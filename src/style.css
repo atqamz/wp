@@ -1,44 +1,234 @@
 :root {
   color-scheme: light dark;
-  --bg: #fff;
-  --fg: #1a1a1a;
-  --ok: #1f6f5c;
-  --down: #b3261e;
+  --bg: #f5f4ef;
+  --surface: #ffffff;
+  --fg: #1c211f;
+  --muted: #5a645f;
+  --line: #d9d7ce;
+  --control: #7a847f;
+  --accent: #1f6f5c;
+  --accent-fg: #ffffff;
+  --accent-ink: #14503f;
+  --accent-soft: #e1efe9;
+  --warn: #8a4b00;
+  --danger: #b3261e;
+  --focus: #1a5fb4;
+  --tabs: 4rem;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 100%;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121212;
-    --fg: #ececec;
-    --ok: #5cc2a8;
-    --down: #f2b8b5;
+    --bg: #101311;
+    --surface: #1a1f1c;
+    --fg: #ebeeec;
+    --muted: #a3aca7;
+    --line: #2e3632;
+    --control: #7e8883;
+    --accent: #5cc2a8;
+    --accent-fg: #0a1f19;
+    --accent-ink: #bfeadd;
+    --accent-soft: #1c3029;
+    --warn: #f0b45a;
+    --danger: #f2a49d;
+    --focus: #8ab4f8;
   }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+h1:focus {
+  outline: none;
+}
+
+h1 {
+  margin: 0.5rem 0 1rem;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.0625rem;
+}
+
+h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+a {
+  color: var(--accent-ink);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: calc(3.25rem + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) max(0.5rem, env(safe-area-inset-right)) 0 max(1rem, env(safe-area-inset-left));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.project {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-link {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--muted);
+}
+
+.icon-link[aria-current="page"] {
+  color: var(--accent-ink);
 }
 
 main {
   box-sizing: border-box;
   max-width: 40rem;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0.5rem max(1rem, env(safe-area-inset-right)) calc(var(--tabs) + env(safe-area-inset-bottom) + 1.5rem)
+    max(1rem, env(safe-area-inset-left));
 }
 
-[data-health="ok"] {
-  color: var(--ok);
+.tabs {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 
-[data-health="down"] {
-  color: var(--down);
+.tabs a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-height: var(--tabs);
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
 }
 
-@media (min-width: 40rem) {
-  main {
-    padding: 2rem;
+.tabs a[aria-current="page"] {
+  color: var(--accent-ink);
+  font-weight: 600;
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.sync {
+  flex: none;
+}
+
+.sync a,
+.sync button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.sync a::before,
+.sync button::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sync[data-state="pending"] a::before {
+  background: var(--muted);
+}
+
+.sync[data-state="offline"] a::before {
+  background: var(--warn);
+}
+
+.sync[data-state="rejected"] a::before,
+.sync[data-state="storage"] a::before,
+.sync[data-state="login"] button::before {
+  background: var(--danger);
+}
+
+.sync[data-state="login"] button,
+.sync[data-state="storage"] a,
+.sync[data-state="rejected"] a {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.splash {
+  min-height: 50vh;
+  padding: 2rem 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.first-run {
+  max-width: 28rem;
+  padding-top: 20vh;
+  padding-bottom: 2rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a {
+    transition: background-color 0.15s;
   }
 }
