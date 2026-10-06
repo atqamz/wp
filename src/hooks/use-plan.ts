@@ -29,6 +29,6 @@ export const usePartner = () => {
   const { partnerA, partnerB } = useSettings();
   const { me } = useSnapshot();
   const label = (side: string | null) =>
-    side === "a" ? (partnerA ?? text.partnerA) : side === "b" ? (partnerB ?? text.partnerB) : side === "both" ? text.both : text.unassigned;
+    side === "a" ? (partnerA ?? "") : side === "b" ? (partnerB ?? "") : side === "both" ? text.both : text.nobody;
   return { me, label };
 };

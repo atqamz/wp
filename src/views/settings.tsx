@@ -24,6 +24,7 @@ const exports = [
 export function Settings() {
   const settings = useSettings();
   const { me } = useSnapshot();
+  const signedInAs = me === "a" ? settings.partnerA : me === "b" ? settings.partnerB : null;
   const [failure, setFailure] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const { busy, once } = useBusy();
@@ -35,6 +36,11 @@ export function Settings() {
     [settingKeys.partnerB]: settings.partnerB ?? "",
   }));
 
+  const [mine, theirs] = me === "b" ? [settingKeys.partnerB, settingKeys.partnerA] : [settingKeys.partnerA, settingKeys.partnerB];
+  const nicknames: Control[] = [
+    { name: mine, label: text.settings.yourNickname, type: "text", value: initial[mine] },
+    { name: theirs, label: text.settings.theirNickname, type: "text", value: initial[theirs] },
+  ];
   const fields: Control[] = [
     { name: settingKeys.ceremonyDate, label: text.settings.ceremonyDate, type: "date", value: initial[settingKeys.ceremonyDate] },
     {
@@ -44,8 +50,7 @@ export function Settings() {
       value: initial[settingKeys.timezone],
       suggestions: [DEFAULT_ZONE, "Asia/Makassar", "Asia/Jayapura"],
     },
-    { name: settingKeys.partnerA, label: text.settings.partnerA, type: "text", value: initial[settingKeys.partnerA] },
-    { name: settingKeys.partnerB, label: text.settings.partnerB, type: "text", value: initial[settingKeys.partnerB] },
+    ...nicknames,
   ];
   const controls = fields.map((control) => ({ ...control, required: initial[control.name] !== "" }));
 
@@ -68,7 +73,7 @@ export function Settings() {
   return (
     <>
       <Title>{text.nav.settings}</Title>
-      {me && <p className="hint">{text.settings.signedInAs(me === "a" ? (settings.partnerA ?? text.partnerA) : (settings.partnerB ?? text.partnerB))}</p>}
+      {signedInAs && <p className="hint">{text.settings.signedInAs(signedInAs)}</p>}
       <form className="form" onSubmit={save} onChange={() => setSaved(false)}>
         {controls.map((control) => (
           <Field key={control.name} control={control} />

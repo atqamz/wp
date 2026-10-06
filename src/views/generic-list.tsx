@@ -35,7 +35,7 @@ export function GenericList({ name }: { name: ListName }) {
           ))}
           {count.none.guests > 0 && (
             <div>
-              <dt>{text.unassigned}</dt>
+              <dt>{text.nobody}</dt>
               <dd>{text.people(count.none.people)}</dd>
             </div>
           )}
