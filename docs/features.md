@@ -1,712 +1,712 @@
-# Riset fitur: wedding dan household hub (wp)
+# Feature research: wedding and household hub (wp)
 
-Bahan diskusi, bukan keputusan final. Riset per 2026-10-06. Pelengkap `docs/brainstorm.md` (branch `hand/f00cf2fa15f0e/t1-a2`), yang membahas spreadsheet, arsitektur Cloudflare, auth, dan sync. Dokumen ini membahas **fitur**: apa yang layak dibuat, apa yang sebaiknya diserahkan ke app lain, dan data apa yang dibutuhkan.
+Discussion material, not a final decision. Research as of 6 October 2026. A companion to `docs/brainstorm.md` (branch `hand/f00cf2fa15f0e/t1-a2`), which covers the spreadsheet, the Cloudflare architecture, auth and sync. This document covers **features**: what is worth building, what should be left to other apps, and what data is needed.
 
-> **Privasi.** Repo ini publik. Dokumen ini tidak memuat nama, nomor HP, alamat, nominal, tanggal, atau detail dokumen asli siapa pun. Pasangan ditulis sebagai **Partner A** dan **Partner B**. Contoh angka memakai placeholder (`Rp X`). Angka yang muncul adalah fakta publik tentang produk, regulasi, atau survei, lengkap dengan sumbernya.
+> **Privacy.** This repo is public. This document contains no real name, phone number, address, amount, date or document detail of anyone. The couple is written as **Partner A** and **Partner B**. Example amounts use a placeholder (`Rp X`). The figures that do appear are public facts about products, regulations or surveys, with their sources.
 
-## Cara baca
+## How to read
 
-- **Effort:** `S` = sekitar satu hari kerja (satu konfigurasi list dan satu layar, tanpa komponen platform baru). `M` = dua sampai empat hari. `L` = lebih dari seminggu, atau butuh komponen platform baru.
-- **Platform need** (hanya catatan agar cocok dengan keputusan stack worker lain, tidak ada rekomendasi stack di sini): `client` = jalan di browser tanpa server; `D1` = database relasional; `R2` = penyimpanan file; `cron` = tugas terjadwal; `push` = notifikasi native; `email` = kirim email; `realtime` = sinkron langsung antar HP; `static` = cukup file statis.
-- **Bukti:** link inline. `[UNVERIFIED]` = tidak bisa dikonfirmasi dari sumber yang berhasil dibuka (cuma snippet pencarian, sumber sekunder yang meragukan, atau halaman gagal dimuat). `(dites lokal)` = percobaan penulis di Node v26.10.0 / ICU 78.3, bukan kutipan.
-- **Skor di §7** adalah penilaian penulis, bukan data. Rumusnya ditulis di sana supaya bisa dibantah.
+- **Effort:** `S` = about one working day (one list configuration and one screen, no new platform component). `M` = two to four days. `L` = more than a week, or needs a new platform component.
+- **Platform need** (only a note so it fits the stack decisions of the other worker, no stack recommendation here): `client` = runs in the browser without a server; `D1` = relational database; `R2` = file storage; `cron` = scheduled task; `push` = native notifications; `email` = sending email; `realtime` = live sync between phones; `static` = static files are enough.
+- **Evidence:** inline links. `[UNVERIFIED]` = could not be confirmed from a source that opened successfully (only a search snippet, a doubtful secondary source, or a page that failed to load). `(tested locally)` = the author's experiment on Node v26.10.0 / ICU 78.3, not a quote.
+- **The scores in §7** are the author's judgement, not data. The formula is written there so it can be challenged.
 
-**Metode dan batas.**
-- Halaman dibaca lewat tool fetch yang meringkas isi, jadi kutipan dan angka yang jadi tumpuan dokumen ini dicek ulang langsung di sumbernya. PMA 30/2024 dibaca dari teks lengkapnya.
-- Kuota WebSearch habis di tengah riset. Akibatnya beberapa area tipis dan ditandai di bagian Gap (terutama: kebiasaan pasangan Indonesia memakai spreadsheet/Notion/WhatsApp, kriteria MABIMS terbaru, dan nomor SKB libur 2026).
-- Ulasan di Trustpilot dan toko aplikasi condong ke masalah registry, pengiriman, dan vendor, bukan alat planning. Artikel perbandingan banyak yang ditulis kompetitor. Keduanya diberi label.
-- Wikipedia dan blog dipakai hanya bila tidak ada sumber primer, dan diberi label sekunder.
+**Method and limits.**
+- Pages were read through a fetch tool that summarises the content, so the quotes and figures this document leans on were rechecked directly at the source. PMA 30/2024 (Minister of Religious Affairs Regulation No. 30 of 2024) was read from its full text.
+- The WebSearch quota ran out in the middle of the research. As a result some areas are thin and are marked in the Gap section (mainly: how Indonesian couples use spreadsheets/Notion/WhatsApp, the latest MABIMS criteria, and the number of the 2026 holiday SKB, the joint ministerial decree).
+- Reviews on Trustpilot and app stores lean toward registry, shipping and vendor problems, not planning tools. Many comparison articles are written by competitors. Both are labelled.
+- Wikipedia and blogs are used only when there is no primary source, and are labelled as secondary.
 
-## Ringkasan
+## Summary
 
-1. **Pasar.** Planner asing (The Knot, Zola, Joy, Bridebook) gratis untuk pasangan karena uangnya dari vendor atau registry. Produk Indonesia yang ketemu adalah marketplace vendor (Bridestory, Weddingku) dan platform undangan digital. Alat planning berbayar dan terselip (Wevitation). Di riset ini **tidak ketemu** produk yang memodelkan proses KUA, buku vendor + jadwal bayar, dan buku amplop dalam satu app privat. Itu bukan bukti produknya tidak ada.
-2. **Pelajaran paling kuat dari riset perilaku:** capture harus cepat, dua orang setara, item default belum di-assign, nudge jarang dan spesifik, tidak ada skor atau streak, dan data bisa dibawa pergi (export).
-3. **Core yang disarankan:** satu model `items` generik + layar "Minggu ini" + tugas dari template, anggaran dengan jadwal bayar, buku vendor, dan daftar tamu. Export JSON/CSV dari hari pertama.
-4. **Household (setelah nikah):** layak dibuat kecil: tagihan dan perpanjangan berulang (pajak kendaraan, STNK, BPJS, asuransi), target tabungan, buku amplop dan momen keluarga. Lebih baik diserahkan ke app lain: daftar belanja, kalender bersama, brankas scan dokumen, kalkulator KPR, itinerary perjalanan.
-5. **Reminder:** layar "Minggu ini" dan tombol "Tambah ke kalender" (`.ics`) dulu. Push belum perlu.
-6. **Dokumen sensitif:** jangan simpan scan KTP/KK atau nomor NIK di app. Simpan status siap, tanggal, dan lokasi dokumen.
-7. **Uang:** simpan rupiah utuh sebagai integer plus kode mata uang. Ini sengaja menyimpang dari ISO 4217 (§5.7, §6).
-
----
-
-## 1. Prinsip produk
-
-### 1.1 Siapa, di perangkat apa, di momen apa
-
-**Pengguna:** dua orang dewasa yang setara (Partner A dan Partner B), satu HP masing-masing, akses hanya lewat dua akun Google. Pembaca tambahan (orang tua, WO) baru dipertimbangkan nanti sebagai link baca-saja (W19).
-
-**Perangkat:**
-- Android sekitar 79% dan iOS sekitar 21% dari traffic web mobile Indonesia pada September 2026 ([StatCounter](https://gs.statcounter.com/os-market-share/mobile/indonesia): Android 79.16%, iOS 20.79%). Itu hitungan traffic web, bukan kepemilikan HP. App harus nyaman di Android Chrome dan di iOS Safari sebagai PWA terpasang.
-- Halaman StatCounter untuk rasio desktop vs mobile di Indonesia menunjukkan desktop 55.83% ([sumber](https://gs.statcounter.com/platform-market-share/desktop-mobile-tablet/indonesia)), yang bertentangan dengan gambaran mobile-first dan tidak bisa direkonsiliasi. Angka itu diabaikan. Keputusan mobile-first diambil dari kebiasaan kalian berdua.
-- Konektivitas: 230 juta pengguna internet, penetrasi 80.5% ([DataReportal Digital 2026: Indonesia](https://datareportal.com/reports/digital-2026-indonesia), data Oktober 2025).
-
-**WhatsApp** hampir pasti kanal berbagi utama, tapi tidak ada angka Indonesia yang bersih. DataReportal tidak menerbitkan angka WhatsApp untuk Indonesia, dan Reuters Institute hanya mengukur pemakaian untuk berita: naik 13 poin persentase ke 56% ([DNR 2026 Indonesia](https://reutersinstitute.politics.ox.ac.uk/digital-news-report/2026/indonesia)). Angka 93% (MEF) dan 65% (Statista) cuma snippet pencarian: `[UNVERIFIED]`. Dokumen ini tidak mengutip persentase WhatsApp.
-
-**Momen pemakaian** (turunan dari penelitian di §1.2 dan pola vendor Indonesia di §2):
-
-| Momen | Perangkat | Yang dibutuhkan dalam hitungan detik | Fitur terkait |
-|---|---|---|---|
-| Di sofa, sesi mingguan berdua | HP, kadang laptop | Lihat "Minggu ini", putuskan yang menggantung, perbarui anggaran | W3, W2, W13 |
-| Meeting dengan vendor | HP, sinyal belum tentu bagus | Buka catatan vendor, catat harga penawaran dan DP, telepon atau WhatsApp | W11, W12, W13 |
-| Belanja seserahan atau perlengkapan | HP | Tambah item, harga, link; lihat total | W9 |
-| Hari-H | HP milik koordinator, bukan pengantin | Run sheet yang terbuka tanpa sinyal, kontak vendor | W20, W21 |
-| Rutinitas rumah | HP | "Ingat, pajak motor bulan depan", tandai sudah bayar | H3, H4 |
-
-Soal hari-H: dalam studi [Massimi dkk. (CSCW 2014)](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf), 15 pasangan yang direkrut terutama di Inggris tenggara, banyak pengantin perempuan meninggalkan HP karena semua orang yang perlu dihubungi ada di tempat. Jadi "mode hari-H" ditujukan ke orang yang mengoordinasi, bukan ke pengantin. Sampelnya kecil dan tidak mencakup pernikahan keluarga besar ala Indonesia.
-
-### 1.2 Kenapa app bersama dipakai atau ditinggalkan: bukti
-
-| # | Temuan | Sumber | Artinya untuk wp |
-|---|---|---|---|
-| 1 | Rumah tangga mengoordinasi tugas lewat lokasi dan ketersediaan, dan melupakan tugas prioritas rendah. Satu orang biasanya jadi "koordinator". 8 rumah tangga, 241 tugas | [Sohn dkk., CSCW 2012](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/38230.pdf) | Momen terbaik adalah "saya sedang di luar" atau "baru ingat". Tambah item harus satu langkah, tanpa field wajib |
-| 2 | 70.5% dari 44 keluarga memakai lebih dari satu kalender; 80% punya kalender "awareness" di tempat lewat (kulkas). Kalender online untuk pemakaian pribadi bisa merusak rutinitas koordinasi keluarga | [Neustaedter dkk., ToCHI 2009](https://grouplab.cpsc.ucalgary.ca/grouplab/uploads/Publications/Publications/2009-CalendarCrucial.TOCHI.pdf) | Lawan sebenarnya adalah WhatsApp, catatan di kulkas, Google Calendar. App kedua kalah kecuali ada di tempat yang kalian lewati. Jangan jadi sumber kebenaran untuk semuanya |
-| 3 | Pasangan merencanakan nikah dengan spreadsheet, dokumen, to-do, email, dan ingin melibatkan orang di luar pasangan (orang tua, saudara) | [Massimi dkk., CSCW 2014](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf) | Pesaing nyata adalah spreadsheet. Beri export dan link baca-saja, jangan akun ketiga |
-| 4 | Pelacak pribadi berhenti karena lupa, repot merawat, melewatkan, atau menangguhkan. Dalam 3 bulan, 26% pengguna alat keuangan berhenti, vs 44-45% untuk alat aktivitas dan lokasi | [Epstein dkk., UbiComp 2015](https://my.eng.utah.edu/~cs5540/au16/readings/PersonalInformatics-Epstein2015.pdf) | Catat uang tahan lama kalau manfaatnya jelas, tapi mati kalau input merepotkan. Model data harus kecil |
-| 5 | Reminder mendukung pengulangan tapi menghambat terbentuknya kebiasaan; cue berbasis kejadian membantu | [Stawarz dkk., CHI 2015](https://research-information.bris.ac.uk/en/publications/beyond-self-tracking-and-reminders-designing-smartphone-apps-that/) | Kaitkan pemakaian ke kejadian yang sudah ada: sesi mingguan, selesai telepon vendor. Tanpa streak dan badge |
-| 6 | Beban kognitif rumah tangga: mengantisipasi dan memantau cenderung tersangkut di satu pasangan; memutuskan lebih sering bersama | [Daminger, ASR 2019](https://inequality.hks.harvard.edu/publications/cognitive-dimension-household-labor) (temuan dari ringkasan hasil pencarian karena halaman 403: `[UNVERIFIED]` terhadap teks utama) | Checkbox hanya mendukung "melakukan". Yang mahal adalah mengingat apa saja yang harus dilakukan. Template dan layar "Minggu ini" menjawabnya |
-| 7 | Pasangan berbagi data tapi mengharapkan privasi; ambiguitas membuat berbagi terasa wajar | [Griggio dkk., CHI 2019](https://www.cs.ubc.ca/labs/edapt/papers/griggio2019_2.pdf) | Tampilkan keadaan item ("dibayar Rabu"), bukan perilaku orang ("terakhir buka app 3 hari lalu") |
-| 8 | Aplikasi pengatur tugas rumah dipasang saat kewalahan, dan gagal kalau dianggap solusi tunggal; notifikasi soal ketimpangan memancing defensif | [Petriglieri, MIT SMR 2019](https://sloanreview.mit.edu/article/hacking-inequality-at-home) dan [MIT Technology Review 2022](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/) (tulisan praktisi dan jurnalistik, bukan studi terkontrol) | Pemicu adopsi (pernikahan) sudah ada. Risikonya satu pasangan merasa "dikelola". Jangan assign dengan notifikasi |
-| 9 | Notifikasi berulang untuk hal yang sama membuat orang mematikan semua notifikasi | [Apple HIG: Notifications](https://developer.apple.com/design/human-interface-guidelines/notifications) | Maksimal satu nudge spesifik yang jarang |
-| 10 | Tutorial onboarding tidak memperbaiki performa tugas; pengguna jarang mengubah default | [NN/g onboarding](https://www.nngroup.com/articles/mobile-app-onboarding/), [NN/g defaults](https://www.nngroup.com/articles/the-power-of-defaults/) | Tanpa tour dan wizard. Buka pertama sudah berisi template yang bisa dihapus |
-| 11 | Pembentukan kebiasaan butuh 18 sampai 254 hari, sangat bervariasi | [Lally dkk., 2010](https://api.crossref.org/works/10.1002/ejsp.674) | Antusiasme minggu ketiga sampai kedelapan akan turun. App harus berguna tanpa kebiasaan harian |
-
-Yang **tidak** ditemukan (jangan dianggap fakta): studi yang membandingkan "assign vs claim" di app pasangan; studi soal feed "siapa mengubah apa"; studi pasangan Indonesia soal teknologi pernikahan. Prinsip di §1.3 yang bersandar pada hal itu adalah inferensi, dan ditandai begitu. Statistik populer "25% app dipakai sekali" tidak punya sumber primer yang ketemu: `[UNVERIFIED]`.
-
-### 1.3 Prinsip
-
-1. **Capture adalah produknya.** Satu input di layar pertama, satu ketukan untuk simpan, tanpa field wajib. (Bukti 1, 4)
-2. **Dua orang setara.** Keduanya bisa menambah, mengubah, menyelesaikan. Tidak ada admin. (Bukti 6; [Frampton dkk., CHI 2026](https://orca.cardiff.ac.uk/id/eprint/185455): kebanyakan alat manajemen keluarga berorientasi satu pengguna, `[UNVERIFIED]` karena hanya dari ringkasan pencarian)
-3. **Item default belum di-assign.** Siapa pun bisa "ambil" dengan satu ketukan. Tidak ada notifikasi assign. Inferensi dari bukti 6 dan 8. Studi Carlson 2025 yang menyebut berbagi per-tugas terasa lebih adil adalah `[UNVERIFIED]` (belum terbit, dilaporkan media kesehatan) dan tidak dijadikan dasar.
-4. **Tampilkan keadaan, bukan perilaku.** "Dibayar oleh Partner B, Selasa" boleh. "Partner B belum membuka ini" tidak. (Bukti 7)
-5. **Nudge jarang, spesifik, dan terikat kejadian.** Prioritas: layar "Minggu ini", lalu tombol "Tambah ke kalender", lalu satu digest mingguan. Berbagi ke WhatsApp dipicu pengguna, bukan dikirim otomatis. (Bukti 5, 9)
-6. **Tanpa onboarding.** Template tugas sudah terisi dan bisa dihapus. (Bukti 10)
-7. **Miliki sedikit hal, interop untuk sisanya.** Kalender, daftar belanja, brankas: serahkan, sambungkan lewat `.ics`, link, CSV. (Bukti 2, 3)
-8. **Undo di mana-mana.** Soft delete dan layar "baru dihapus", karena dua orang menyunting data yang sama. ([NN/g 10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/): pengguna sering melakukan aksi karena salah dan butuh jalan keluar yang jelas; [Apple HIG undo](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/undo-and-redo.json))
-9. **Data bisa dibawa pergi.** Export JSON dan CSV dari hari pertama. Terlalu banyak app pasangan dan rumah tangga mati atau berubah pemilik (§5.4).
-10. **Indonesia-first.** Rupiah utuh, tanggal `6 Okt 2026`, Hijri sebagai tampilan perkiraan, WhatsApp untuk berbagi, bahasa UI Indonesia santai.
-
-### 1.4 Uji pemakaian mingguan
-
-Setiap fitur yang direkomendasikan harus lolos satu dari tiga:
-
-- **Mingguan:** ada alasan nyata disentuh tiap minggu (mis. anggaran, "Minggu ini", tagihan).
-- **Padat-sementara:** disentuh hampir tiap minggu dalam jendela 4 sampai 8 minggu yang jelas (mis. proses KUA, rundown menjelang hari-H).
-- **Tebus-nilai tinggi:** jarang dipakai, tapi kalau butuh tidak ada penggantinya (mis. buku amplop saat diundang kondangan).
-
-Fitur yang tidak lolos masuk daftar "tidak dibuat" (§8). Tabel di §3 dan §4 mencantumkan pemicunya di kolom Nilai.
+1. **Market.** Foreign planners (The Knot, Zola, Joy, Bridebook) are free for couples because the money comes from vendors or registries. The Indonesian products found are vendor marketplaces (Bridestory, Weddingku) and digital invitation platforms. Paid planning tools are tucked away (Wevitation). In this research **no** product was found that models the *KUA* (Office of Religious Affairs, the marriage registry) process, a vendor book + payment schedule, and an *amplop* (wedding-gift envelope) ledger in one private app. That is not proof such a product doesn't exist.
+2. **The strongest lessons from the behavioural research:** capture has to be fast, two people are equal, default items are unassigned, nudges are rare and specific, no scores or streaks, and data can be taken away (export).
+3. **Suggested core:** one generic `items` model + a "This week" screen + tasks from a template, a budget with a payment schedule, a vendor book, and a guest list. JSON/CSV export from day one.
+4. **Household (after the wedding):** worth building small: recurring bills and renewals (vehicle tax, *STNK* (vehicle registration), *BPJS* (national health insurance), insurance), savings goals, an *amplop* ledger and family occasions. Better left to other apps: shopping lists, a shared calendar, a vault of document scans, a *KPR* (home mortgage) calculator, trip itineraries.
+5. **Reminders:** the "This week" screen and an "Add to calendar" button (`.ics`) first. Push isn't needed yet.
+6. **Sensitive documents:** don't store scans of the *KTP*/*KK* (national ID card/family card) or *NIK* (national ID number) in the app. Store the ready status, the date, and the location of the document.
+7. **Money:** store whole rupiah as an integer plus a currency code. This deliberately departs from ISO 4217 (§5.7, §6).
 
 ---
 
-## 2. Lanskap
+## 1. Product principles
 
-### 2.1 Planner pernikahan internasional
+### 1.1 Who, on what device, at what moment
 
-Semua produk besar gratis untuk pasangan. Uangnya dari vendor (iklan, lead) dan registry/stationery, jadi pasangan adalah produknya.
+**Users:** two equal adults (Partner A and Partner B), one phone each, access only through two Google accounts. Extra readers (parents, *WO* (wedding organizer)) are only considered later as a read-only link (W19).
 
-| Produk | Apa | Model uang | Kolaborasi dan ekspor | Sumber |
+**Devices:**
+- Android is about 79% and iOS about 21% of Indonesia's mobile web traffic in September 2026 ([StatCounter](https://gs.statcounter.com/os-market-share/mobile/indonesia): Android 79.16%, iOS 20.79%). That is web traffic, not phone ownership. The app has to be comfortable on Android Chrome and on iOS Safari as an installed PWA.
+- The StatCounter page for the desktop vs mobile ratio in Indonesia shows desktop at 55.83% ([source](https://gs.statcounter.com/platform-market-share/desktop-mobile-tablet/indonesia)), which contradicts the mobile-first picture and can't be reconciled. That figure is ignored. The mobile-first decision comes from the habits of you two.
+- Connectivity: 230 million internet users, 80.5% penetration ([DataReportal Digital 2026: Indonesia](https://datareportal.com/reports/digital-2026-indonesia), October 2025 data).
+
+**WhatsApp** is almost certainly the main sharing channel, but there is no clean Indonesian figure. DataReportal doesn't publish a WhatsApp figure for Indonesia, and the Reuters Institute only measures use for news: up 13 percentage points to 56% ([DNR 2026 Indonesia](https://reutersinstitute.politics.ox.ac.uk/digital-news-report/2026/indonesia)). The 93% (MEF) and 65% (Statista) figures are only search snippets: `[UNVERIFIED]`. This document doesn't quote a WhatsApp percentage.
+
+**Moments of use** (derived from the research in §1.2 and the Indonesian vendor patterns in §2):
+
+| Moment | Device | What is needed within seconds | Related features |
+|---|---|---|---|
+| On the sofa, the weekly session for two | Phone, sometimes a laptop | See "This week", decide what's hanging, update the budget | W3, W2, W13 |
+| Meeting with a vendor | Phone, signal not necessarily good | Open the vendor notes, record the quoted price and the down payment, call or WhatsApp | W11, W12, W13 |
+| Shopping for *seserahan* (ceremonial gifts) or supplies | Phone | Add an item, price, link; see the total | W9 |
+| Wedding day | The coordinator's phone, not the couple's | A run sheet that opens without signal, vendor contacts | W20, W21 |
+| Household routine | Phone | "Remember, motorbike tax next month", mark as paid | H3, H4 |
+
+On the wedding day: in the study by [Massimi et al. (CSCW 2014)](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf), 15 couples recruited mainly in south-east England, many brides left their phones because everyone they needed to contact was there. So "wedding-day mode" is aimed at the person coordinating, not at the couple. The sample is small and doesn't cover an extended-family Indonesian wedding.
+
+### 1.2 Why shared apps are used or abandoned: the evidence
+
+| # | Finding | Source | What it means for wp |
+|---|---|---|---|
+| 1 | Households coordinate tasks through location and availability, and forget low-priority tasks. One person usually becomes the "coordinator". 8 households, 241 tasks | [Sohn et al., CSCW 2012](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/38230.pdf) | The best moment is "I'm out" or "I just remembered". Adding an item must be one step, with no required fields |
+| 2 | 70.5% of 44 families use more than one calendar; 80% have an "awareness" calendar in a place they pass (the fridge). An online calendar for personal use can disrupt family coordination routines | [Neustaedter et al., ToCHI 2009](https://grouplab.cpsc.ucalgary.ca/grouplab/uploads/Publications/Publications/2009-CalendarCrucial.TOCHI.pdf) | The real opponents are WhatsApp, fridge notes, Google Calendar. A second app loses unless it's somewhere you pass. Don't be the source of truth for everything |
+| 3 | Couples plan the wedding with spreadsheets, documents, to-dos, email, and want to involve people outside the couple (parents, siblings) | [Massimi et al., CSCW 2014](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf) | The real competitor is the spreadsheet. Give export and a read-only link, not a third account |
+| 4 | Personal trackers get abandoned because of forgetting, the hassle of maintaining, skipping, or suspending. Within 3 months, 26% of users of financial tools quit, vs 44-45% for activity and location tools | [Epstein et al., UbiComp 2015](https://my.eng.utah.edu/~cs5540/au16/readings/PersonalInformatics-Epstein2015.pdf) | Money tracking lasts if the benefit is clear, but dies if input is a hassle. The data model must be small |
+| 5 | Reminders support repetition but hinder habit formation; event-based cues help | [Stawarz et al., CHI 2015](https://research-information.bris.ac.uk/en/publications/beyond-self-tracking-and-reminders-designing-smartphone-apps-that/) | Tie use to events that already exist: the weekly session, finishing a call with a vendor. No streaks and badges |
+| 6 | Household cognitive load: anticipating and monitoring tend to get stuck with one partner; deciding is more often done together | [Daminger, ASR 2019](https://inequality.hks.harvard.edu/publications/cognitive-dimension-household-labor) (finding from a search result summary because the page returned 403: `[UNVERIFIED]` against the main text) | A checkbox only supports "doing". What's expensive is remembering what has to be done. Templates and the "This week" screen answer that |
+| 7 | Couples share data but expect privacy; ambiguity makes sharing feel natural | [Griggio et al., CHI 2019](https://www.cs.ubc.ca/labs/edapt/papers/griggio2019_2.pdf) | Show the state of the item ("paid Wednesday"), not people's behaviour ("last opened the app 3 days ago") |
+| 8 | Chore-management apps get installed when overwhelmed, and fail when seen as the sole solution; notifications about inequality provoke defensiveness | [Petriglieri, MIT SMR 2019](https://sloanreview.mit.edu/article/hacking-inequality-at-home) and [MIT Technology Review 2022](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/) (practitioner and journalistic writing, not a controlled study) | The adoption trigger (the wedding) already exists. The risk is one partner feeling "managed". Don't assign with notifications |
+| 9 | Repeated notifications for the same thing make people turn off all notifications | [Apple HIG: Notifications](https://developer.apple.com/design/human-interface-guidelines/notifications) | At most one rare, specific nudge |
+| 10 | Onboarding tutorials don't improve task performance; users rarely change defaults | [NN/g onboarding](https://www.nngroup.com/articles/mobile-app-onboarding/), [NN/g defaults](https://www.nngroup.com/articles/the-power-of-defaults/) | No tour and no wizard. The first open already contains templates that can be deleted |
+| 11 | Habit formation takes 18 to 254 days, very variable | [Lally et al., 2010](https://api.crossref.org/works/10.1002/ejsp.674) | Enthusiasm from the third to the eighth week will drop. The app has to be useful without a daily habit |
+
+What was **not** found (don't treat as fact): a study comparing "assign vs claim" in couple apps; a study of a "who changed what" feed; a study of Indonesian couples on wedding technology. Principles in §1.3 that rest on those are inference, and are marked as such. The popular statistic "25% of apps are used once" has no primary source found: `[UNVERIFIED]`.
+
+### 1.3 Principles
+
+1. **Capture is the product.** One input on the first screen, one tap to save, no required fields. (Evidence 1, 4)
+2. **Two equal people.** Both can add, change, complete. No admin. (Evidence 6; [Frampton et al., CHI 2026](https://orca.cardiff.ac.uk/id/eprint/185455): most family management tools are oriented to a single user, `[UNVERIFIED]` because it's only from a search summary)
+3. **Default items are unassigned.** Anyone can "take" one with one tap. No assignment notification. Inference from evidence 6 and 8. The Carlson 2025 study saying per-task sharing feels fairer is `[UNVERIFIED]` (unpublished, reported by health media) and isn't used as a basis.
+4. **Show state, not behaviour.** "Paid by Partner B, Tuesday" is fine. "Partner B hasn't opened this" is not. (Evidence 7)
+5. **Nudges that are rare, specific, and tied to events.** Priority: the "This week" screen, then the "Add to calendar" button, then one weekly digest. Sharing to WhatsApp is triggered by the user, not sent automatically. (Evidence 5, 9)
+6. **No onboarding.** Task templates are already filled in and can be deleted. (Evidence 10)
+7. **Own little, interoperate for the rest.** Calendar, shopping list, vault: hand them off, connect through `.ics`, links, CSV. (Evidence 2, 3)
+8. **Undo everywhere.** Soft delete and a "recently deleted" screen, because two people edit the same data. ([NN/g 10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/): users often perform actions by mistake and need a clear way out; [Apple HIG undo](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/undo-and-redo.json))
+9. **Data can be taken away.** JSON and CSV export from day one. Too many couple and household apps die or change owners (§5.4).
+10. **Indonesia-first.** Whole rupiah, date `6 Oct 2026`, Hijri as an approximate display, WhatsApp for sharing, casual Indonesian UI language.
+
+### 1.4 Weekly-use test
+
+Every recommended feature must pass one of three:
+
+- **Weekly:** there is a real reason to touch it every week (e.g. budget, "This week", bills).
+- **Dense-temporary:** touched almost every week within a clear 4 to 8 week window (e.g. the KUA process, the rundown approaching the wedding day).
+- **High-value redemption:** rarely used, but when needed there is no replacement (e.g. the *amplop* ledger when invited to a *kondangan* (a wedding you attend as a guest)).
+
+Features that don't pass go on the "not built" list (§8). The tables in §3 and §4 list the trigger in the Value column.
+
+---
+
+## 2. Landscape
+
+### 2.1 International wedding planners
+
+All the big products are free for couples. The money comes from vendors (ads, leads) and registry/stationery, so the couple is the product.
+
+| Product | What | Money model | Collaboration and export | Source |
 |---|---|---|---|---|
-| The Knot | Marketplace AS dengan alat gratis: checklist, budget, guest list/RSVP, vendor, website, registry | Vendor dan registry; kelompok Knot dimiliki Permira dan Spectrum Equity | Ekspor CSV ada tapi "perlu dibersihkan" (sumber kompetitor); tidak ada API publik yang ketemu | [App Store](https://apps.apple.com/app/id457941553), [Wikipedia: The Knot Worldwide](https://en.wikipedia.org/wiki/The_Knot_Worldwide), [Paperlust](https://paperlust.co/blog/wedding-website-builders-compared/) (penjual stationery, bias) |
-| WeddingWire | Direktori vendor AS + alat gratis | Vendor bayar listing; milik Knot Worldwide | Tidak ada API publik; menurut audit pihak ketiga semua "API" WeddingWire adalah scraper tidak resmi | [weddingwire.com](https://www.weddingwire.com/), [Supergood](https://supergood.ai/api-report-card/weddingwire) |
-| Hitched | Planner UK dengan marketplace supplier | Dibeli Knot Worldwide dari Immediate Media pada 3 Feb 2020 | Tidak ditemukan | [Siaran pers Knot Worldwide](https://www.theknotww.com/press-releases/theknotworldwide-hitched-acquisition) |
-| Zola | Registry-first, plus website, guest list, budget, checklist | Registry commerce, stationery. Planning inti gratis | Satu pasangan per akun: pasangan hanya "akses untuk melihat"; hanya pemegang akun yang bisa memindahkan cash fund. Impor spreadsheet ada | [Zola FAQ](https://www.zola.com/faq/115002422171), [Zola planning](https://www.zola.com/wedding-planning), [Zola import](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-) |
-| Joy | Website-first, gratis | "We make money when guests purchase items couples add to their registry that Joy sells" | Gratis termasuk "multiple editor accounts". Impor dan ekspor CSV guest list terdokumentasi | [Joy pricing](https://withjoy.com/pricing/), [Joy export](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list) |
-| Bridebook | App UK: checklist, budget, guest list, cari venue | "every couple can use Bridebook completely free"; supplier membayar paket | Undang pasangan lewat link | [Bridebook help](https://support.bridebook.com/en/support/how-much-does-bridebook-cost), [partner invite](https://support.bridebook.com/en/support/invite-your-partner-to-join-your-wedding-planning) |
-| Aisle Planner | Software untuk profesional event (klien, proposal, invoice), bukan untuk pasangan | Langganan mulai $49.99/bln | n/a | [aisleplanner.com/pricing](https://www.aisleplanner.com/pricing) |
-| Appy Couple | Website dan app native + RSVP + foto tamu | Harga tidak tertulis | n/a | [appycouple.com](https://appycouple.com/) |
+| The Knot | US marketplace with free tools: checklist, budget, guest list/RSVP, vendors, website, registry | Vendors and registry; the Knot group is owned by Permira and Spectrum Equity | CSV export exists but "needs cleaning up" (competitor source); no public API found | [App Store](https://apps.apple.com/app/id457941553), [Wikipedia: The Knot Worldwide](https://en.wikipedia.org/wiki/The_Knot_Worldwide), [Paperlust](https://paperlust.co/blog/wedding-website-builders-compared/) (a stationery seller, biased) |
+| WeddingWire | US vendor directory + free tools | Vendors pay for listings; owned by Knot Worldwide | No public API; according to a third-party audit all WeddingWire "APIs" are unofficial scrapers | [weddingwire.com](https://www.weddingwire.com/), [Supergood](https://supergood.ai/api-report-card/weddingwire) |
+| Hitched | UK planner with a supplier marketplace | Bought by Knot Worldwide from Immediate Media on 3 February 2020 | Not found | [Knot Worldwide press release](https://www.theknotww.com/press-releases/theknotworldwide-hitched-acquisition) |
+| Zola | Registry-first, plus website, guest list, budget, checklist | Registry commerce, stationery. Core planning is free | One couple per account: the partner only has "view access"; only the account holder can move the cash fund. Spreadsheet import exists | [Zola FAQ](https://www.zola.com/faq/115002422171), [Zola planning](https://www.zola.com/wedding-planning), [Zola import](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-) |
+| Joy | Website-first, free | "We make money when guests purchase items couples add to their registry that Joy sells" | Free includes "multiple editor accounts". Guest list CSV import and export documented | [Joy pricing](https://withjoy.com/pricing/), [Joy export](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list) |
+| Bridebook | UK app: checklist, budget, guest list, venue search | "every couple can use Bridebook completely free"; suppliers pay for packages | Invite your partner through a link | [Bridebook help](https://support.bridebook.com/en/support/how-much-does-bridebook-cost), [partner invite](https://support.bridebook.com/en/support/invite-your-partner-to-join-your-wedding-planning) |
+| Aisle Planner | Software for event professionals (clients, proposals, invoices), not for couples | Subscription from $49.99/month | n/a | [aisleplanner.com/pricing](https://www.aisleplanner.com/pricing) |
+| Appy Couple | Website and native app + RSVP + guest photos | Price not stated | n/a | [appycouple.com](https://appycouple.com/) |
 
-Catatan struktur:
-- Dari semua produk couple-facing, hanya Joy yang terverifikasi punya ekspor CSV penuh untuk guest list. Tidak ada yang menampakkan API publik untuk pasangan. Ekspor budget hampir tidak terdokumentasi (hanya forum WeddingWire 2019 yang menyebut tombol "Download": [thread](https://www.weddingwire.com/wedding-forums/printing-my-invite-list-and-budget/b685bfcf5c413105.html), mungkin usang).
-- Kontroversi vendor: seorang senator AS menuduh The Knot menagih vendor untuk lead palsu, The Knot membantah dan bilang sedang "reducing spam and ghosting" ([AOL, 29 Okt 2025](https://www.aol.com/articles/republican-senator-wants-investigation-popular-145815916.html), [siaran lanjutan 13 Mei 2026](https://capitolreleases.com/releases/899033c7-10e9-4436-9139-0ff5bf1b6782)). Ini tuduhan, bukan putusan.
-- Satu-satunya klaim "offline" yang ketemu, dari WeddingHappy ("No network connection required for almost everything"), `[UNVERIFIED]` (halaman toko gagal dimuat).
+Structural notes:
+- Of all the couple-facing products, only Joy is verified to have a full CSV export for the guest list. None exposes a public API for couples. Budget export is hardly documented (only a 2019 WeddingWire forum mentions a "Download" button: [thread](https://www.weddingwire.com/wedding-forums/printing-my-invite-list-and-budget/b685bfcf5c413105.html), possibly outdated).
+- Vendor controversy: a US senator accused The Knot of charging vendors for fake leads, and The Knot denied it and said it is "reducing spam and ghosting" ([AOL, 29 October 2025](https://www.aol.com/articles/republican-senator-wants-investigation-popular-145815916.html), [follow-up release 13 May 2026](https://capitolreleases.com/releases/899033c7-10e9-4436-9139-0ff5bf1b6782)). This is an allegation, not a ruling.
+- The only "offline" claim found, from WeddingHappy ("No network connection required for almost everything"), is `[UNVERIFIED]` (the store page failed to load).
 
-### 2.2 Template spreadsheet, Notion, Trello, Airtable
+### 2.2 Spreadsheet templates, Notion, Trello, Airtable
 
-| Template | Isi | Sumber |
+| Template | Contents | Source |
 |---|---|---|
-| Notion "Big Day, Big Plans" (10 template) | Guest list, seating, budget, timeline hari-H, vendor, RSVP | [Notion](https://www.notion.com/en-gb/templates/collections/big-day-big-plans) |
-| Trello, 5 board resmi | To-do per lead time, timeline hari-H, wedding party, seating, thank-you | [Atlassian](https://www.atlassian.com/blog/trello/guide-to-planning-a-wedding-with-trello) |
-| Airtable "Wedding planning" | 5 tabel: tamu, seating, vendor, perlengkapan/biaya, venue; kalender dan timeline | [Airtable](https://www.airtable.com/templates/wedding-planning/expxNBai7rjuqdJ06) |
-| Notion berbayar (Contra, $27) | 19 section termasuk payment tracker, checklist 12 bulan | [Contra](https://contra.com/products/uZSPwsLK-notion-wedding-planner-template-or-budget-timeline-and-checklist) |
-| Notion berbayar (notioneverything, $20) | Budget, tamu, vendor, countdown, checklist malam sebelum | [notioneverything](https://www.notioneverything.com/templates/wedding-planner-template) |
-| Google Sheets/Excel gratis, 10 tab | Budget, tamu, vendor, checklist, jadwal hari-H, stationery | [weddingplanningspreadsheet.com](https://weddingplanningspreadsheet.com/) |
+| Notion "Big Day, Big Plans" (10 templates) | Guest list, seating, budget, wedding-day timeline, vendors, RSVP | [Notion](https://www.notion.com/en-gb/templates/collections/big-day-big-plans) |
+| Trello, 5 official boards | To-dos per lead time, wedding-day timeline, wedding party, seating, thank-you | [Atlassian](https://www.atlassian.com/blog/trello/guide-to-planning-a-wedding-with-trello) |
+| Airtable "Wedding planning" | 5 tables: guests, seating, vendors, supplies/costs, venue; calendar and timeline | [Airtable](https://www.airtable.com/templates/wedding-planning/expxNBai7rjuqdJ06) |
+| Paid Notion (Contra, $27) | 19 sections including a payment tracker, a 12-month checklist | [Contra](https://contra.com/products/uZSPwsLK-notion-wedding-planner-template-or-budget-timeline-and-checklist) |
+| Paid Notion (notioneverything, $20) | Budget, guests, vendors, countdown, night-before checklist | [notioneverything](https://www.notioneverything.com/templates/wedding-planner-template) |
+| Free Google Sheets/Excel, 10 tabs | Budget, guests, vendors, checklist, wedding-day schedule, stationery | [weddingplanningspreadsheet.com](https://weddingplanningspreadsheet.com/) |
 
-**Pola yang sama di semua template:** budget, guest list/RSVP, vendor, checklist per lead time, timeline hari-H, seating, pembayaran. Tambahan yang sering muncul: playlist, tracker undangan, tracker ucapan terima kasih, malam sebelum.
+**The same pattern in all templates:** budget, guest list/RSVP, vendors, checklist per lead time, wedding-day timeline, seating, payments. Additions that often show up: playlist, invitation tracker, thank-you tracker, the night before.
 
-**Pengalaman satu orang yang merencanakan nikah dengan spreadsheet:** app "fine" tapi ditinggalkan dalam seminggu; spreadsheet cocok untuk "a lot of moving parts, a fixed deadline, and real money on the line" ([Spreadsheet Point](https://spreadsheetpoint.com/i-planned-my-entire-wedding-with-spreadsheets/), penulis mungkin menjual konten spreadsheet). Satu orang, bukan data.
+**One person's experience planning a wedding with a spreadsheet:** the app was "fine" but abandoned within a week; the spreadsheet suits "a lot of moving parts, a fixed deadline, and real money on the line" ([Spreadsheet Point](https://spreadsheetpoint.com/i-planned-my-entire-wedding-with-spreadsheets/), the author may sell spreadsheet content). One person, not data.
 
-### 2.3 Produk Indonesia
+### 2.3 Indonesian products
 
-| Produk | Apa | Melayani | Model uang | Sumber |
+| Product | What | Serves | Money model | Source |
 |---|---|---|---|---|
-| Bridestory | Marketplace vendor + app; Bridestory Pay (cicilan); sejak Sept 2025 "SayYes RSVP" (RSVP, check-in QR) | Pasangan dan vendor | Vendor langganan Silver/Gold; dibeli Tokopedia 2019 | [App Store](https://apps.apple.com/id/app/bridestory-wedding-app-hilda/id1067262519), [versi 3.17.3](https://apps.apple.com/id/app/bridestory/id1067262519), [KrASIA](https://amp.kr-asia.com/bridestory-and-life-after-tokopedias-acquisition-startup-stories), [paket vendor](https://business.bridestory.com/id/blog/mengenal-vendor-subscription-plan-di-bridestory) |
-| Weddingku | Direktori vendor + konten, sejak 2002 | Pasangan (browse) dan vendor | Vendor bayar paket Gold Rp13.320.000/tahun, Diamond Rp27.750.000/tahun; iklan | [weddingku.com](https://www.weddingku.com), [partner.weddingku.com](https://partner.weddingku.com). Alat checklist/budget tidak ketemu di halaman yang dibuka |
-| Wevitation | Undangan digital + modul "Event Planner" (Budget Planner, To-Do, Vendor, Timeline), QR tamu, kado digital | Pasangan dan tamu | Gratis (terbatas); Premium Rp69K dan Business Rp99K sekali bayar. Modul planner hanya di paket berbayar | [wevitation.com](https://wevitation.com) |
-| invi.id | Undangan, amplop digital, buku tamu, ekspor PDF/Excel pesan tamu | Pasangan, reseller | Rp99K dan Rp149K per tahun | [invi.id](https://invi.id) |
-| SebarUndangan, Menica, Ze Guest Management, Pentamoo, Digitation | Undangan + RSVP WhatsApp + QR check-in + buku tamu digital | Pasangan dan penyelenggara | Variatif; Ze mulai Rp300.000 | [SebarUndangan](https://sebarundangan.id), [Menica](https://menica.pro), [Ze](https://zeinvitation.com), [Pentamoo](https://pentamoo.id), [Digitation](https://one.digitation.id/) |
+| Bridestory | Vendor marketplace + app; Bridestory Pay (instalments); since September 2025 "SayYes RSVP" (RSVP, QR check-in) | Couples and vendors | Vendors on Silver/Gold subscriptions; bought by Tokopedia in 2019 | [App Store](https://apps.apple.com/id/app/bridestory-wedding-app-hilda/id1067262519), [version 3.17.3](https://apps.apple.com/id/app/bridestory/id1067262519), [KrASIA](https://amp.kr-asia.com/bridestory-and-life-after-tokopedias-acquisition-startup-stories), [vendor plans](https://business.bridestory.com/id/blog/mengenal-vendor-subscription-plan-di-bridestory) |
+| Weddingku | Vendor directory + content, since 2002 | Couples (browsing) and vendors | Vendors pay for the Gold package Rp13,320,000/year, Diamond Rp27,750,000/year; ads | [weddingku.com](https://www.weddingku.com), [partner.weddingku.com](https://partner.weddingku.com). Checklist/budget tools not found on the pages opened |
+| Wevitation | Digital invitations + an "Event Planner" module (Budget Planner, To-Do, Vendors, Timeline), guest QR, digital gifts | Couples and guests | Free (limited); Premium Rp69K and Business Rp99K one-time payment. The planner module is only in the paid plans | [wevitation.com](https://wevitation.com) |
+| invi.id | Invitations, digital envelopes, guest book, PDF/Excel export of guest messages | Couples, resellers | Rp99K and Rp149K per year | [invi.id](https://invi.id) |
+| SebarUndangan, Menica, Ze Guest Management, Pentamoo, Digitation | Invitations + WhatsApp RSVP + QR check-in + digital guest book | Couples and organisers | Varies; Ze starts at Rp300,000 | [SebarUndangan](https://sebarundangan.id), [Menica](https://menica.pro), [Ze](https://zeinvitation.com), [Pentamoo](https://pentamoo.id), [Digitation](https://one.digitation.id/) |
 
-Temuan:
-- Pencarian App Store Indonesia untuk "wedding planner indonesia" tidak menampilkan developer Indonesia di 9 hasil teratas ([query](https://itunes.apple.com/search?term=wedding%20planner%20indonesia&country=id&entity=software&limit=15), satu query saja). Artikel media Indonesia merekomendasikan app asing: [Kumparan, 17 Apr 2026](https://kumparan.com/how-to-tekno/5-aplikasi-wedding-planner-untuk-memudahkan-persiapan-acara-27E12z0bbmC), [Beautynesia 2021](https://www.beautynesia.id/life/8-aplikasi-populer-yang-wajib-didownload-untuk-bantu-persiapan-pernikahan/b-211274).
-- Fitur undangan digital, RSVP WhatsApp, QR check-in, dan amplop digital sudah ramai dilayani platform khusus. Membuatnya sendiri tidak punya alasan kuat (lihat §8).
-- Tidak ketemu alat yang mencatat **amplop masuk dan keluar sebagai buku balas-membalas**, padahal praktiknya nyata (§3, W25).
-- Tidak ketemu sumber Indonesia tentang pemakaian Google Sheets, Notion, atau grup WhatsApp untuk planning (lihat Gap).
+Findings:
+- An Indonesian App Store search for "wedding planner indonesia" shows no Indonesian developer in the top 9 results ([query](https://itunes.apple.com/search?term=wedding%20planner%20indonesia&country=id&entity=software&limit=15), a single query). Indonesian media articles recommend foreign apps: [Kumparan, 17 April 2026](https://kumparan.com/how-to-tekno/5-aplikasi-wedding-planner-untuk-memudahkan-persiapan-acara-27E12z0bbmC), [Beautynesia 2021](https://www.beautynesia.id/life/8-aplikasi-populer-yang-wajib-didownload-untuk-bantu-persiapan-pernikahan/b-211274).
+- Digital invitations, WhatsApp RSVP, QR check-in and digital envelopes are already well served by dedicated platforms. Building them ourselves has no strong reason (see §8).
+- No tool was found that records **incoming and outgoing *amplop* as a reciprocal ledger**, even though the practice is real (§3, W25).
+- No Indonesian source was found about using Google Sheets, Notion or WhatsApp groups for planning (see Gap).
 
-### 2.4 Apa yang disukai dan dikeluhkan pengguna
+### 2.4 What users like and complain about
 
-Peringatan: ulasan condong ke registry, pengiriman, dan vendor. Pasangan yang membahas alat planning murni jarang.
+Warning: reviews lean toward registry, shipping and vendors. Couples discussing pure planning tools are rare.
 
-| Produk | Suka/Keluh | Tema | Sumber | Isi |
+| Product | Like/Complaint | Theme | Source | Content |
 |---|---|---|---|---|
-| Joy | Suka | Tanpa upsell, sederhana | [Trustpilot Joy](https://www.trustpilot.com/review/withjoy.com) | "The website is quite robust, and doesn't push a million products on you" (Sep 2026) |
-| Joy | Suka | Guest list dan RSVP bisa diatur | [Trustpilot Joy](https://www.trustpilot.com/review/withjoy.com) | "I love the guest list management and RSVP form customization" (Agu 2026) |
-| The Knot | Suka | Semua di satu tempat | [App Store](https://apps.apple.com/app/id457941553) | Pengulas menyebutnya "an all-in-one planning tool" |
-| The Knot | Keluh | Data tamu hilang | [Trustpilot Knot](https://www.trustpilot.com/review/theknot.com?stars=1) | "Lost all menu choice guest data right before the wedding" (Agu 2026) |
-| The Knot / WeddingWire | Keluh | Spam lead (sisi vendor) | [AOL](https://www.aol.com/articles/republican-senator-wants-investigation-popular-145815916.html), [Trustpilot WeddingWire](https://www.trustpilot.com/review/weddingwire.com) | Vendor mengaku lead palsu dari bot |
-| WeddingWire | Keluh | Pasangan diblokir karena kirim ke banyak vendor | [forum](https://www.weddingwire.com/wedding-forums/ww-spam-blocked-me/bbdd14f7e14540be.html) | Utas 2019; usang |
-| Zola | Keluh | Grup tamu kaku | [App Store](https://apps.apple.com/us/app/zola-wedding-planner/id852691916) | Pasangan selalu diundang bersama (parafrase) |
-| Joy | Keluh | Anggaran/checklist tipis | [App Store](https://apps.apple.com/us/app/joy-wedding-app-website/id994411720) | Satu tema ulasan negatif (bertentangan dengan materi Joy, `[UNVERIFIED]` kedalamannya) |
-| Bridestory (iOS) | Suka | Inspirasi, jangkauan vendor | [feed ulasan Apple](https://itunes.apple.com/id/rss/customerreviews/id=1067262519/sortBy=mostRecent/json) | "Apps ini sangat lengkap, mudah digunakan dan sangat bermanfaat" (Jul 2023) |
-| Bridestory (iOS) | Keluh | Crash, lambat, gagal login | sama | Tema paling sering di 46 ulasan terbaru (hitungan peneliti, sampel miring ke ulasan lama, bukan representatif): "Aplikasi LEMOT, loading mulu berujung ERROR" (2021) |
-| Bridestory (iOS) | Keluh | Tidak ada checklist/anggaran | sama | "No wedding checklist, no budgeting etc...vendors are expensive" (Agu 2020) |
-| Honeydue | Suka | Reminder lebih baik dari catatan bersama | [App Store](https://apps.apple.com/app/id1157633945) | "huge step up from sharing a note in my iPhone because we get reminders" |
-| Honeydue | Keluh | Sinkron transaksi, dukungan hilang | sama | "the support team seems to have gone completely dark" |
-| Splitwise | Keluh | Batas harian di free tier tanpa pemberitahuan | [Trustpilot](https://www.trustpilot.com/review/splitwise.com?page=2) | Ulasan Des 2023 sampai Jul 2024: batas entri harian, jeda 10 detik. Tidak ada pengumuman resmi yang ketemu |
-| Money Lover | Keluh | Ekspor sulit bahkan setelah bayar premium | [feed ulasan Apple ID](https://itunes.apple.com/id/rss/customerreviews/id=486312413/sortBy=mostRecent/json) | "useless premium can't export to google sheet" (Mei 2026) |
-| Money Lover | Keluh | Tidak ada tautan ke BCA | sama | "Please connect it to BCA (bank cetral asia) indonesia" (Jul 2025) |
-| Google Keep | Keluh | Sinkron dan data hilang di list bersama | [App Store](https://apps.apple.com/us/app/google-keep-notes-and-lists/id1029207872) | Update kolaborator tidak muncul; catatan menggandakan atau hilang |
-| Wanderlog | Keluh | Trial paksa | [Trustpilot](https://www.trustpilot.com/review/wanderlog.com) | "Forced free trial which I'm not interested in." (Agu 2026); 51 ulasan, sampel kecil |
-| Aplikasi chores | Keluh | Menambah kerja manajer, terasa seperti mengasuh pasangan | [MIT Tech Review](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/) | "It doesn't solve the problem: that you're nagging someone else or parenting your partner." |
-| Tody | Suka | Mengurangi kelelahan memutuskan | [App Store](https://apps.apple.com/us/app/tody-easy-house-cleaning/id595339588) | "It has helped me to only focus on what's right in front of me." |
+| Joy | Like | No upsell, simple | [Trustpilot Joy](https://www.trustpilot.com/review/withjoy.com) | "The website is quite robust, and doesn't push a million products on you" (September 2026) |
+| Joy | Like | Guest list and RSVP can be tuned | [Trustpilot Joy](https://www.trustpilot.com/review/withjoy.com) | "I love the guest list management and RSVP form customization" (August 2026) |
+| The Knot | Like | Everything in one place | [App Store](https://apps.apple.com/app/id457941553) | A reviewer calls it "an all-in-one planning tool" |
+| The Knot | Complaint | Guest data lost | [Trustpilot Knot](https://www.trustpilot.com/review/theknot.com?stars=1) | "Lost all menu choice guest data right before the wedding" (August 2026) |
+| The Knot / WeddingWire | Complaint | Lead spam (vendor side) | [AOL](https://www.aol.com/articles/republican-senator-wants-investigation-popular-145815916.html), [Trustpilot WeddingWire](https://www.trustpilot.com/review/weddingwire.com) | Vendors claim fake leads from bots |
+| WeddingWire | Complaint | Couples blocked for sending to many vendors | [forum](https://www.weddingwire.com/wedding-forums/ww-spam-blocked-me/bbdd14f7e14540be.html) | A 2019 thread; outdated |
+| Zola | Complaint | Rigid guest groups | [App Store](https://apps.apple.com/us/app/zola-wedding-planner/id852691916) | Couples are always invited together (paraphrase) |
+| Joy | Complaint | Thin budget/checklist | [App Store](https://apps.apple.com/us/app/joy-wedding-app-website/id994411720) | One negative review theme (contradicts Joy's material, depth `[UNVERIFIED]`) |
+| Bridestory (iOS) | Like | Inspiration, vendor reach | [Apple review feed](https://itunes.apple.com/id/rss/customerreviews/id=1067262519/sortBy=mostRecent/json) | "This app is very complete, easy to use and very useful" (July 2023, translated from Indonesian) |
+| Bridestory (iOS) | Complaint | Crashes, slow, login fails | same | The most frequent theme in the 46 latest reviews (the researcher's count, the sample leans toward old reviews, not representative): "The app is SLOW, just keeps loading and ends in ERROR" (2021, translated from Indonesian) |
+| Bridestory (iOS) | Complaint | No checklist/budget | same | "No wedding checklist, no budgeting etc...vendors are expensive" (August 2020) |
+| Honeydue | Like | Reminders better than a shared note | [App Store](https://apps.apple.com/app/id1157633945) | "huge step up from sharing a note in my iPhone because we get reminders" |
+| Honeydue | Complaint | Transaction sync, support gone | same | "the support team seems to have gone completely dark" |
+| Splitwise | Complaint | Daily limit on the free tier without notice | [Trustpilot](https://www.trustpilot.com/review/splitwise.com?page=2) | Reviews from December 2023 to July 2024: a daily entry limit, a 10-second delay. No official announcement found |
+| Money Lover | Complaint | Export is hard even after paying for premium | [Apple ID review feed](https://itunes.apple.com/id/rss/customerreviews/id=486312413/sortBy=mostRecent/json) | "useless premium can't export to google sheet" (May 2026) |
+| Money Lover | Complaint | No link to BCA | same | "Please connect it to BCA (bank cetral asia) indonesia" (July 2025) |
+| Google Keep | Complaint | Sync and data loss in shared lists | [App Store](https://apps.apple.com/us/app/google-keep-notes-and-lists/id1029207872) | Collaborator updates don't show up; notes duplicate or disappear |
+| Wanderlog | Complaint | Forced trial | [Trustpilot](https://www.trustpilot.com/review/wanderlog.com) | "Forced free trial which I'm not interested in." (August 2026); 51 reviews, a small sample |
+| Chore apps | Complaint | Adds work for the manager, feels like parenting your partner | [MIT Tech Review](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/) | "It doesn't solve the problem: that you're nagging someone else or parenting your partner." |
+| Tody | Like | Reduces decision fatigue | [App Store](https://apps.apple.com/us/app/tody-easy-house-cleaning/id595339588) | "It has helped me to only focus on what's right in front of me." |
 
-**Tema yang berulang:**
-- **Suka:** satu tempat untuk semuanya; sederhana tanpa upsell; reminder yang spesifik; kontrol atas tamu/RSVP; tampilan "terakhir dilakukan/akan jatuh tempo".
-- **Keluh:** upsell dan paywall; kehilangan data dan sinkron rusak; ekspor terkunci; spam vendor; crash dan login gagal; memaksa satu pasangan jadi manajer.
+**Recurring themes:**
+- **Like:** one place for everything; simple without upsell; specific reminders; control over guests/RSVP; a "last done/coming due" view.
+- **Complaint:** upsell and paywalls; data loss and broken sync; locked export; vendor spam; crashes and failed login; forcing one partner to be the manager.
 
-### 2.5 Keluhan pasangan Indonesia
+### 2.5 Complaints of Indonesian couples
 
-Jakpat, 26-30 Juni 2025, 798 responden yang berencana menikah ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)): anggaran adalah hal tersulit bagi 64%, menyeimbangkan kewajiban keluarga 55%, tekanan keluarga/teman 45%, urusan administrasi dan hukum 32%, komunikasi dengan pasangan 30%. Sumber dana (Jakpat, [Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)): 45% tabungan pribadi, 40% tabungan bersama.
+Jakpat, 26-30 June 2025, 798 respondents planning to marry ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)): budget is the hardest thing for 64%, balancing family obligations 55%, family/friend pressure 45%, administrative and legal matters 32%, communication with the partner 30%. Source of funds (Jakpat, [Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)): 45% personal savings, 40% joint savings.
 
-Poin lain dari artikel Indonesia:
-- **Pengeluaran melenceng:** survei Bridestory 2017 menemukan hanya 49.1% responden yang berhasil menjaga budget ([laporan](https://business.bridestory.com/blog/2017-indonesia-wedding-industry-report-by-bridestory1520393557); basis respondennya pengguna Bridestory).
-- **Tamu tambahan dan porsi:** satu undangan bisa jadi 2-4 orang; aturan katering bervariasi, ada yang menyarankan 2x tamu undangan ([Antara, 29 Jul 2024](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan)), ada yang 2,5x ([Mojok, 2021](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). Jadi pengali harus bisa diatur pasangan sendiri.
-- **Keluarga ikut campur:** saran umum adalah menyelaraskan dengan pasangan dulu, membuka budget ke yang ikut membiayai, membagi slot undangan per keluarga, dan menuliskan kesepakatan ([IDN Times](https://www.idntimes.com/life/relationship/cara-hadapi-keluarga-terlalu-ikut-campur-persiapan-nikah-c1c2-01-zn5b2-d3brgs)).
-- **Pertengkaran:** pembagian tugas yang timpang disebut sebagai salah satu pemicu ([Popbela, 17 Feb 2026](https://www.popbela.com/relationship/married/kenapa-pasangan-sering-bertengkar-saat-persiapan-pernikahan-00-ck827-w0vs7y)).
-- **Penipuan WO:** lembaga konsumen menyebut kasus WO bermasalah sebagai "iceberg phenomenon" karena korban tidak tahu harus lapor ke mana ([Kontan, 9 Des 2025](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)). Alasan kuat untuk menyimpan kontrak, bukti bayar, dan jadwal.
-- **Amplop sebagai utang sosial:** sumbangan pernikahan balas-membalas terasa seperti "hutang sosial" ([Mojok](https://mojok.co/liputan/harian/sumbangan-pernikahan-di-jogja-bikin-nelangsa-dan-menderita/)); amplop bernama membentuk "buku besar sosial" informal ([Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)). Tidak ketemu alat yang mencatatnya.
-- **Harga dulu:** menurut data internal Bridestory semester I 2026, "70,13% business leads berasal dari aktivitas melihat atau meminta informasi harga" ([Bridestory Business Insight](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)). Itu data sisi vendor, tapi konsisten dengan kebutuhan membandingkan penawaran.
+Other points from Indonesian articles:
+- **Spending drifts off:** a 2017 Bridestory survey found only 49.1% of respondents managed to keep to the budget ([report](https://business.bridestory.com/blog/2017-indonesia-wedding-industry-report-by-bridestory1520393557); the respondent base was Bridestory users).
+- **Extra guests and portions:** one invitation can become 2-4 people; catering rules vary, some suggest 2x the invited guests ([Antara, 29 July 2024](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan)), some 2.5x ([Mojok, 2021](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). So the multiplier has to be adjustable by the couple themselves.
+- **Family interference:** common advice is to align with your partner first, open the budget to those who help pay, split invitation slots per family, and write down the agreement ([IDN Times](https://www.idntimes.com/life/relationship/cara-hadapi-keluarga-terlalu-ikut-campur-persiapan-nikah-c1c2-01-zn5b2-d3brgs)).
+- **Arguments:** an uneven division of tasks is named as one trigger ([Popbela, 17 February 2026](https://www.popbela.com/relationship/married/kenapa-pasangan-sering-bertengkar-saat-persiapan-pernikahan-00-ck827-w0vs7y)).
+- **WO fraud:** a consumer body calls problematic WO cases an "iceberg phenomenon" because victims don't know where to report ([Kontan, 9 December 2025](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)). A strong reason to keep contracts, payment proof and the schedule.
+- **Amplop as social debt:** reciprocal wedding contributions feel like a "social debt" ([Mojok](https://mojok.co/liputan/harian/sumbangan-pernikahan-di-jogja-bikin-nelangsa-dan-menderita/)); named envelopes form an informal "social ledger" ([Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)). No tool was found that records it.
+- **Price first:** according to Bridestory's internal data for the first half of 2026, "70.13% of business leads come from viewing or asking for price information" ([Bridestory Business Insight](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)). That is vendor-side data, but consistent with the need to compare quotes.
 
-**Peringatan sampel:** survei Bridestory mewakili penggunanya sendiri (2025: 94.3% Jabodetabek). Mereka melaporkan budget modal Rp250-500 juta, sedangkan panel nasional Jakpat menunjukkan Rp50-100 juta ([Bridestory 2025](https://business.bridestory.com/id/blog/bridestory-wedding-trend-survey-report-2025), [Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)). Jangan pakai satu angka sebagai "normal".
+**Sample warning:** the Bridestory survey represents its own users (2025: 94.3% Greater Jakarta). They report a typical budget of Rp250-500 million, while Jakpat's national panel shows Rp50-100 million ([Bridestory 2025](https://business.bridestory.com/id/blog/bridestory-wedding-trend-survey-report-2025), [Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)). Don't use one figure as "normal".
 
-### 2.6 Aplikasi pasangan dan rumah tangga (ringkas, rinci di §4)
+### 2.6 Couple and household apps (brief, detail in §4)
 
-| Kategori | Contoh yang diverifikasi |
+| Category | Verified examples |
 |---|---|
-| Uang bersama | Honeydue (sinkron via Plaid; tidak ada di App Store Indonesia), Splitwise, YNAB, Monarch, Goodbudget |
-| Tabungan | Bank Jago Kantong Bersama, blu bluGether |
-| Daftar belanja | AnyList, OurGroceries, Bring!, Google Keep |
-| Tugas rumah | Tody, Sweepy, Cozi |
-| Kalender | Google Calendar, Apple Calendar, TimeTree, Cozi |
-| Dokumen | Bitwarden (lampiran terenkripsi, emergency access), Google Inactive Account Manager |
-| Rumah dan KPR | Simulasi KPR Rumah123 dan BCA, HomeZada |
-| Perjalanan | Wanderlog, TripIt |
-| Kenangan dan relasi | Day One, Between, Paired, Gottman Card Decks |
+| Shared money | Honeydue (syncs via Plaid; not on the Indonesian App Store), Splitwise, YNAB, Monarch, Goodbudget |
+| Savings | Bank Jago Kantong Bersama, blu bluGether |
+| Shopping lists | AnyList, OurGroceries, Bring!, Google Keep |
+| Household chores | Tody, Sweepy, Cozi |
+| Calendar | Google Calendar, Apple Calendar, TimeTree, Cozi |
+| Documents | Bitwarden (encrypted attachments, emergency access), Google Inactive Account Manager |
+| Home and mortgage | Rumah123 and BCA mortgage simulations, HomeZada |
+| Travel | Wanderlog, TripIt |
+| Memories and relationships | Day One, Between, Paired, Gottman Card Decks |
 
-Bukti dan sumber per kategori ada di §4.
+Evidence and sources per category are in §4.
 
-### 2.7 Celah yang masuk akal (inferensi)
+### 2.7 Plausible gaps (inference)
 
-- **Satu tempat privat untuk dua orang** yang menggabungkan tugas, vendor, jadwal bayar, tamu, dan rundown. Alat-alat di atas memecah ini ke 3-4 app, atau menguncinya di paket berbayar.
-- **Proses KUA sebagai checklist bersyarat dengan tenggat dihitung mundur dari hari akad.** Tidak ketemu produk yang melakukannya. Alasan lemah: bisa saja ada dan tidak terjangkau pencarian ini.
-- **Buku amplop dan momen keluarga** sebagai ledger balas-membalas.
-- **Data milik sendiri:** ekspor penuh, tanpa paywall, tanpa batas harian.
+- **One private place for two people** that combines tasks, vendors, payment schedule, guests and rundown. The tools above split this across 3-4 apps, or lock it in paid plans.
+- **The KUA process as a conditional checklist with deadlines counted back from the *akad* (marriage contract ceremony) day.** No product found that does it. A weak reason: one may exist and just be out of this search's reach.
+- **The *amplop* ledger and family occasions** as a reciprocal ledger.
+- **Self-owned data:** full export, no paywall, no daily limit.
 
-Semua celah ini harus diperlakukan sebagai hipotesis yang dicek ke kalian berdua (§8), bukan sebagai temuan pasar.
-
----
-
-## 3. Katalog fitur pernikahan per fase
-
-Semua tenggat dihitung mundur atau maju dari **H** = hari akad. `HK` = hari kerja. Kolom **Nilai** menyebut pemicu pemakaian (lihat uji di §1.4). Nama `kind` di kolom Data merujuk ke model di §7. Effort dan Platform pakai legenda di bagian "Cara baca".
-
-### 3.1 Fase 0: Dasar (H-12 bulan dan seterusnya)
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W1 | **Hari-H dan countdown.** Tanggal akad, zona waktu, countdown, tanggal Hijri perkiraan di sebelahnya | Satu angka yang membuat semua tenggat relatif. Terlihat tiap buka app | S | `settings`: tanggal akad (`YYYY-MM-DD`), zona IANA, label Partner A/B | client |
-| W2 | **Timeline tugas dari template** dengan offset dari H. Tugas bisa diubah atau dihapus. Satu ketukan untuk "saya ambil". Tanda "perlu keputusan" | Mingguan. App yang mengingat apa saja yang harus dikerjakan mengurangi beban mengantisipasi (§1.2 #6) | M | `task`: judul, `due_on`, `done_on`, `who` (kosong = siapa saja), `group_key` (fase), catatan, flag keputusan | D1 + file template statis |
-| W3 | **Layar "Minggu ini".** Tugas jatuh tempo atau telat, pembayaran 7 hari ke depan, keputusan menggantung, perpanjangan dokumen | Jangkar sesi mingguan di sofa. Satu-satunya "reminder" yang tidak butuh infrastruktur | S | Query atas `task`, `payment`, `doc` | client |
-| W4 | **Catatan kesepakatan.** Keputusan penting: apa, siapa yang setuju, kapan, alasannya | Saran umum untuk konflik keluarga adalah menuliskan kesepakatan ([IDN Times](https://www.idntimes.com/life/relationship/cara-hadapi-keluarga-terlalu-ikut-campur-persiapan-nikah-c1c2-01-zn5b2-d3brgs)). Dipakai saat ada perdebatan "dulu kita bilang apa" | S | `note`: judul, isi, tanggal, `who` | D1 |
-
-### 3.2 Fase 1: Administrasi nikah (kira-kira H-3 bulan sampai H+7 HK)
-
-Berlaku untuk pasangan Muslim yang menikah lewat KUA. Jalur sipil (non-Muslim) dicatat di Dukcapil dan dilaporkan paling lambat 60 hari sejak perkawinan ([UU 23/2006 Pasal 34(1)](https://pasal.id/peraturan/uu/uu-no-23-tahun-2006), teks dari situs pihak ketiga; [Detik, 31 Mar 2026](https://news.detik.com/berita/d-8423682/syarat-dan-cara-urus-akta-kelahiran-akta-perkawinan-dan-akta-kematian) mengulang aturan itu). Jalur sipil tidak dimodelkan di sini.
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W5 | **Checklist KUA bersyarat.** Daftar langkah dan dokumen dari §3.8, tenggat dihitung mundur dari H. Dokumen tambahan muncul sesuai kondisi (usia, akad di luar kecamatan, janda/duda, TNI/Polri, WNA). Butir yang aturannya beda antar KUA ditandai "tanya KUA" dengan kolom catatan | Padat-sementara: dua bulan penuh aktivitas, dengan tenggat yang berakibat nyata | M | `task` dari template dengan aturan; status siap (bool), tanggal, catatan. **Tanpa nomor NIK, tanpa scan** | D1 + file template statis |
-| W6 | **Kalender hari kerja** untuk menghitung "10 HK sebelum akad". Daftar libur nasional dan cuti bersama bisa diedit. Peringatan buffer: 10 HK adalah minimum hukum, bukan jadwal realistis | definisi "hari kerja" di PMA dan perlakuan cuti bersama tidak ditemukan (§3.8). Libur ditetapkan lewat SKB 3 Menteri tiap tahun ([SKB 2026, Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)) | S | `settings`: daftar tanggal libur (seed tahunan, diisi manual) | static + client |
-| W7 | **Jalur perjanjian pranikah (opsional).** Empat tugas: putuskan, cari notaris, tanda tangan, beri tahu KUA agar dicatat di Akta dan Buku Nikah | MK mengizinkan perjanjian dibuat sebelum, saat, atau selama perkawinan ([Putusan MK 69/PUU-XIII/2015](https://www.mkri.id/public/content/persidangan/putusan/69_PUU-XIII_2015.pdf)); untuk Muslim dibuat di hadapan notaris dan dicatat KUA ([PMA 30/2024 Pasal 39-40](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf)). Bukan nasihat hukum. Hanya jika kalian berdua memang memikirkannya | S | `task` (4 butir) | D1 |
-
-### 3.3 Fase 2: Lamaran, seserahan, acara adat
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W8 | **Acara** sebagai grup: lamaran, siraman, midodareni, pengajian, akad, resepsi, ngunduh mantu, tasyakuran. Template yang bisa diedit dan dihapus. Dipakai sebagai `group_key` di tugas, anggaran, rundown | Struktur anggaran dan rundown mengikuti acara. Mana yang dipakai berbeda tiap keluarga dan daerah (ngunduh mantu opsional: [Popbela](https://www.popbela.com/relationship/married/perbedaan-resepsi-dan-ngunduh-mantu-00-925lr-2j6wk6)) | S | `settings`: daftar acara (nama, tanggal opsional, zona) | client |
-| W9 | **Daftar seserahan/hantaran.** Nama, harga, link beli, kategori, status (belum/proses/selesai), total | Mingguan selama berburu barang; dipakai di toko. Dari sheet asli (brainstorm §1.6) | S | `item` jenis seserahan: judul, `amount`, link, `group_key`, `status`, `who` | D1 |
-
-Mahar bukan fitur terpisah: catat sebagai butir anggaran atau catatan. PMA 30/2024 tidak menyebut mahar ([PDF](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf), dicari lewat grep oleh peneliti). Perbedaan hukum mahar vs seserahan tidak berhasil diverifikasi: `[UNVERIFIED]`.
-
-### 3.4 Fase 3: Vendor dan uang (H-12 bulan sampai H-1 bulan)
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W11 | **Buku vendor.** Kategori, status (opsi/fix/batal), kontak, PIC, ketukan untuk telepon dan WhatsApp, fakta kunci kontrak (biaya tambahan di luar kontrak, aturan pembatalan, kontak darurat) | Meeting vendor dan hari-H. Penipuan WO jarang berujung ke mana-mana ([Kontan](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)), jadi kontrak dan kontak harus mudah ditemukan. Pertanyaan wajib ke WO: biaya tambahan di luar kontrak, rencana cadangan ([Popbela](https://www.popbela.com/relationship/married/pertanyaan-wedding-organizer-00-vmqqn-l796gq)) | S | `vendor`: nama, `group_key` (kategori), `status`, telepon E.164, PIC, `amount` (harga penawaran), link kontrak, catatan | D1 |
-| W12 | **Perbandingan penawaran per kategori.** Beberapa vendor opsi berdampingan, harga dulu | Harga adalah pintu masuk: 70,13% lead vendor Bridestory berasal dari lihat atau minta harga ([Bridestory](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)); anggaran adalah hal tersulit bagi 64% responden ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)) | S | Tampilan atas `vendor` (kelompokkan menurut `group_key`) | client |
-| W13 | **Anggaran dan pembayaran.** Butir anggaran per acara (rencana vs terpakai), baris pembayaran (DP, termin, pelunasan) dengan tanggal jatuh tempo dan tanggal bayar, sisa, tanda "telat", daftar "7 hari ke depan". Hasil survei Bridestory 2017: hanya 49.1% yang menjaga budget, jadi selisih rencana vs aktual perlu terlihat | Mingguan. Pembayaran vendor adalah uang dan tenggat nyata. Sheet asli tidak punya tanggal jatuh tempo (brainstorm §1.4) | M | `budget` (judul, `group_key` = acara, `amount` rencana, `parent_id` = vendor opsional) dan `payment` (`parent_id` = butir anggaran, `amount`, `due_on`, `done_on`, `who` = pembayar) | D1 |
-| W14 | **Dana nikah.** Target, setoran per orang atau sumber (Partner A, Partner B, orang tua, lainnya), progres, "perlu menabung Rp X per bulan" = (target dikurangi terkumpul) dibagi bulan tersisa | Mingguan sampai bulanan. 45% responden Jakpat mendanai dari tabungan pribadi dan 40% dari tabungan bersama ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), jadi pencatatan per sumber bermakna. Uang sebenarnya ada di rekening/Kantong; app hanya mencatat | S | `saving` (target, tenggat) dan `contribution` (`parent_id`, `amount`, `done_on`, `who`) | D1 |
-| W15 | **Bukti bayar sebagai link** ke Drive/Photos, bukan unggahan. Unggahan ke `R2` baru nanti (lihat W15b di §7) | Jejak penipuan WO dan sengketa. Link murah; upload butuh R2 (§5.3) | S | `payment.data.link` | D1 |
-
-### 3.5 Fase 4: Tamu dan undangan
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W16 | **Daftar tamu satu tabel.** Sisi (Partner A/B), kategori, nama, jumlah orang (pax), nomor HP, status undangan, catatan. Total per sisi dan kategori. **Pengali porsi katering yang bisa diatur** (aturan 2x atau 2,5x berbeda antar sumber: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). Impor dan ekspor CSV | Mingguan di fase undangan; angka total menggerakkan anggaran katering, yang bisa 40-60% dari anggaran resepsi ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)) | M | `guest`: nama, `group_key` (sisi dan kategori), `qty` (pax), telepon, `status`, catatan | D1 + client (CSV) |
-| W17 | **Tracker undangan** dengan tombol "kirim lewat WhatsApp" per tamu (`wa.me/<nomor>?text=...`, [format resmi](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/)) dan penanda terkirim | Mingguan saat mengirim; pesan dikirim manual oleh pengguna, bukan otomatis | S | `guest.status` ("belum/terkirim/konfirmasi/tidak datang") | client |
-| W18 | **Impor hasil RSVP/check-in dari layanan undangan digital**, lewat CSV/Excel. Banyak platform menawarkan ekspor, mis. invi.id ([halaman](https://invi.id)) | Hanya bila kalian memakai layanan undangan eksternal (§8: tidak dibuat sendiri) | M | Pencocokan nama ke `guest` | client |
-| W19 | **Link baca-saja** untuk orang tua atau WO: rundown, total tamu, kontak vendor. Token acak per link, bisa dicabut | Pasangan ingin melibatkan orang di luar mereka ([Massimi dkk.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)). Risiko privasi, jadi ditunda dan dibuat sempit | M | Tabel token (hash), cakupan per link | D1 + endpoint publik |
-
-### 3.6 Fase 5: Hari-H
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W20 | **Rundown per acara.** Waktu mulai dan selesai, acara, PIC, catatan, centang, sorotan "sekarang/berikutnya". Terbuka **tanpa sinyal** | Padat-sementara: dibuka berulang di dua minggu terakhir dan di hari-H. Untuk koordinator, bukan pengantin (§1.1) | M | `rundown`: `group_key` = acara, `due_on` (tanggal), `data` (jam mulai/selesai), judul, PIC, catatan, `done_on` | D1 + `client` (cache offline) |
-| W21 | **Bagikan rundown dan kontak vendor** sebagai teks WhatsApp (`wa.me/?text=`) atau cetak. Teks sudah di-URL-encode | Cara paling murah memberi run sheet ke koordinator tanpa akun ketiga | S | Tampilan atas `rundown` dan `vendor` | client |
-| W22 | **Daftar lagu per momen** (masuk, akad, makan, penutup) | Sekali-pakai tapi murah. Dari sheet asli (brainstorm §1.11) | S | `song`: judul, penyanyi, `group_key` (momen) | D1 |
-| W23 | **Checklist malam sebelum** dan barang bawaan | Template statis | S | `task` dari template | D1 + static |
-
-### 3.7 Fase 6: Setelah nikah (H+1 sampai kira-kira H+90)
-
-| ID | Fitur | Nilai (pemicu) | Effort | Data | Platform |
-|---|---|---|---|---|---|
-| W24 | **Checklist admin pasca-nikah.** KK baru, perubahan status di KTP-el, BPJS (tambah pasangan), status pajak, bank/asuransi/paspor/STNK. Dibedakan **wajib vs opsional vs belum jelas** (§3.9) | Padat-sementara; berlanjut ke household | S | `task` dari template | D1 + static |
-| W25 | **Buku amplop masuk.** Siapa memberi, berapa, di acara apa, catatan. Saat diundang kondangan nanti, lihat apa yang pernah mereka beri (lanjut ke H12) | Tebus-nilai tinggi. Praktiknya terdokumentasi sebagai balas-membalas ([Goodnews from Indonesia](https://www.goodnewsfromindonesia.id/2021/11/24/fenomena-sosial-dan-eksistensi-tradisi-buwuhan-dalam-hajatan), [Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)), dan tidak ketemu alat khusus. **Permintaan belum divalidasi** | S | `gift`: nama pemberi, `group_key` = acara, `amount`, `done_on`, arah (masuk/keluar) di `data`, catatan | D1 |
-| W26 | **Penutupan.** Sisa tagihan vendor, daftar ucapan terima kasih, export arsip (JSON + CSV + `.ics`) | Mengakhiri proyek dengan rapi dan menyimpan salinan di luar app | S | Tampilan atas `payment`, `guest` | client |
-
-### 3.8 Detail: proses KUA (dasar W5 dan W6)
-
-Dasar hukum: Peraturan Menteri Agama (PMA) 30/2024 tentang Pencatatan Pernikahan, ditetapkan 24 Desember 2024, berlaku 30 Desember 2024, mencabut PMA 22/2024 ([BPK](https://peraturan.bpk.go.id/Details/321787)). Teks lengkap dibaca dari [salinan PDF](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf). Tidak ditemukan pengganti per Agustus-September 2026 ([Detik, 9 Sep 2026](https://www.detik.com/hikmah/khazanah/d-8656003/syarat-dan-alur-pendaftaran-nikah-terbaru-kemenag-2026), [Kemenag Kebumen, 3 Sep 2026](https://kebumen.kemenag.go.id/mau-menikah-ini-syarat-dan-tahapan-pendaftaran-nikah-di-kua-sesuai-pma-30-tahun-2024/)). Ini bukan nasihat hukum.
-
-| Langkah | Kapan | Dokumen/hal | Sumber | Status |
-|---|---|---|---|---|
-| 1. Pilih KUA dan tanggal akad; putuskan di KUA atau di luar | Awal. Saran penulis: tiga bulan atau lebih sebelum H (bukan aturan) | – | PMA Pasal 16 | Aturan terverifikasi; waktu adalah saran |
-| 2. Surat pengantar nikah dari kelurahan/desa | Sebelum mendaftar | Pasal 4(1)(a). Kode formulir N1-N4 adalah nama lokal, PMA tidak menyebut kode | PMA; [SIMKAH](https://simkah4.kemenag.go.id/) menyebut "N1-N4" | Terverifikasi. Langkah RT/RW `[UNVERIFIED]` |
-| 3. Surat rekomendasi nikah, bila akad di luar kecamatan domisili | Sebelum mendaftar di KUA tempat akad | Pasal 4(1)(e), 17. Satu rekomendasi dari KUA tiap domisili; bila keduanya satu kecamatan cukup satu | PMA | Terverifikasi; lead time `[UNVERIFIED]` |
-| 4. Surat keterangan sehat dari fasilitas kesehatan | Sebelum mendaftar. Kemenkes menyarankan pemeriksaan sekitar 3 bulan sebelum ([Ayo Sehat, 2018](https://ayosehat.kemkes.go.id/pentingnya-pemeriksaan-kesehatan-pra-nikah)) | Permenkes 2/2025 Pasal 28 ([PDF](https://jdih.kemkes.go.id/storage/documents/pdfs/2025permenkes002.pdf)). Imunisasi TT tidak disebut di pasal saat ini; apakah KUA meminta kartu TT `[UNVERIFIED]` | PMA 4(1)(f), Permenkes | Terverifikasi |
-| 5. Daftar kehendak nikah di KUA atau online lewat SIMKAH | Paling lambat **10 HK sebelum akad**. Kurang dari itu: surat dispensasi camat atau surat pernyataan bermeterai | Pasal 3 | PMA | Terverifikasi (teks lengkap) |
-| 6. Datang ke KUA setelah daftar online | Halaman SIMKAH menyebut paling lambat 15 HK; teks PMA tidak memuat aturan itu | – | [SIMKAH](https://simkah4.kemenag.go.id/), [Kompas, 5 Mei 2026](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya) | **Bertentangan**, tanya KUA |
-| 7. Bimbingan perkawinan | Wajib bagi catin yang sudah mendaftar; sertifikat menjadi syarat pemeriksaan nikah | Pasal 5, 6(2)(d). Durasi dan jadwal `[UNVERIFIED]` | PMA | Wajib terverifikasi |
-| 8. Pemeriksaan nikah | Setelah bimwin; calon suami, calon istri, dan wali hadir | Pasal 6 | PMA | Terverifikasi |
-| 9. Lengkapi dokumen yang kurang | Paling lambat 1 HK sebelum akad | Pasal 7(2) | PMA | Terverifikasi |
-| 10. Biaya | Rp0 di KUA pada hari dan jam kerja. Rp600.000 bila di luar KUA atau di luar jam kerja | PP 59/2018 Pasal 5 ([BPK](https://peraturan.bpk.go.id/Details/99855/pp-no-59-tahun-2018)); jumlahnya ada di lampiran gambar, sehingga angka diambil dari halaman Kemenag ([Purbalingga, Agu 2026](https://purbalingga.kemenag.go.id/dari-rumah-bisa-ini-alur-pendaftaran-nikah-melalui-simkah/), [SIMKAH](https://simkah4.kemenag.go.id/)) | PP, Kemenag | Terverifikasi; konfirmasi ke KUA |
-| 11. Akad; Buku Nikah dan Kartu Nikah | Diberikan sesaat setelah akad; bila tidak bisa, paling lambat 7 HK | Pasal 38 | PMA | Terverifikasi (teks lengkap) |
-
-**Dokumen bersyarat (Pasal 4(1)):** izin orang tua/wali bila di bawah 21; dispensasi dari Pengadilan bila di bawah 19 pada hari akad; akta cerai atau kematian untuk janda/duda; izin atasan untuk TNI/Polri; penetapan izin poligami; daftar terpisah untuk WNA (Pasal 4(2)-(3)).
-
-**Yang tidak ada di daftar nasional:** ijazah, pas foto, mahar, NPWP. Persyaratan foto adalah praktik lokal (satu kantor Kemenag menyebut 4x6 cm dan 2x3 cm, latar biru: [Purbalingga](https://purbalingga.kemenag.go.id/mau-nikah-pahami-dulu-persyaratan-pendaftaran-nikahnya/)).
-
-**Elsimil (BKKBN) bukan syarat nasional.** Tidak ada di daftar Pasal 4; BKKBN pernah meminta pemda mewajibkannya untuk surat pengantar ([Antara, 26 Mar 2024](https://www.antaranews.com/berita/4029018/bkkbn-minta-sertifikat-elsimil-jadi-syarat-surat-pengantar-menikah)); Kemendukbangga dan Kemenag sepakat memperkuat pemakaiannya tanpa mandat ([Antara, 5 Mei 2026](https://www.antaranews.com/berita/5556837/kemendukbangga-kemenag-perkuat-elsimil-guna-cegah-perceraian)). Beberapa blog menyebutnya "wajib" di 2026: bertentangan, `[UNVERIFIED]`, anggap praktik lokal.
-
-**SIMKAH:** situs resmi pendaftaran online adalah `simkah4.kemenag.go.id` (nama sistem: Sistem Informasi Manajemen Nikah). Alur: buat akun dengan email dan OTP, pilih "Daftar Nikah", isi data, unggah dokumen, cetak bukti ([Kontan, 29 Mei 2023](https://nasional.kontan.co.id/news/cara-daftar-nikah-online-di-simkah4kemenaggoid-hubungi-nomor-ini-jika-terkendala), mungkin sudah berubah). Saluran pengaduan pungutan tidak resmi: `simdumas.kemenag.go.id` ([Kompas](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya)).
-
-**Implikasi desain (saran penulis, bukan fakta):** simpan "tanya KUA" sebagai butir dengan kolom catatan, bukan aturan keras; dokumen bersyarat sebagai aturan sederhana pada template; semua tanggal turunan dari H dan bisa diedit; jangan menyimpan nomor dokumen atau scan.
-
-### 3.9 Detail: admin setelah nikah (dasar W24)
-
-| Butir | Wajib atau opsional | Tenggat | Sumber | Status |
-|---|---|---|---|---|
-| Buku Nikah di tangan | Prasyarat semua butir lain | Sesaat setelah akad, paling lambat 7 HK | PMA Pasal 38 | Terverifikasi |
-| KK baru (keluarga baru) | Praktis wajib untuk BPJS, bank, dll. | Tenggat nasional tidak ketemu; "30 hari" hanya dari satu blog `[UNVERIFIED]` ([blog ITERA](https://blog.itera.ac.id/?p=8862)) | Dukcapil: [KK baru](https://dukcapil.kemendagri.go.id/page/read/penerbitan-kartu-keluarga-baru-karena-membentuk-keluarga-baru) (fotokopi buku nikah, formulir F-1.02) | Syarat terverifikasi |
-| Perubahan status di KTP-el | Perubahan data dicatat di Dinas | Tidak ketemu | Dukcapil: [KTP-el](https://dukcapil.kemendagri.go.id/page/read/penerbitan-ktp-el-baru-karena-pindah-perubahan-data-rusak-dan-hilang-untuk-wni) | Syarat terverifikasi |
-| BPJS Kesehatan: tambah pasangan | Pasangan adalah anggota keluarga ([Perpres 82/2018 Pasal 5(1)](https://pasal.id/peraturan/perpres/perpres-no-82-tahun-2018), salinan situs pihak ketiga) | Tenggat tambah pasangan tidak ketemu (28 hari di sana untuk bayi baru lahir, bukan pasangan) | Perpres | Hubungan terverifikasi; tenggat `[UNVERIFIED]` |
-| Pajak: status K/0, K/1 | Diurus lewat HR atau DJP | Aturan waktu `[UNVERIFIED]` | [PMK 101/2016 berstatus "Berlaku"](https://peraturan.bpk.go.id/Details/121096/pmk-no-101pmk0102016) di BPK | Status regulasi terverifikasi; sisanya tidak |
-| BPJS Ketenagakerjaan (ahli waris), paspor, bank/asuransi (penerima manfaat), STNK, formulir HR | Opsional atau sesuai kontrak | Tidak ketemu | – | `[UNVERIFIED]` semuanya |
-| Integrasi data SIAK-SIMKAH | Bila aktif, status perkawinan di Dukcapil diperbarui otomatis | Target selesai November 2026, pilot di 2-3 KUA pada Desember 2026; sampai itu KK dan KTP-el diurus terpisah | [Dukcapil, 22 Sep 2026](https://dukcapil.kemendagri.go.id/blog/read/mencegah-fraud-identitas-interkoneksi-data-siak-dan-simkah-ditargetkan-tuntas-november-2026) | Target, belum aktif |
-
-Saran desain: jadikan template ini tugas yang bisa disembunyikan satu per satu, terutama butir KK dan KTP-el kalau integrasi SIAK-SIMKAH sudah berjalan.
+All these gaps should be treated as hypotheses to check with you two (§8), not as market findings.
 
 ---
 
-## 4. Katalog fitur household (setelah menikah)
+## 3. Wedding feature catalogue by phase
 
-Pertanyaan yang dijawab untuk tiap kategori: apakah layak dibuat di app privat dua orang, atau lebih baik diserahkan ke app yang ada. Kriterianya: lolos uji §1.4, aplikasi yang ada sudah baik atau gratis, risiko privasi, dan apakah bagian tersulitnya (sinkron instan, integrasi bank, peta) bisa dikerjakan app kecil.
+All deadlines are counted back or forward from **H** = the *akad* day. Working days (HK) are written `HK`. The **Value** column names the trigger for use (see the test in §1.4). The `kind` names in the Data column refer to the model in §7. Effort and Platform use the legend in the "How to read" section.
 
-**Fakta yang menentukan banyak keputusan: bank sync ala AS tidak tersedia di Indonesia.**
-- Plaid tidak mencantumkan Indonesia di daftar negara Link ([Plaid docs](https://plaid.com/docs/api/link/)); cakupan institusinya AS dan Kanada ([Plaid institutions](https://plaid.com/docs/institutions/)). Absennya Indonesia adalah ketiadaan di daftar, bukan pernyataan eksplisit.
-- Honeydue sinkron lewat Plaid dan hanya baca ([CNBC Select, 26 Mar 2026](https://www.cnbc.com/select/honeydue-budgeting-app-review/)); pencarian Apple untuk id app-nya di storefront Indonesia mengembalikan nol hasil pada 2026-10-06 ([lookup](https://itunes.apple.com/lookup?id=1157633945&country=id)). Ketersediaan di Android Indonesia tidak dicek.
-- SNAP, standar open API Bank Indonesia sejak 2022 (dikelola ASPI sejak 1 Sep 2023), adalah standar pembayaran: transfer, cek saldo, riwayat transaksi ([BI](https://www.bi.go.id/id/layanan/Standar/SNAP/default.aspx), [ASPI portal](https://apidevportal.aspi-indonesia.or.id/)). Apakah individu atau app tanpa izin bisa memanggilnya tidak tampak: `[UNVERIFIED]`. Agregator seperti Brankas menjual API ke developer dan perusahaan ([brankas.com](https://www.brankas.com/)).
-- App lokal menyiasati dengan unggah mutasi, screenshot e-wallet, atau log lewat WhatsApp: [Finku](https://apps.apple.com/id/app/finku-budget-money-manager/id1587320325), [Sribuu](https://apps.apple.com/id/app/sribuu-budget-money-manager/id1542637665). Pengulas Money Lover masih meminta integrasi BCA (lihat §2.4).
-- Konsekuensi: app kecil tidak tertinggal soal sinkronisasi. Jalur realistis adalah entri manual, impor CSV/mutasi, atau OCR screenshot.
+### 3.1 Phase 0: Basics (H-12 months and onward)
 
-### 4.1 Ringkasan keputusan
-
-| ID | Fitur | Keputusan | Alasan satu baris | Effort | Platform |
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
-| H1 | Pengeluaran bersama (ledger tipis) | **Mungkin**, setelah H3/H2 | Tanpa bank sync; risiko berhenti tertinggi karena input manual | M | D1, client (CSV) |
-| H2 | Target tabungan | **Buat** (pakai ulang W14) | Uang ada di bank; app hanya mencatat progres | S | D1 |
-| H3 | Tagihan dan kewajiban berulang | **Buat, kecil** | Bayarnya di app resmi; celah ada di pengingat | M | D1; cron atau `.ics` untuk pengingat |
-| H4 | Perpanjangan dokumen dan kendaraan | **Buat** (varian H3) | Pajak tahunan, STNK 5 tahun, SIM, paspor, asuransi | S | D1 |
-| H5 | Daftar belanja | **Serahkan** | Aplikasi matang, gratis, sinkron instan | – | – |
-| H6 | Rencana makan | **Tidak** | Tidak ada bukti kebutuhan mingguan yang belum terlayani | – | – |
-| H7 | Tugas rumah berulang | **Mungkin, kecil** | "Terakhir dilakukan / jatuh tempo", tanpa assign | S (di atas H3) | D1 |
-| H8 | Kalender bersama | **Serahkan** + feed `.ics` | Google Calendar gratis dan granular | S (feed) | D1 + endpoint publik |
-| H9 | Brankas dokumen | **Serahkan scan**; **buat indeks** | Scan KTP/KK adalah data paling berisiko | S (indeks) | D1 |
-| H10 | Rumah, renovasi, KPR | **Serahkan** KPR; **pakai ulang** anggaran untuk renovasi | Kalkulator KPR sudah ada | S | D1 |
-| H11 | Perjalanan | **Serahkan**; boleh sebagai proyek | Wanderlog dan Maps | S | D1 |
-| H12 | Orang dan momen: ulang tahun, kondangan/amplop keluar, Lebaran/mudik | **Buat, kecil, setelah divalidasi** | Tidak ada alat balas-membalas amplop yang ketemu | S | D1 |
-| H13 | Jurnal dan kenangan | **Mungkin**: timeline teks | Bukti mengarah ke kepemilikan data, bukan fitur | S | D1 |
-| H14 | Lain-lain (servis kendaraan, kesehatan, hewan peliharaan) | Servis: lipat ke H3; sisanya **tidak** | Tidak ada bukti kebutuhan yang cukup | S | D1 |
+| W1 | **H-day and countdown.** The *akad* date, time zone, countdown, the approximate Hijri date next to it | One number that makes every deadline relative. Visible every time the app opens | S | `settings`: *akad* date (`YYYY-MM-DD`), IANA zone, Partner A/B labels | client |
+| W2 | **Task timeline from a template** with offsets from H. Tasks can be changed or deleted. One tap for "I'll take it". A "needs a decision" flag | Weekly. An app that remembers what has to be done reduces the load of anticipating (§1.2 #6) | M | `task`: title, `due_on`, `done_on`, `who` (empty = anyone), `group_key` (phase), note, decision flag | D1 + static template file |
+| W3 | **The "This week" screen.** Tasks due or late, payments in the next 7 days, hanging decisions, document renewals | The anchor of the weekly sofa session. The only "reminder" that needs no infrastructure | S | Queries over `task`, `payment`, `doc` | client |
+| W4 | **Agreement notes.** Important decisions: what, who agreed, when, the reason | Common advice for family conflict is to write down the agreement ([IDN Times](https://www.idntimes.com/life/relationship/cara-hadapi-keluarga-terlalu-ikut-campur-persiapan-nikah-c1c2-01-zn5b2-d3brgs)). Used when there's a "what did we say back then" argument | S | `note`: title, body, date, `who` | D1 |
 
-### 4.2 Bukti per kategori
+### 3.2 Phase 1: Marriage administration (roughly H-3 months to H+7 HK)
 
-**H1 Pengeluaran bersama.**
-- Splitwise: pengulas melaporkan batas entri harian dan jeda di free tier sejak Desember 2023 ([Trustpilot](https://www.trustpilot.com/review/splitwise.com?page=2)); tidak ada pengumuman resmi yang ketemu. Honeydue: ulasan menyebut transaksi tidak ter-refresh dan dukungan "dark" ([App Store](https://apps.apple.com/app/id1157633945)).
-- Zeta (app keuangan pasangan): Acorns mengumumkan akuisisi aset pada 24 Juni 2025 ([Acorns](https://acorns.com/learn/acorns-zeta-acquisition/)); tanggal tutup 9 Mei 2025 hanya dari blog pesaing `[UNVERIFIED]` ([Pocket Clear](https://pocketclear.app/blog/zeta-app-alternative-couples.html)).
-- Goodbudget: entri manual dan envelope ([CNBC Select](https://www.cnbc.com/select/goodbudget-app-review/)).
-- Epstein dkk. (UbiComp 2015): alat keuangan bertahan lebih baik dari alat aktivitas, tapi perawatan manual menjadi pembunuh utama (§1.2 #4).
-- **Saran:** mulai dari "total aktual bulan ini per kategori" dan "siapa bayar apa" untuk pengeluaran besar bersama, bukan mencatat setiap kopi. Siapkan impor/ekspor CSV. Jangan mengejar sinkronisasi bank.
+Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim) is recorded at Dukcapil (the civil registry) and reported at the latest 60 days after the marriage ([Law 23/2006 Article 34(1)](https://pasal.id/peraturan/uu/uu-no-23-tahun-2006), text from a third-party site; [Detik, 31 March 2026](https://news.detik.com/berita/d-8423682/syarat-dan-cara-urus-akta-kelahiran-akta-perkawinan-dan-akta-kematian) repeats that rule). The civil route is not modelled here.
 
-**H2 Target tabungan.** Bank Jago "Kantong Bersama": undang pengguna Jago lain ke satu Kantong dengan target; peran akses "Bisa Lihat, Bisa Pakai, atau Bisa Lihat dan Pakai"; kedua orang harus punya akun Jago ([ringkasan produk Jago](https://assets.jago.com/web-assets/public/riplay-umum-kantong-jago-new-logo.pdf)). Pada akhir Desember 2025 ada 40 juta Kantong dan Kantong Bersama tumbuh 87% setahun ([BCA Sekuritas, 30 Jan 2026](https://bcasekuritas.co.id/en/latest-news/news/bank-jago-catat-adopsi-fitur-kantong-aplikasi-banking-capai-40-juta)). blu by BCA Digital punya bluGether; Republika menyebutnya menabung "tanpa harus membuka rekening bersama", Selular menyebutnya rekening bersama, jadi bentuk hukumnya bertentangan antar sumber ([Republika](https://ekonomi.republika.co.id/berita/tin053349/blu-by-bca-digital-menabung-kini-jadi-aktivitas-kolaboratif), [Selular, Feb 2026](https://selular.id/2026/02/blu-by-bca-digital-dorong-couple-budgeting-lewat-blusaving-dan-blugether/)). **Saran:** app mencatat progres (nama, target, tenggat, kontribusi, "perlu Rp X per bulan"). Uangnya tetap di bank.
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W5 | **Conditional KUA checklist.** The list of steps and documents from §3.8, deadlines counted back from H. Extra documents show up depending on conditions (age, *akad* outside the sub-district, divorced/widowed, military/police, foreign nationals). Items whose rules differ between KUAs are marked "ask the KUA" with a notes column | Dense-temporary: two full months of activity, with deadlines that have real consequences | M | `task` from a template with rules; ready status (bool), date, note. **No NIK number, no scans** | D1 + static template file |
+| W6 | **Working-day calendar** to compute "10 HK before the *akad*". The list of national holidays and collective leave can be edited. Buffer warning: 10 HK is the legal minimum, not a realistic schedule | the definition of "working day" in the PMA and the treatment of collective leave were not found (§3.8). Holidays are set through the joint decree of 3 ministers (SKB) every year ([SKB 2026, Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)) | S | `settings`: list of holiday dates (seeded yearly, filled in by hand) | static + client |
+| W7 | **Prenuptial agreement route (optional).** Four tasks: decide, find a notary, sign, tell the KUA so it's recorded in the Deed and the *Buku Nikah* (marriage book) | The Constitutional Court allows an agreement to be made before, at, or during the marriage ([Decision 69/PUU-XIII/2015](https://www.mkri.id/public/content/persidangan/putusan/69_PUU-XIII_2015.pdf)); for Muslims it is made before a notary and recorded by the KUA ([PMA 30/2024 Articles 39-40](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf)). Not legal advice. Only if you two are really thinking about it | S | `task` (4 items) | D1 |
 
-**H3-H4 Tagihan dan perpanjangan.** Pengulas Honeydue menyukai pengingat dibanding catatan bersama (§2.4). Pembayaran dikuasai app resmi dengan basis pengguna besar: PLN Mobile (4,8 dari 178.385 rating di App Store Indonesia), Mobile JKN (4,78 dari 388.838) ([PLN Mobile](https://apps.apple.com/id/app/pln-mobile/id1299581030), [Mobile JKN](https://apps.apple.com/id/app/mobile-jkn/id1237601115), snapshot 2026-10-06). App pengingat tagihan mandiri di App Store Indonesia punya 0-1 rating ([pencarian](https://itunes.apple.com/search?term=tagihan+pengingat+jatuh+tempo&entity=software&country=id)): bisa berarti tidak ada permintaan atau tidak ada distribusi. App SIGNAL (Samsat Digital Nasional) punya 1,78 bintang dari 10.317 ulasan ([pencarian](https://itunes.apple.com/search?term=pajak+kendaraan+samsat&entity=software&country=id)). Masa berlaku STNK lima tahun ([Wikipedia](https://id.wikipedia.org/wiki/Surat_Tanda_Nomor_Kendaraan), sekunder). **Saran:** tabel berulang (nama, jumlah, periode atau tanggal jatuh tempo, siapa yang bayar, "sudah bayar periode ini", jatuh tempo berikutnya). Tidak mendeteksi langganan dari transaksi (butuh agregasi bank).
+### 3.3 Phase 2: *Lamaran* (formal engagement visit), *seserahan*, traditional ceremonies
 
-**H5-H6 Belanja dan makan.** AnyList (inti gratis, Complete $9,99/tahun individu atau $14,99 rumah tangga: [App Store](https://apps.apple.com/us/app/anylist-grocery-shopping-list/id522167641)), OurGroceries ([App Store](https://apps.apple.com/us/app/our-groceries-shopping-list/id325851015)), dan Bring! sudah matang. Keluhan Google Keep soal sinkron dan item hilang ([App Store](https://apps.apple.com/us/app/google-keep-notes-and-lists/id1029207872)) menunjukkan sulitnya sinkron instan. Kehilangan satu item di lorong toko mahal harganya. Mealime tutup 21 Oktober 2026 dan menghapus data pribadi ([Mealime](https://www.mealime.com/closing)): contoh risiko ketergantungan. **Saran:** serahkan; pilih salah satu app yang punya ekspor.
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W8 | **Events** as a group: *lamaran*, *siraman* (pre-wedding bathing ritual), *midodareni* (Javanese eve-of-wedding ritual), *pengajian* (Quran recital gathering), *akad*, *resepsi* (wedding reception), *ngunduh mantu* (groom's family reception for the new bride), *tasyakuran* (thanksgiving gathering). A template that can be edited and deleted. Used as the `group_key` in tasks, budget, rundown | The structure of the budget and rundown follows the events. Which ones are used differs per family and region (*ngunduh mantu* is optional: [Popbela](https://www.popbela.com/relationship/married/perbedaan-resepsi-dan-ngunduh-mantu-00-925lr-2j6wk6)) | S | `settings`: list of events (name, optional date, zone) | client |
+| W9 | **The *seserahan*/*hantaran* (a related term for the gift offering) list.** Name, price, purchase link, category, status (not yet/in progress/done), total | Weekly while hunting for items; used in the shop. From the original sheet (brainstorm §1.6) | S | `item` of *seserahan* kind: title, `amount`, link, `group_key`, `status`, `who` | D1 |
 
-**H7 Tugas rumah.** Tody menggunakan model "perlu dikerjakan" berbasis urgensi dan diulas mengurangi kelelahan memutuskan ([App Store](https://apps.apple.com/us/app/tody-easy-house-cleaning/id595339588)). Studi dan liputan tentang aplikasi chores: delegasi menambah pekerjaan bagi yang sudah mengelola, dan terasa seperti mengasuh pasangan ([MIT Technology Review](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/)). **Saran:** bila dibuat, hanya varian H3 dengan "terakhir dilakukan oleh, kapan" dan jatuh tempo berikutnya. Tanpa poin, peringkat, atau assign dengan notifikasi. Jika tidak dirawat, serahkan ke Tody.
+*Mahar* (the groom's wedding payment) is not a separate feature: record it as a budget item or a note. PMA 30/2024 doesn't mention *mahar* ([PDF](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf), searched by grep by the researcher). The legal difference between *mahar* and *seserahan* could not be verified: `[UNVERIFIED]`.
 
-**H8 Kalender.** Google Calendar berbagi gratis dengan lima level izin ([Google](https://support.google.com/calendar/answer/37082)). Fakta untuk feed `.ics`: Google hanya bisa menambah kalender dari URL lewat browser komputer, bukan lewat app Android/iPhone/iPad ([Google](https://support.google.com/calendar/answer/37100?hl=en)); interval refresh tidak dipublikasikan oleh Google (angka "12-24 jam" hanya dari blog pihak ketiga: `[UNVERIFIED]`). **Saran:** jangan membangun UI kalender. Sediakan feed baca-saja (§6).
+### 3.4 Phase 3: Vendors and money (H-12 months to H-1 month)
 
-**H9 Brankas dokumen.** Bitwarden Premium: $1,65/bulan, lampiran 5 GB, emergency access ([harga](https://bitwarden.com/pricing/), [emergency access](https://bitwarden.com/help/emergency-access/)). Google Inactive Account Manager: sampai 10 kontak terpercaya menerima data terpilih setelah akun tidak aktif ([Google](https://support.google.com/accounts/answer/3036546)). OWASP: unggahan file butuh otorisasi, nama file acak, penyimpanan di luar web root, validasi signature ([cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)). Dirjen Dukcapil pernah meminta publik tidak mengunggah dokumen kependudukan ke media sosial ([Medcom, 10 Mei 2021](https://www.medcom.id/nasional/peristiwa/GbmqQ5Pb-jaga-kerahasiaan-dokumen-kependudukan-tak-perlu-diunggah-ke-medsos)); klaim hukuman 10 tahun hanya di snippet pencarian: `[UNVERIFIED]`. **Saran:** scan dokumen di brankas yang sudah ada. App menyimpan **indeks**: nama dokumen, lokasi fisik atau brankas, tanggal kedaluwarsa, siapa yang memegang, nomor telepon darurat. Tanpa nomor identitas.
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W11 | **Vendor book.** Category, status (option/fix/cancelled), contact, PIC, taps to call and WhatsApp, key contract facts (extra charges outside the contract, cancellation rules, emergency contact) | Vendor meetings and the wedding day. WO fraud rarely leads anywhere ([Kontan](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)), so contracts and contacts must be easy to find. Mandatory questions to a WO: extra charges outside the contract, a backup plan ([Popbela](https://www.popbela.com/relationship/married/pertanyaan-wedding-organizer-00-vmqqn-l796gq)) | S | `vendor`: name, `group_key` (category), `status`, E.164 phone, PIC, `amount` (quoted price), contract link, note | D1 |
+| W12 | **Quote comparison per category.** Several option vendors side by side, price first | Price is the entry point: 70.13% of Bridestory vendor leads come from viewing or asking for a price ([Bridestory](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)); budget is the hardest thing for 64% of respondents ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)) | S | A view over `vendor` (grouped by `group_key`) | client |
+| W13 | **Budget and payments.** Budget items per event (planned vs spent), payment rows (down payment, instalments, final settlement) with a due date and a payment date, remainder, "late" mark, a "next 7 days" list. Bridestory 2017 survey result: only 49.1% kept to the budget, so the gap between plan and actual needs to be visible | Weekly. Vendor payments are real money and real deadlines. The original sheet has no due date (brainstorm §1.4) | M | `budget` (title, `group_key` = event, planned `amount`, `parent_id` = optional vendor) and `payment` (`parent_id` = budget item, `amount`, `due_on`, `done_on`, `who` = payer) | D1 |
+| W14 | **Wedding fund.** Target, deposits per person or source (Partner A, Partner B, parents, others), progress, "need to save Rp X per month" = (target minus collected) divided by months left | Weekly to monthly. 45% of Jakpat respondents fund from personal savings and 40% from joint savings ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), so recording per source is meaningful. The money actually sits in the account/Kantong (pocket); the app only records | S | `saving` (target, deadline) and `contribution` (`parent_id`, `amount`, `done_on`, `who`) | D1 |
+| W15 | **Payment proof as a link** to Drive/Photos, not an upload. Upload to `R2` only later (see W15b in §7) | The trail for WO fraud and disputes. A link is cheap; upload needs R2 (§5.3) | S | `payment.data.link` | D1 |
 
-**H10 Rumah, renovasi, KPR.** Kalkulator KPR sudah ada di [Rumah123](https://www.rumah123.com/kpr/simulasi-kpr/) dan [BCA rumahsaya](https://www.bca.co.id/en/informasi/edukatips/2023/08/01/06/13/simulasi-kpr-dengan-mudah-di-rumahsaya). Rumah123 menyatakan batas cicilan bank 30% dari gaji bersih: "Kemampuan Cicilan = (Gaji Bersih x 30%) - Cicilan Lain" ([Rumah123](https://www.rumah123.com/kpr/kemampuan-kpr/)). Overrun renovasi nyata di data Inggris: 38% pemilik rumah melebihi budget awal ([Houzz UK 2026 via InteriorDaily](https://www.interiordaily.com/article/9855002/uk-homeowners-cut-renovation-budgets-by-nearly-30/)); bukan data Indonesia dan tidak ada sumber kebiasaan RAB Indonesia yang ketemu: `[UNVERIFIED]`. HomeZada adalah suite besar bergaya AS ([homezada.com](https://www.homezada.com/)). **Saran:** kalkulator KPR diserahkan. Renovasi atau pindahan menjadi "proyek" baru dengan modul anggaran dan pembayaran yang sama dari W13, hampir tanpa kode baru (§7). Berlaku hanya bila benar-benar ada renovasi.
+### 3.5 Phase 4: Guests and invitations
 
-**H11 Perjalanan.** Wanderlog (inti gratis; ulasan Trustpilot 1,9 dari 51 ulasan, sampel kecil: [Trustpilot](https://www.trustpilot.com/review/wanderlog.com)). Google Trips dihentikan 5 Agustus 2019 ([MobileSyrup](https://mobilesyrup.com/2019/06/04/google-trips-shutdown-august-5-2019/)). **Saran:** serahkan. Boleh memakai "proyek perjalanan" (tugas + anggaran) bila sudah terasa berguna.
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W16 | **One-table guest list.** Side (Partner A/B), category, name, number of people (pax), phone number, invitation status, note. Totals per side and category. **An adjustable catering portion multiplier** (the 2x or 2.5x rule differs between sources: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). CSV import and export | Weekly in the invitation phase; the total drives the catering budget, which can be 40-60% of the reception budget ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)) | M | `guest`: name, `group_key` (side and category), `qty` (pax), phone, `status`, note | D1 + client (CSV) |
+| W17 | **Invitation tracker** with a "send via WhatsApp" button per guest (`wa.me/<number>?text=...`, [official format](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/)) and a sent marker | Weekly while sending; the message is sent manually by the user, not automatically | S | `guest.status` ("not yet/sent/confirmed/not coming") | client |
+| W18 | **Import RSVP/check-in results from a digital invitation service**, through CSV/Excel. Many platforms offer export, e.g. invi.id ([page](https://invi.id)) | Only if you two use an external invitation service (§8: not built ourselves) | M | Matching names to `guest` | client |
+| W19 | **Read-only link** for parents or the WO: rundown, guest total, vendor contacts. A random token per link, revocable | Couples want to involve people outside themselves ([Massimi et al.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)). A privacy risk, so it's postponed and kept narrow | M | Token table (hash), scope per link | D1 + public endpoint |
 
-**H12 Orang dan momen.** Wishlist hadiah ditangani Giftster, Giftful, GoWish (gratis dan matang: contoh [Giftster](https://apps.apple.com/us/app/giftster-the-family-wish-list/id478126039)). Yang tidak ketemu adalah pencatat amplop balas-membalas: satu app dari pengembang asing, KnotNote, mencoba niche ini dan punya 0 rating ([App Store](https://apps.apple.com/id/app/knotnote-gift-money-diary/id6784234386)), dan Arisan Ceria, yang hanya mengundi pemenang, 2,13 dari 8 ulasan ([App Store](https://apps.apple.com/id/app/arisan-ceria/id6742703765)). Arisan sendiri adalah tabungan bergilir ([Wikipedia](https://en.wikipedia.org/wiki/Arisan)), dan Jago sudah punya Kantong Arisan. Tidak ketemu sumber yang mengonfirmasi bahwa pasangan Indonesia merasa sulit melacak kondangan atau arisan: `[UNVERIFIED]`. **Saran:** satu tabel kecil "orang dan momen" (siapa, acara, tanggal, jumlah masuk/keluar, catatan) plus pengingat ulang tahun dan ulang tahun nikah. Arisan diserahkan ke grup WhatsApp atau Kantong Arisan kecuali kalian memang menjalankannya. **Validasi dengan kalian dulu** sebelum dibuat.
+### 3.6 Phase 5: Wedding day
 
-**H13 Jurnal dan kenangan.** Day One punya enkripsi dan ekspor ([dayoneapp.com](https://dayoneapp.com/)). Between berpindah pemilik: diakuisisi SoCar pada 2018 ([The Bridge](https://thebridge.jp/2018/07/socar-acquires-vcnc)); menurut Asiae setelah masuk Krafton dan digabung ke Thingsflow, kebijakan privasinya berubah dan pesan pengguna dikumpulkan untuk riset AI ([Asiae, 2022](https://view.asiae.co.kr/en/article/2022051815010915714), klaim sesuai artikel). Isi relasi (pertanyaan harian, latihan) sudah dilayani Paired ([paired.com](https://www.paired.com/)) dan Gottman Card Decks, yang oleh seorang terapis disebut "Genuinely useful. Free" sebagai pelengkap ([blog praktik](https://www.southdenvertherapy.com/blog/do-relationship-apps-work-therapist-review)). **Saran:** serahkan konten relasi. Foto di album Google Photos atau iCloud. Satu timeline teks ("kita") dengan ekspor adalah beberapa jam kerja bila diinginkan.
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W20 | **Rundown per event.** Start and end time, activity, PIC, note, tick-off, "now/next" highlight. Opens **without signal** | Dense-temporary: opened repeatedly in the last two weeks and on the wedding day. For the coordinator, not the couple (§1.1) | M | `rundown`: `group_key` = event, `due_on` (date), `data` (start/end time), title, PIC, note, `done_on` | D1 + `client` (offline cache) |
+| W21 | **Share the rundown and vendor contacts** as WhatsApp text (`wa.me/?text=`) or print. The text is already URL-encoded | The cheapest way to give the run sheet to the coordinator without a third account | S | A view over `rundown` and `vendor` | client |
+| W22 | **Song list per moment** (entrance, *akad*, meal, closing) | Single-use but cheap. From the original sheet (brainstorm §1.11) | S | `song`: title, singer, `group_key` (moment) | D1 |
+| W23 | **Night-before checklist** and things to bring | Static template | S | `task` from a template | D1 + static |
 
-**H14 Lain-lain.** Servis kendaraan lipat ke H3 dengan satu kolom kilometer (contoh app: [CARFAX Car Care](https://apps.apple.com/us/app/carfax-car-care/id552472249), fokus AS). Pengelolaan janji kesehatan dan hewan peliharaan: hanya app telehealth yang ketemu, tidak ada bukti kebutuhan bersama: `[UNVERIFIED]`. PBB tahunan tidak diteliti: `[UNVERIFIED]`.
+### 3.7 Phase 6: After the wedding (H+1 to roughly H+90)
 
-### 4.3 Layak di app privat dua orang vs lebih baik di app yang ada
+| ID | Feature | Value (trigger) | Effort | Data | Platform |
+|---|---|---|---|---|---|
+| W24 | **Post-wedding admin checklist.** New KK, status change on the *KTP-el* (electronic ID card), BPJS (add spouse), tax status, bank/insurance/passport/STNK. Separated into **mandatory vs optional vs unclear** (§3.9) | Dense-temporary; continues into household | S | `task` from a template | D1 + static |
+| W25 | ***Amplop* ledger, incoming.** Who gave, how much, at which event, notes. When invited to a *kondangan* later, see what they once gave (continues to H12) | High-value redemption. The practice is documented as reciprocal ([Goodnews from Indonesia](https://www.goodnewsfromindonesia.id/2021/11/24/fenomena-sosial-dan-eksistensi-tradisi-buwuhan-dalam-hajatan), [Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)), and no dedicated tool was found. **Demand not yet validated** | S | `gift`: giver name, `group_key` = event, `amount`, `done_on`, direction (incoming/outgoing) in `data`, note | D1 |
+| W26 | **Closing out.** Remaining vendor bills, thank-you list, archive export (JSON + CSV + `.ics`) | Ends the project neatly and keeps a copy outside the app | S | A view over `payment`, `guest` | client |
 
-| Kategori | Putusan | Catatan |
+### 3.8 Detail: the KUA process (basis of W5 and W6)
+
+Legal basis: Minister of Religious Affairs Regulation (PMA) 30/2024 on Marriage Registration, issued 24 December 2024, in force 30 December 2024, revoking PMA 22/2024 ([BPK](https://peraturan.bpk.go.id/Details/321787)). The full text was read from a [PDF copy](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf). No replacement was found as of August-September 2026 ([Detik, 9 September 2026](https://www.detik.com/hikmah/khazanah/d-8656003/syarat-dan-alur-pendaftaran-nikah-terbaru-kemenag-2026), [Kemenag Kebumen, 3 September 2026](https://kebumen.kemenag.go.id/mau-menikah-ini-syarat-dan-tahapan-pendaftaran-nikah-di-kua-sesuai-pma-30-tahun-2024/)). This is not legal advice.
+
+| Step | When | Documents/items | Source | Status |
+|---|---|---|---|---|
+| 1. Choose the KUA and the *akad* date; decide whether at the KUA or outside | Early. The author's suggestion: three months or more before H (not a rule) | – | PMA Article 16 | Rule verified; timing is a suggestion |
+| 2. Marriage cover letter from the *kelurahan*/*desa* (village office) | Before registering | Article 4(1)(a). The form codes N1-N4 are a local name, the PMA doesn't mention the codes | PMA; [SIMKAH](https://simkah4.kemenag.go.id/) mentions "N1-N4" | Verified. The RT/RW (neighbourhood heads) step is `[UNVERIFIED]` |
+| 3. Marriage recommendation letter, if the *akad* is outside the home sub-district | Before registering at the KUA of the *akad* | Articles 4(1)(e), 17. One recommendation from the KUA of each residence; if both are in the same sub-district, one is enough | PMA | Verified; lead time `[UNVERIFIED]` |
+| 4. Health certificate from a health facility | Before registering. The Ministry of Health suggests an examination about 3 months before ([Ayo Sehat, 2018](https://ayosehat.kemkes.go.id/pentingnya-pemeriksaan-kesehatan-pra-nikah)) | Permenkes 2/2025 (Minister of Health Regulation) Article 28 ([PDF](https://jdih.kemkes.go.id/storage/documents/pdfs/2025permenkes002.pdf)). TT immunisation isn't mentioned in the current article; whether the KUA asks for a TT card `[UNVERIFIED]` | PMA 4(1)(f), Permenkes | Verified |
+| 5. Register the intent to marry at the KUA or online through SIMKAH | At the latest **10 HK before the *akad***. Less than that: a sub-district head's dispensation letter or a stamped statement | Article 3 | PMA | Verified (full text) |
+| 6. Come to the KUA after registering online | The SIMKAH page says at the latest 15 HK; the PMA text doesn't contain that rule | – | [SIMKAH](https://simkah4.kemenag.go.id/), [Kompas, 5 May 2026](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya) | **Contradictory**, ask the KUA |
+| 7. Marriage guidance (*bimwin*) | Mandatory for prospective couples (*catin*) who have registered; the certificate is a requirement for the marriage examination | Articles 5, 6(2)(d). Duration and schedule `[UNVERIFIED]` | PMA | Mandatory, verified |
+| 8. Marriage examination | After *bimwin*; the groom-to-be, the bride-to-be, and the marriage guardian (*wali*) attend | Article 6 | PMA | Verified |
+| 9. Complete missing documents | At the latest 1 HK before the *akad* | Article 7(2) | PMA | Verified |
+| 10. Fee | Rp0 at the KUA on working days and hours. Rp600,000 if outside the KUA or outside working hours | PP 59/2018 (Government Regulation) Article 5 ([BPK](https://peraturan.bpk.go.id/Details/99855/pp-no-59-tahun-2018)); the amount is in an image appendix, so the figure is taken from Kemenag pages ([Purbalingga, August 2026](https://purbalingga.kemenag.go.id/dari-rumah-bisa-ini-alur-pendaftaran-nikah-melalui-simkah/), [SIMKAH](https://simkah4.kemenag.go.id/)) | PP, Kemenag | Verified; confirm with the KUA |
+| 11. *Akad*; *Buku Nikah* and marriage card | Given right after the *akad*; if not possible, at the latest 7 HK | Article 38 | PMA | Verified (full text) |
+
+**Conditional documents (Article 4(1)):** parent/guardian permission if under 21; a dispensation from the Court if under 19 on the *akad* day; a divorce or death certificate for divorced or widowed persons; permission from a superior for military/police; a polygamy permit decision; a separate list for foreign nationals (Article 4(2)-(3)).
+
+**Not on the national list:** diploma, passport photo, *mahar*, NPWP (tax ID number). The photo requirement is a local practice (one Kemenag office mentions 4x6 cm and 2x3 cm, blue background: [Purbalingga](https://purbalingga.kemenag.go.id/mau-nikah-pahami-dulu-persyaratan-pendaftaran-nikahnya/)).
+
+**Elsimil (BKKBN) is not a national requirement.** Not in the Article 4 list; BKKBN once asked local governments to make it mandatory for the cover letter ([Antara, 26 March 2024](https://www.antaranews.com/berita/4029018/bkkbn-minta-sertifikat-elsimil-jadi-syarat-surat-pengantar-menikah)); Kemendukbangga and Kemenag agreed to strengthen its use without a mandate ([Antara, 5 May 2026](https://www.antaranews.com/berita/5556837/kemendukbangga-kemenag-perkuat-elsimil-guna-cegah-perceraian)). Some blogs call it "mandatory" in 2026: contradictory, `[UNVERIFIED]`, treat as a local practice.
+
+**SIMKAH:** the official online registration site is `simkah4.kemenag.go.id` (system name: Marriage Management Information System). Flow: create an account with email and OTP, choose "Register Marriage", fill in the data, upload documents, print the proof ([Kontan, 29 May 2023](https://nasional.kontan.co.id/news/cara-daftar-nikah-online-di-simkah4kemenaggoid-hubungi-nomor-ini-jika-terkendala), may have changed). Channel for complaints about unofficial charges: `simdumas.kemenag.go.id` ([Kompas](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya)).
+
+**Design implications (the author's suggestion, not fact):** keep "ask the KUA" as an item with a notes column, not a hard rule; conditional documents as simple rules in the template; all dates derived from H and editable; don't store document numbers or scans.
+
+### 3.9 Detail: admin after the wedding (basis of W24)
+
+| Item | Mandatory or optional | Deadline | Source | Status |
+|---|---|---|---|---|
+| *Buku Nikah* in hand | Prerequisite for all other items | Right after the *akad*, at the latest 7 HK | PMA Article 38 | Verified |
+| New KK (new family) | Practically mandatory for BPJS, banks, etc. | No national deadline found; "30 days" only from one blog `[UNVERIFIED]` ([ITERA blog](https://blog.itera.ac.id/?p=8862)) | Dukcapil: [new KK](https://dukcapil.kemendagri.go.id/page/read/penerbitan-kartu-keluarga-baru-karena-membentuk-keluarga-baru) (photocopy of the marriage book, form F-1.02) | Requirements verified |
+| Status change on the KTP-el | Data changes are recorded at the *Dinas* (local office) | Not found | Dukcapil: [KTP-el](https://dukcapil.kemendagri.go.id/page/read/penerbitan-ktp-el-baru-karena-pindah-perubahan-data-rusak-dan-hilang-untuk-wni) | Requirements verified |
+| BPJS Kesehatan: add spouse | The spouse is a family member ([Perpres 82/2018 (Presidential Regulation) Article 5(1)](https://pasal.id/peraturan/perpres/perpres-no-82-tahun-2018), copy from a third-party site) | The deadline to add a spouse was not found (28 days there is for newborns, not spouses) | Perpres | Relationship verified; deadline `[UNVERIFIED]` |
+| Tax: status K/0, K/1 | Handled through HR or DJP (tax office) | Timing rule `[UNVERIFIED]` | [PMK 101/2016 (Minister of Finance Regulation) with status "In force"](https://peraturan.bpk.go.id/Details/121096/pmk-no-101pmk0102016) at BPK | Regulation status verified; the rest is not |
+| BPJS Ketenagakerjaan (heirs), passport, bank/insurance (beneficiaries), STNK, HR forms | Optional or per contract | Not found | – | All `[UNVERIFIED]` |
+| SIAK-SIMKAH data integration | When active, the marital status at Dukcapil is updated automatically | Target completion November 2026, pilot at 2-3 KUAs in December 2026; until then KK and KTP-el are handled separately | [Dukcapil, 22 September 2026](https://dukcapil.kemendagri.go.id/blog/read/mencegah-fraud-identitas-interkoneksi-data-siak-dan-simkah-ditargetkan-tuntas-november-2026) | Target, not yet active |
+
+Design suggestion: make this template tasks that can be hidden one by one, especially the KK and KTP-el items once the SIAK-SIMKAH integration is running.
+
+---
+
+## 4. Household feature catalogue (after marriage)
+
+The question answered for each category: is it worth building in a private two-person app, or better handed off to an existing app. The criteria: passes the §1.4 test, existing apps are already good or free, privacy risk, and whether the hardest part (instant sync, bank integration, maps) can be done by a small app.
+
+**A fact that decides many choices: US-style bank sync isn't available in Indonesia.**
+- Plaid doesn't list Indonesia in its Link country list ([Plaid docs](https://plaid.com/docs/api/link/)); its institution coverage is the US and Canada ([Plaid institutions](https://plaid.com/docs/institutions/)). The absence of Indonesia is an absence from the list, not an explicit statement.
+- Honeydue syncs through Plaid and is read-only ([CNBC Select, 26 March 2026](https://www.cnbc.com/select/honeydue-budgeting-app-review/)); an Apple search for its app id in the Indonesian storefront returned zero results on 6 October 2026 ([lookup](https://itunes.apple.com/lookup?id=1157633945&country=id)). Availability on Android in Indonesia was not checked.
+- SNAP, Bank Indonesia's open API standard since 2022 (managed by ASPI since 1 September 2023), is a payment standard: transfers, balance checks, transaction history ([BI](https://www.bi.go.id/id/layanan/Standar/SNAP/default.aspx), [ASPI portal](https://apidevportal.aspi-indonesia.or.id/)). Whether an individual or an unlicensed app can call it is unclear: `[UNVERIFIED]`. Aggregators like Brankas sell APIs to developers and companies ([brankas.com](https://www.brankas.com/)).
+- Local apps work around it with uploading statements, e-wallet screenshots, or logging through WhatsApp: [Finku](https://apps.apple.com/id/app/finku-budget-money-manager/id1587320325), [Sribuu](https://apps.apple.com/id/app/sribuu-budget-money-manager/id1542637665). Money Lover reviewers still ask for BCA integration (see §2.4).
+- Consequence: a small app isn't behind on sync. The realistic routes are manual entry, CSV/statement import, or screenshot OCR.
+
+### 4.1 Decision summary
+
+| ID | Feature | Decision | One-line reason | Effort | Platform |
+|---|---|---|---|---|---|
+| H1 | Shared expenses (thin ledger) | **Maybe**, after H3/H2 | No bank sync; the highest risk of quitting because input is manual | M | D1, client (CSV) |
+| H2 | Savings goal | **Build** (reuse W14) | The money is in the bank; the app only records progress | S | D1 |
+| H3 | Recurring bills and obligations | **Build, small** | Payment happens in the official app; the gap is in the reminder | M | D1; cron or `.ics` for reminders |
+| H4 | Document and vehicle renewals | **Build** (a variant of H3) | Annual tax, STNK every 5 years, driver's licence (*SIM*), passport, insurance | S | D1 |
+| H5 | Shopping list | **Hand off** | Mature apps, free, instant sync | – | – |
+| H6 | Meal plan | **No** | No evidence of an unserved weekly need | – | – |
+| H7 | Recurring chores | **Maybe, small** | "Last done / due", no assigning | S (on top of H3) | D1 |
+| H8 | Shared calendar | **Hand off** + `.ics` feed | Google Calendar is free and granular | S (feed) | D1 + public endpoint |
+| H9 | Document vault | **Hand off the scans**; **build an index** | KTP/KK scans are the riskiest data | S (index) | D1 |
+| H10 | Home, renovation, KPR | **Hand off** KPR; **reuse** the budget for renovation | Mortgage calculators already exist | S | D1 |
+| H11 | Travel | **Hand off**; may be done as a project | Wanderlog and Maps | S | D1 |
+| H12 | People and occasions: birthdays, *kondangan*/outgoing *amplop*, *Lebaran* (Eid al-Fitr)/*mudik* (annual homecoming travel) | **Build, small, after validation** | No tool for reciprocal *amplop* found | S | D1 |
+| H13 | Journal and memories | **Maybe**: a text timeline | The evidence points to data ownership, not a feature | S | D1 |
+| H14 | Others (vehicle servicing, health, pets) | Servicing: fold into H3; the rest **no** | Not enough evidence of need | S | D1 |
+
+### 4.2 Evidence per category
+
+**H1 Shared expenses.**
+- Splitwise: reviewers report a daily entry limit and delay on the free tier since December 2023 ([Trustpilot](https://www.trustpilot.com/review/splitwise.com?page=2)); no official announcement found. Honeydue: reviews mention transactions not refreshing and support gone "dark" ([App Store](https://apps.apple.com/app/id1157633945)).
+- Zeta (a couple finance app): Acorns announced an asset acquisition on 24 June 2025 ([Acorns](https://acorns.com/learn/acorns-zeta-acquisition/)); the closing date of 9 May 2025 is only from a competitor blog `[UNVERIFIED]` ([Pocket Clear](https://pocketclear.app/blog/zeta-app-alternative-couples.html)).
+- Goodbudget: manual entry and envelopes ([CNBC Select](https://www.cnbc.com/select/goodbudget-app-review/)).
+- Epstein et al. (UbiComp 2015): financial tools last longer than activity tools, but manual upkeep is the main killer (§1.2 #4).
+- **Suggestion:** start from "actual total this month per category" and "who paid what" for big shared expenses, not recording every coffee. Prepare CSV import/export. Don't chase bank sync.
+
+**H2 Savings goal.** Bank Jago "Kantong Bersama" (shared pocket): invite another Jago user into one Kantong (pocket) with a goal; access roles "Can View, Can Use, or Can View and Use"; both people must have a Jago account ([Jago product summary](https://assets.jago.com/web-assets/public/riplay-umum-kantong-jago-new-logo.pdf)). At the end of December 2025 there were 40 million Kantong and Kantong Bersama grew 87% in a year ([BCA Sekuritas, 30 January 2026](https://bcasekuritas.co.id/en/latest-news/news/bank-jago-catat-adopsi-fitur-kantong-aplikasi-banking-capai-40-juta)). blu by BCA Digital has bluGether; Republika calls it saving "without having to open a joint account", Selular calls it a joint account, so its legal form is contradictory between sources ([Republika](https://ekonomi.republika.co.id/berita/tin053349/blu-by-bca-digital-menabung-kini-jadi-aktivitas-kolaboratif), [Selular, February 2026](https://selular.id/2026/02/blu-by-bca-digital-dorong-couple-budgeting-lewat-blusaving-dan-blugether/)). **Suggestion:** the app records progress (name, target, deadline, contributions, "need Rp X per month"). The money stays in the bank.
+
+**H3-H4 Bills and renewals.** Honeydue reviewers like reminders compared with a shared note (§2.4). Payment is dominated by official apps with large user bases: PLN Mobile (4.8 from 178,385 ratings on the Indonesian App Store), Mobile JKN (4.78 from 388,838) ([PLN Mobile](https://apps.apple.com/id/app/pln-mobile/id1299581030), [Mobile JKN](https://apps.apple.com/id/app/mobile-jkn/id1237601115), snapshot 6 October 2026). Standalone bill-reminder apps on the Indonesian App Store have 0-1 ratings ([search](https://itunes.apple.com/search?term=tagihan+pengingat+jatuh+tempo&entity=software&country=id)): that could mean no demand or no distribution. The SIGNAL app (Samsat Digital Nasional, the national digital vehicle registration service) has 1.78 stars from 10,317 reviews ([search](https://itunes.apple.com/search?term=pajak+kendaraan+samsat&entity=software&country=id)). The STNK validity is five years ([Wikipedia](https://id.wikipedia.org/wiki/Surat_Tanda_Nomor_Kendaraan), secondary). **Suggestion:** a recurring table (name, amount, period or due date, who pays, "paid this period", next due). Don't detect subscriptions from transactions (needs bank aggregation).
+
+**H5-H6 Shopping and meals.** AnyList (free core, Complete $9.99/year individual or $14.99 household: [App Store](https://apps.apple.com/us/app/anylist-grocery-shopping-list/id522167641)), OurGroceries ([App Store](https://apps.apple.com/us/app/our-groceries-shopping-list/id325851015)), and Bring! are already mature. Google Keep complaints about sync and missing items ([App Store](https://apps.apple.com/us/app/google-keep-notes-and-lists/id1029207872)) show how hard instant sync is. Losing an item in a shop aisle is costly. Mealime closes on 21 October 2026 and deletes personal data ([Mealime](https://www.mealime.com/closing)): an example of the risk of dependence. **Suggestion:** hand off; pick one app that has export.
+
+**H7 Chores.** Tody uses an urgency-based "needs doing" model and is reviewed as reducing decision fatigue ([App Store](https://apps.apple.com/us/app/tody-easy-house-cleaning/id595339588)). Studies and coverage on chore apps: delegation adds work for the person who already manages, and feels like parenting your partner ([MIT Technology Review](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/)). **Suggestion:** if built, only an H3 variant with "last done by, when" and the next due date. No points, rankings, or assigning with notifications. If it isn't maintained, hand off to Tody.
+
+**H8 Calendar.** Google Calendar shares for free with five permission levels ([Google](https://support.google.com/calendar/answer/37082)). Facts for the `.ics` feed: Google can only add a calendar from a URL through a computer browser, not through the Android/iPhone/iPad app ([Google](https://support.google.com/calendar/answer/37100?hl=en)); the refresh interval is not published by Google (the "12-24 hours" figure is only from third-party blogs: `[UNVERIFIED]`). **Suggestion:** don't build a calendar UI. Provide a read-only feed (§6).
+
+**H9 Document vault.** Bitwarden Premium: $1.65/month, 5 GB attachments, emergency access ([pricing](https://bitwarden.com/pricing/), [emergency access](https://bitwarden.com/help/emergency-access/)). Google Inactive Account Manager: up to 10 trusted contacts receive selected data after the account goes inactive ([Google](https://support.google.com/accounts/answer/3036546)). OWASP: file upload needs authorisation, random file names, storage outside the web root, signature validation ([cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)). The Director General of Dukcapil once asked the public not to upload population documents to social media ([Medcom, 10 May 2021](https://www.medcom.id/nasional/peristiwa/GbmqQ5Pb-jaga-kerahasiaan-dokumen-kependudukan-tak-perlu-diunggah-ke-medsos)); the claim of a 10-year penalty is only in a search snippet: `[UNVERIFIED]`. **Suggestion:** document scans in the vault you already have. The app stores an **index**: document name, physical location or vault, expiry date, who holds it, emergency phone number. No identity numbers.
+
+**H10 Home, renovation, KPR.** Mortgage calculators already exist at [Rumah123](https://www.rumah123.com/kpr/simulasi-kpr/) and [BCA rumahsaya](https://www.bca.co.id/en/informasi/edukatips/2023/08/01/06/13/simulasi-kpr-dengan-mudah-di-rumahsaya). Rumah123 states the bank instalment limit as 30% of net salary: "Kemampuan Cicilan = (Gaji Bersih x 30%) - Cicilan Lain" ([Rumah123](https://www.rumah123.com/kpr/kemampuan-kpr/)). Renovation overrun is real in UK data: 38% of homeowners exceed the initial budget ([Houzz UK 2026 via InteriorDaily](https://www.interiordaily.com/article/9855002/uk-homeowners-cut-renovation-budgets-by-nearly-30/)); not Indonesian data and no source on Indonesian RAB (renovation budget plan) habits was found: `[UNVERIFIED]`. HomeZada is a big US-style suite ([homezada.com](https://www.homezada.com/)). **Suggestion:** hand off the mortgage calculator. Renovation or moving becomes a new "project" with the same budget and payment module from W13, with almost no new code (§7). Applies only when there's really a renovation.
+
+**H11 Travel.** Wanderlog (free core; Trustpilot reviews 1.9 from 51 reviews, a small sample: [Trustpilot](https://www.trustpilot.com/review/wanderlog.com)). Google Trips was discontinued on 5 August 2019 ([MobileSyrup](https://mobilesyrup.com/2019/06/04/google-trips-shutdown-august-5-2019/)). **Suggestion:** hand off. A "travel project" (tasks + budget) is fine once it feels useful.
+
+**H12 People and occasions.** Gift wishlists are handled by Giftster, Giftful, GoWish (free and mature: example [Giftster](https://apps.apple.com/us/app/giftster-the-family-wish-list/id478126039)). What wasn't found is a reciprocal *amplop* recorder: one app from a foreign developer, KnotNote, tried this niche and has 0 ratings ([App Store](https://apps.apple.com/id/app/knotnote-gift-money-diary/id6784234386)), and Arisan Ceria, which only draws winners, 2.13 from 8 reviews ([App Store](https://apps.apple.com/id/app/arisan-ceria/id6742703765)). *Arisan* itself is a rotating savings group ([Wikipedia](https://en.wikipedia.org/wiki/Arisan)), and Jago already has Kantong Arisan. No source was found confirming that Indonesian couples find it hard to track *kondangan* or *arisan*: `[UNVERIFIED]`. **Suggestion:** one small "people and occasions" table (who, event, date, amount in/out, note) plus birthday and wedding anniversary reminders. *Arisan* is handed off to a WhatsApp group or Kantong Arisan unless you two actually run one. **Validate with you two first** before building.
+
+**H13 Journal and memories.** Day One has encryption and export ([dayoneapp.com](https://dayoneapp.com/)). Between changed owners: acquired by SoCar in 2018 ([The Bridge](https://thebridge.jp/2018/07/socar-acquires-vcnc)); according to Asiae, after entering Krafton and being merged into Thingsflow, its privacy policy changed and user messages were collected for AI research ([Asiae, 2022](https://view.asiae.co.kr/en/article/2022051815010915714), claim as per the article). Relationship content (daily questions, exercises) is already served by Paired ([paired.com](https://www.paired.com/)) and Gottman Card Decks, which a therapist calls "Genuinely useful. Free" as a complement ([practice blog](https://www.southdenvertherapy.com/blog/do-relationship-apps-work-therapist-review)). **Suggestion:** hand off the relationship content. Photos in a Google Photos or iCloud album. One text timeline ("us") with export is a few hours of work if wanted.
+
+**H14 Others.** Vehicle servicing folds into H3 with one kilometre column (example app: [CARFAX Car Care](https://apps.apple.com/us/app/carfax-car-care/id552472249), US-focused). Health appointment and pet management: only telehealth apps found, no evidence of a shared need: `[UNVERIFIED]`. Annual *PBB* (property tax) was not researched: `[UNVERIFIED]`.
+
+### 4.3 Worth a private two-person app vs better in an existing app
+
+| Category | Verdict | Notes |
 |---|---|---|
-| Tagihan/perpanjangan, target tabungan, orang dan momen, indeks dokumen | **App privat** | Tabel kecil, pemicu jelas, tidak butuh integrasi |
-| Pengeluaran bersama | **Mungkin** | Setelah dua yang di atas stabil; risiko berhenti tinggi |
-| Tugas rumah | **Mungkin, kecil** | Varian tagihan berulang |
-| Anggaran renovasi atau perjalanan | **Pakai ulang modul anggaran** | Tanpa kode baru bila model generik (§7) |
-| Daftar belanja, kalender bersama, brankas scan, kalkulator KPR, itinerary, konten relasi, wishlist | **App yang ada** | Sambungkan lewat link, `.ics`, atau CSV |
+| Bills/renewals, savings goal, people and occasions, document index | **Private app** | Small tables, clear triggers, no integration needed |
+| Shared expenses | **Maybe** | After the two above are stable; high risk of quitting |
+| Chores | **Maybe, small** | A variant of recurring bills |
+| Renovation or travel budget | **Reuse the budget module** | No new code if the model is generic (§7) |
+| Shopping list, shared calendar, scan vault, mortgage calculator, itinerary, relationship content, wishlist | **Existing app** | Connect through links, `.ics`, or CSV |
 
 ---
 
-## 5. Kebutuhan lintas fitur
+## 5. Cross-feature needs
 
-### 5.1 Reminder dan notifikasi
+### 5.1 Reminders and notifications
 
-Tangga dari yang paling murah. Naik anak tangga hanya bila anak tangga sebelumnya terbukti kurang.
+A ladder from the cheapest. Climb a rung only if the previous one proved insufficient.
 
-| # | Saluran | Infrastruktur | Fakta platform | Putusan |
+| # | Channel | Infrastructure | Platform facts | Verdict |
 |---|---|---|---|---|
-| 1 | Layar "Minggu ini" (W3) | Tidak ada | – | **Mulai di sini.** Sesi mingguan jadi jangkar (§1.2 #5) |
-| 2 | Tombol "Tambah ke kalender" per item (`.ics` dibuat di client, dengan alarm `VALARM`) | Tidak ada di server | `VEVENT`/`VTODO` dan `VALARM` didefinisikan di [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). Pengingat ditangani kalender HP | **Kedua.** Pengganti push yang paling murah (brainstorm, backlog 1) |
-| 3 | Feed `.ics` berlangganan | Endpoint baca-saja | Google hanya menerima langganan URL lewat browser komputer; interval refresh tidak dipublikasikan ([Google](https://support.google.com/calendar/answer/37100?hl=en)). Apple Calendar di Mac punya menu Auto-refresh ([Apple](https://support.apple.com/en-au/guide/calendar/icl1022/16.0/mac/26)); kalender langganan baca-saja | Nanti (§6). Jangan menjanjikan sinkron instan |
-| 4 | Bagikan ke WhatsApp (tombol, dipicu pengguna) | Tidak ada | Format `wa.me/<nomor>?text=` dari [FAQ WhatsApp](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/). Teks terisi di chat; apakah terkirim otomatis tidak terkonfirmasi (FAQ terpotong): `[UNVERIFIED]`, tes di HP | Bagus untuk berbagi rundown dan ringkasan, bukan untuk reminder otomatis |
-| 5 | Bot Telegram dari cron | Cron + secret | Pesan bot gratis; pada satu chat hindari lebih dari satu pesan per detik ([Telegram FAQ](https://core.telegram.org/bots/faq)). Pengguna harus memulai chat dengan bot (inferensi; belum dicek di dokumen) | Mudah, tapi hanya bila kalian berdua memang memakai Telegram |
-| 6 | Email digest | Cron + email | Mengirim ke alamat tujuan terverifikasi di akun gratis di semua paket; mengirim ke alamat sembarang hanya Paid; Email Service masih Beta ([Email Routing](https://developers.cloudflare.com/email-routing/), [Email Service pricing](https://developers.cloudflare.com/email-service/platform/pricing/)). Apakah domain di Cloudflare wajib: `[UNVERIFIED]` | Pilihan murah untuk digest mingguan |
-| 7 | Web Push | Cron + VAPID + enkripsi payload | iOS hanya untuk web app yang ditambahkan ke Home Screen, dan izin diminta lewat interaksi pengguna ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). VAPID: [RFC 8292](https://www.rfc-editor.org/rfc/rfc8292.html); enkripsi: [RFC 8291](https://www.rfc-editor.org/rfc/rfc8291.html); primitif ada di WebCrypto Workers ([docs](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)) | Nanti, hanya bila 1 sampai 6 kurang. Effort M |
+| 1 | The "This week" screen (W3) | None | – | **Start here.** The weekly session becomes the anchor (§1.2 #5) |
+| 2 | "Add to calendar" button per item (`.ics` generated on the client, with a `VALARM` alarm) | None on the server | `VEVENT`/`VTODO` and `VALARM` are defined in [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). The phone's calendar handles the reminder | **Second.** The cheapest replacement for push (brainstorm, backlog 1) |
+| 3 | Subscribed `.ics` feed | Read-only endpoint | Google only accepts URL subscriptions through a computer browser; the refresh interval isn't published ([Google](https://support.google.com/calendar/answer/37100?hl=en)). Apple Calendar on Mac has an Auto-refresh menu ([Apple](https://support.apple.com/en-au/guide/calendar/icl1022/16.0/mac/26)); subscribed calendars are read-only | Later (§6). Don't promise instant sync |
+| 4 | Share to WhatsApp (button, user-triggered) | None | The `wa.me/<number>?text=` format from the [WhatsApp FAQ](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/). The text is filled in the chat; whether it is sent automatically is not confirmed (the FAQ is truncated): `[UNVERIFIED]`, test on a phone | Good for sharing the rundown and summaries, not for automatic reminders |
+| 5 | Telegram bot from cron | Cron + secret | Bot messages are free; in a single chat avoid more than one message per second ([Telegram FAQ](https://core.telegram.org/bots/faq)). The user has to start a chat with the bot (inference; not checked in a document) | Easy, but only if you two actually use Telegram |
+| 6 | Email digest | Cron + email | Sending to verified destination addresses is free on the free account on all plans; sending to arbitrary addresses is Paid only; Email Service is still Beta ([Email Routing](https://developers.cloudflare.com/email-routing/), [Email Service pricing](https://developers.cloudflare.com/email-service/platform/pricing/)). Whether the domain must be on Cloudflare: `[UNVERIFIED]` | A cheap option for a weekly digest |
+| 7 | Web Push | Cron + VAPID + payload encryption | On iOS only for web apps added to the Home Screen, and permission is requested through a user interaction ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). VAPID: [RFC 8292](https://www.rfc-editor.org/rfc/rfc8292.html); encryption: [RFC 8291](https://www.rfc-editor.org/rfc/rfc8291.html); the primitives are in Workers WebCrypto ([docs](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)) | Later, only if 1 to 6 fall short. Effort M |
 
-**Batas cron di paket gratis:** 5 Cron Trigger per akun (dihitung bersama Worker lain di akun yang sama), CPU 10 ms per run, berjalan dalam UTC ([limits](https://developers.cloudflare.com/workers/platform/limits/), [cron](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). Satu cron mingguan cukup untuk digest; Minggu 20.00 WIB = 13.00 UTC.
+**Cron limits on the free plan:** 5 Cron Triggers per account (counted together with other Workers in the same account), CPU 10 ms per run, runs in UTC ([limits](https://developers.cloudflare.com/workers/platform/limits/), [cron](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). One weekly cron is enough for the digest; Sunday 20:00 WIB (Western Indonesia Time) = 13:00 UTC.
 
-**Aturan nudge** (§1.3): maksimal satu pengingat spesifik yang terikat kejadian. Jangan kirim notifikasi yang cuma berisi "buka app". Apple HIG memperingatkan pengguna mematikan semua notifikasi bila terlalu sering ([HIG](https://developer.apple.com/design/human-interface-guidelines/notifications)).
+**The nudge rule** (§1.3): at most one specific reminder tied to an event. Don't send a notification that only says "open the app". Apple HIG warns that users turn off all notifications if they are too frequent ([HIG](https://developer.apple.com/design/human-interface-guidelines/notifications)).
 
-### 5.2 Pencarian
+### 5.2 Search
 
-Satu kolom cari di atas semua `items`, disaring di client (`includes`, tanpa mesin pencari). Jumlah data hanya ribuan baris. Menghindari pencarian di server juga menghindari batas ekspor D1: tabel virtual seperti FTS5 tidak didukung `wrangler d1 export` dan harus dihapus dulu ([D1 import/export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
+One search box over all `items`, filtered on the client (`includes`, no search engine). The amount of data is only thousands of rows. Avoiding server-side search also avoids the D1 export limit: virtual tables like FTS5 aren't supported by `wrangler d1 export` and have to be dropped first ([D1 import/export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
 Effort S. Platform: client.
 
-### 5.3 Lampiran dan foto
+### 5.3 Attachments and photos
 
-- **Mulai dengan kolom link** ke Drive/Photos (W15). Murah, tanpa platform baru.
-- **Unggahan butuh R2.** Gratis: 10 GB-bulan, 1 juta operasi Class A dan 10 juta Class B per bulan, egress gratis ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)). Mengaktifkannya lewat checkout "R2 subscription" ([R2 get started](https://developers.cloudflare.com/r2/get-started/)). Apakah metode pembayaran wajib tidak disebut di docs: `[UNVERIFIED]`. Brainstorm §3.2 menyimpulkan perlu. Konfirmasi ke worker stack sebelum bergantung padanya.
-- **Jangan simpan file di D1.** Batas satu baris, string, atau blob adalah 2 MB ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/)).
-- **Foto album bersama:** Google Photos Library API sejak 31 Maret 2025 hanya mengakses item yang dibuat oleh app itu sendiri ([Google](https://developers.google.com/photos/support/updates)). Memilih foto pengguna lewat Picker API dengan sesi dan `pickerUri` ([panduan](https://developers.google.com/photos/picker/guides/get-started-picker)). Jadi album foto tetap di Google Photos/iCloud, app hanya menyimpan link.
-- **Bila suatu hari unggah ditambahkan** (bukti bayar, kontrak): kompres di client, nama file acak, otorisasi sebelum akses ([OWASP](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)), metadata `item` memegang SHA-256, mime, ukuran. Effort L karena menyentuh R2, akses tertanda, dan sync. Ini yang membuat W15b (unggahan) ditunda (§7).
+- **Start with a link column** to Drive/Photos (W15). Cheap, no new platform.
+- **Upload needs R2.** Free: 10 GB-month, 1 million Class A and 10 million Class B operations per month, free egress ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)). Enabling it goes through the "R2 subscription" checkout ([R2 get started](https://developers.cloudflare.com/r2/get-started/)). Whether a payment method is required isn't stated in the docs: `[UNVERIFIED]`. Brainstorm §3.2 concludes it is. Confirm with the stack worker before depending on it.
+- **Don't store files in D1.** The limit for one row, string, or blob is 2 MB ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/)).
+- **Shared album photos:** since 31 March 2025 the Google Photos Library API only accesses items created by the app itself ([Google](https://developers.google.com/photos/support/updates)). Picking the user's photos goes through the Picker API with a session and `pickerUri` ([guide](https://developers.google.com/photos/picker/guides/get-started-picker)). So photo albums stay in Google Photos/iCloud, the app only stores the link.
+- **If upload is added one day** (payment proof, contracts): compress on the client, random file names, authorisation before access ([OWASP](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)), the `item` metadata holds SHA-256, mime, size. Effort L because it touches R2, signed access, and sync. This is what makes W15b (upload) postponed (§7).
 
-### 5.4 Ekspor dan backup
+### 5.4 Export and backup
 
-**Alasan:** produk pasangan dan rumah tangga sering berhenti atau berganti tangan, dengan pemberitahuan antara kira-kira dua sampai lima bulan, kadang tanpa tombol ekspor.
+**Reason:** couple and household products often shut down or change hands, with notice of roughly two to five months, sometimes without an export button.
 
-| Produk | Yang terjadi | Sumber |
+| Product | What happened | Source |
 |---|---|---|
-| Mealime | Tutup 21 Okt 2026; "All personal data will be deleted when the Mealime application is shut down." Satu sumber pihak ketiga menyebut tidak ada ekspor | [Mealime](https://www.mealime.com/closing), [Pann](https://www.pann-app.com/blog/is-mealime-shutting-down) |
-| Zeta | Acorns mengumumkan akuisisi aset 24 Jun 2025; tanggal tutup 9 Mei 2025 hanya dari blog pesaing `[UNVERIFIED]` | [Acorns](https://acorns.com/learn/acorns-zeta-acquisition/), [Pocket Clear](https://pocketclear.app/blog/zeta-app-alternative-couples.html) |
-| Mint | Intuit menutup Mint dan mengarahkan ke Credit Karma; diumumkan 1 Nov 2023, tutup digeser ke 23 Mar 2024. Klaim budget tidak ikut pindah hanya dari snippet: `[UNVERIFIED]` | [Wikipedia](https://en.wikipedia.org/wiki/Mint.com) |
-| Google Trips | Dihentikan 5 Agt 2019, diganti Google Travel dan Maps | [MobileSyrup](https://mobilesyrup.com/2019/06/04/google-trips-shutdown-august-5-2019/) |
-| Wunderlist | Diumumkan 6 Des 2019, tutup 6 Mei 2020, impor ke Microsoft To Do | [Wikipedia](https://en.wikipedia.org/wiki/Wunderlist) |
-| Tuned (Meta) | Pengguna diminta mengunduh data sebelum 19 Sep 2022 | [Slashdot](https://tech.slashdot.org/story/22/07/25/2049239/meta-is-shutting-down-tuned-its-social-app-for-couples) |
-| Couple (dulu Pair) | Tidak aktif sejak 22 Apr 2019 | [Wikipedia](https://en.wikipedia.org/wiki/Couple_(app)) |
-| OurHome | Dihentikan; "The mobile apps are unavailable, and the website is not secure anymore." | [AlternativeTo](https://alternativeto.net/software/ourhome/about/) |
-| Between | Berganti pemilik 2018, 2021, 2022; kebijakan privasi berubah menurut Asiae | [The Bridge](https://thebridge.jp/2018/07/socar-acquires-vcnc), [Asiae](https://view.asiae.co.kr/en/article/2022051815010915714) |
+| Mealime | Closes 21 October 2026; "All personal data will be deleted when the Mealime application is shut down." One third-party source says there is no export | [Mealime](https://www.mealime.com/closing), [Pann](https://www.pann-app.com/blog/is-mealime-shutting-down) |
+| Zeta | Acorns announced an asset acquisition on 24 June 2025; the closing date of 9 May 2025 is only from a competitor blog `[UNVERIFIED]` | [Acorns](https://acorns.com/learn/acorns-zeta-acquisition/), [Pocket Clear](https://pocketclear.app/blog/zeta-app-alternative-couples.html) |
+| Mint | Intuit shut down Mint and pointed to Credit Karma; announced 1 November 2023, closing pushed to 23 March 2024. The claim that budgets didn't carry over is only from a snippet: `[UNVERIFIED]` | [Wikipedia](https://en.wikipedia.org/wiki/Mint.com) |
+| Google Trips | Discontinued 5 August 2019, replaced by Google Travel and Maps | [MobileSyrup](https://mobilesyrup.com/2019/06/04/google-trips-shutdown-august-5-2019/) |
+| Wunderlist | Announced 6 December 2019, closed 6 May 2020, import to Microsoft To Do | [Wikipedia](https://en.wikipedia.org/wiki/Wunderlist) |
+| Tuned (Meta) | Users were asked to download their data before 19 September 2022 | [Slashdot](https://tech.slashdot.org/story/22/07/25/2049239/meta-is-shutting-down-tuned-its-social-app-for-couples) |
+| Couple (formerly Pair) | Inactive since 22 April 2019 | [Wikipedia](https://en.wikipedia.org/wiki/Couple_(app)) |
+| OurHome | Discontinued; "The mobile apps are unavailable, and the website is not secure anymore." | [AlternativeTo](https://alternativeto.net/software/ourhome/about/) |
+| Between | Changed owners in 2018, 2021, 2022; privacy policy changed according to Asiae | [The Bridge](https://thebridge.jp/2018/07/socar-acquires-vcnc), [Asiae](https://view.asiae.co.kr/en/article/2022051815010915714) |
 
-**Yang disediakan app** (dibangun bertahap; yang pertama S):
-1. Tombol "Unduh cadangan" yang dijalankan client: baca semua baris, hasilkan `export.json` (lossless) dan satu CSV per jenis item. Effort S.
-2. `calendar.ics` untuk item bertanggal dan `contacts.vcf` untuk vendor (§6). Effort S.
-3. `database.sql` dari `wrangler d1 export` sebagai salinan pemulihan bencana. Ini perintah CLI, bukan API yang bisa dipanggil Worker; selama ekspor berjalan, permintaan lain diblokir; angka numerik terkena presisi 52-bit JavaScript ([D1 import/export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
-4. Sebagai pengaman: D1 Time Travel mengembalikan database sampai 7 hari di paket Free dan 30 hari di Paid ([Cloudflare](https://developers.cloudflare.com/d1/reference/time-travel/)). Tujuh hari tidak cukup sebagai arsip.
-5. Simpan satu salinan **di luar Cloudflare** (laptop atau Drive pribadi). Jadwalkan sebagai tugas berulang "backup bulanan" di H3, supaya app memakai fiturnya sendiri.
+**What the app provides** (built in stages; the first is S):
+1. A "Download backup" button run by the client: read all rows, produce `export.json` (lossless) and one CSV per item kind. Effort S.
+2. `calendar.ics` for dated items and `contacts.vcf` for vendors (§6). Effort S.
+3. `database.sql` from `wrangler d1 export` as a disaster-recovery copy. This is a CLI command, not an API a Worker can call; while the export runs, other requests are blocked; numeric values are subject to JavaScript's 52-bit precision ([D1 import/export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
+4. As a safety net: D1 Time Travel restores the database up to 7 days on the Free plan and 30 days on Paid ([Cloudflare](https://developers.cloudflare.com/d1/reference/time-travel/)). Seven days isn't enough as an archive.
+5. Keep one copy **outside Cloudflare** (a laptop or a personal Drive). Schedule it as a recurring "monthly backup" task in H3, so the app uses its own feature.
 
-Model yang sudah dipercaya pengguna: Google Takeout bisa dijadwalkan setiap dua bulan selama setahun ([Google](https://support.google.com/accounts/answer/3024190)).
+A model users already trust: Google Takeout can be scheduled every two months for a year ([Google](https://support.google.com/accounts/answer/3024190)).
 
-### 5.5 Impor
+### 5.5 Import
 
-- **Sekali jalan dari spreadsheet lama:** skrip yang membaca ODS dan menghasilkan SQL; data dan keluarannya disimpan di luar repo publik (brainstorm §7). Ini bukan fitur produk.
-- **Impor CSV generik:** satu pemetaan kolom → `items` untuk daftar tamu (Joy dan Zola menawarkan hal serupa: [Joy](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list), [Zola](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-)) dan, kelak, pengeluaran. Normalisasi nomor HP ke `+62...` (nomor disimpan sebagai angka di sheet lama: brainstorm §1.8). Deduplikasi dengan ID atau kunci kombinasi. Effort S sampai M.
-- **Mutasi bank:** BCA menyediakan e-statement lewat myBCA, myBCA web, dan KlikBCA ([BCA, 18 Des 2025](https://www.bca.co.id/id/informasi/news-and-features/2025/12/18/09/09/Akses-Mutasi-Rekening-Kini-Lebih-Praktis-dan-Mudah)). Format untuk nasabah individu tidak disebut, dan bank lain tidak dicek: `[UNVERIFIED]`. Jangan membangun parser sebelum ada contoh berkas nyata.
-- **Impor dari Splitwise, YNAB, Money Manager:** dokumentasi ekspor CSV tidak ketemu: `[UNVERIFIED]`. Splitwise dan YNAB punya API ([Splitwise](https://dev.splitwise.com/), [YNAB](https://api.ynab.com/)) tapi itu integrasi, bukan impor. Tidak dibuat.
+- **One-time from the old spreadsheet:** a script that reads the ODS and produces SQL; the data and its output are kept outside the public repo (brainstorm §7). This is not a product feature.
+- **Generic CSV import:** one column mapping → `items` for the guest list (Joy and Zola offer something similar: [Joy](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list), [Zola](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-)) and, later, expenses. Normalise phone numbers to `+62...` (numbers are stored as numbers in the old sheet: brainstorm §1.8). Deduplicate by ID or a composite key. Effort S to M.
+- **Bank statements:** BCA provides e-statements through myBCA, myBCA web, and KlikBCA ([BCA, 18 December 2025](https://www.bca.co.id/id/informasi/news-and-features/2025/12/18/09/09/Akses-Mutasi-Rekening-Kini-Lebih-Praktis-dan-Mudah)). The format for individual customers isn't stated, and other banks weren't checked: `[UNVERIFIED]`. Don't build a parser before there are real sample files.
+- **Import from Splitwise, YNAB, Money Manager:** CSV export documentation wasn't found: `[UNVERIFIED]`. Splitwise and YNAB have APIs ([Splitwise](https://dev.splitwise.com/), [YNAB](https://api.ynab.com/)) but that is integration, not import. Not built.
 
 ### 5.6 Offline
 
-Rancangan sinkron dan offline ada di brainstorm §5 (shell dengan Service Worker, IndexedDB sebagai sumber data UI, antrean `outbox`, ID dibuat di client, pull berbasis `rev`). Di sini hanya kebutuhan per fitur:
+The sync and offline design is in brainstorm §5 (a shell with a Service Worker, IndexedDB as the UI's data source, an `outbox` queue, IDs created on the client, `rev`-based pull). Here only the needs per feature:
 
-| Perlu baca offline | Perlu tulis offline |
+| Needs offline reading | Needs offline writing |
 |---|---|
-| Rundown (W20), buku vendor (W11), checklist KUA (W5), "Minggu ini" (W3), daftar tamu (W16) | Capture cepat: tugas (W2), pembayaran dicentang (W13), tagihan dicentang (H3), buku amplop saat acara (W25) |
+| Rundown (W20), vendor book (W11), KUA checklist (W5), "This week" (W3), guest list (W16) | Quick capture: tasks (W2), payments ticked (W13), bills ticked (H3), the *amplop* ledger during the event (W25) |
 
-Fakta iOS yang mempengaruhi desain (diverifikasi di brainstorm, bukan di sini): data web app di Home Screen tidak dihapus oleh aturan ITP 7 hari ([WebKit](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)); Background Sync tidak didukung Safari dan Firefox ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)), jadi outbox terkirim hanya saat app dibuka. Effort total ada di sisi platform, bukan di fitur.
+iOS facts that affect the design (verified in the brainstorm, not here): Home Screen web app data isn't deleted by the 7-day ITP rule ([WebKit](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)); Background Sync isn't supported in Safari and Firefox ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)), so the outbox is only sent while the app is open. The total effort is on the platform side, not in the features.
 
-### 5.7 Bahasa Indonesia, tanggal, uang, dan Hijri
+### 5.7 Indonesian language, dates, money, and Hijri
 
-Hasil di bawah dites lokal (Node v26.10.0, ICU 78.3). Browser target bisa berbeda, jadi tes ulang di Chrome Android dan Safari iOS.
+The results below were tested locally (Node v26.10.0, ICU 78.3). Target browsers may differ, so retest in Chrome Android and Safari iOS.
 
-| Hal | Hasil / aturan | Catatan |
+| Topic | Result / rule | Notes |
 |---|---|---|
-| Bahasa UI | Indonesia santai, semua teks di satu berkas | Tanpa pustaka i18n (belum ada kebutuhan bahasa kedua) |
-| Rupiah | `new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR"}).format(600000)` menghasilkan `Rp 600.000` dengan spasi non-breaking; tanpa desimal | Format ringkas membulatkan (`59 jt` untuk 58.500.000), jangan dipakai untuk uang |
-| Konflik ISO | Daftar ISO 4217 (SIX, terbit 2026-09-17) mencantumkan IDR dengan **minor unit 2** ([list-one.xml](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)). MDN: format mata uang memakai digit ISO secara default ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat)). Tapi tes lokal menunjukkan 0 desimal untuk IDR di `id-ID` | Jangan menebak penyebabnya. Keputusan penyimpanan di §6 |
-| Tanggal | `6 Okt 2026` (medium), `6 Oktober 2026` (long), `Selasa, 06 Oktober 2026` (full), `06/10/2026` | Penulisan resmi umumnya tanggal-nama bulan-tahun atau dd/mm/yyyy; aturan resminya tidak ketemu: `[UNVERIFIED]` |
-| Jam | `12.00` dengan titik sebagai pemisah | |
-| Zona waktu | WIB UTC+7, WITA UTC+8, WIT UTC+9, tanpa DST ([Wikipedia](https://id.wikipedia.org/wiki/Waktu_di_Indonesia), sekunder) | Simpan nama IANA (`Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`), bukan singkatan; singkatan tergantung locale: `12.00 WIB`, `13.00 WITA`, `14.00 WIT` untuk instan yang sama |
-| Hijri | Lima kalender Islam di runtime uji. Untuk 6 Okt 2026: `islamic` 25, `islamic-umalqura` 25, `islamic-civil` 23, `islamic-tbla` 24, `islamic-rgsa` 25 Rabiulakhir 1448 | Selisih sampai 2 hari pada tanggal yang sama. MDN mencantumkan `islamic-civil`, `islamic-tbla`, `islamic-umalqura` ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/supportedValuesOf)) tapi tidak `islamic-rgsa` |
-| Awal Ramadan 1447 | `islamic-umalqura`, `-civil`, `-rgsa`, `islamic`: 18 Feb 2026; `islamic-tbla`: 17 Feb 2026 | Perbandingan algoritma, bukan tanggal resmi Indonesia |
-| Bulan Hijriah resmi | Kemenag menetapkan lewat sidang isbat ([Wikipedia](https://id.wikipedia.org/wiki/Sidang_isbat), sekunder). Kriteria MABIMS terbaru (3 derajat tinggi, 6,4 derajat elongasi) tidak berhasil disumberkan: `[UNVERIFIED]` | Algoritma di browser bisa meleset satu hari dari keputusan Kemenag |
-| Libur nasional | SKB 3 Menteri tiap tahun; 2026: 17 libur nasional dan 8 cuti bersama ([Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)). Tidak ada dataset terbuka resmi yang ketemu. Repo tidak resmi [APIHariLibur_V2](https://github.com/guangrei/APIHariLibur_V2) bersumber dari Google Calendar, lisensi GPL-3.0 | Seed manual per tahun yang bisa diedit. Jangan bergantung pada API tidak resmi |
-| Weton/hari baik | Praktik Jawa yang opsional ([Wikipedia](https://id.wikipedia.org/wiki/Weton), sekunder) | Catatan opsional per tanggal, bukan pembatas jadwal |
+| UI language | Casual Indonesian, all text in one file | No i18n library (no need for a second language yet) |
+| Rupiah | `new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR"}).format(600000)` produces `Rp 600.000` with a non-breaking space; no decimals | The compact format rounds (`59 jt` for 58,500,000), don't use it for money |
+| ISO conflict | The ISO 4217 list (SIX, published 17 September 2026) lists IDR with **minor unit 2** ([list-one.xml](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)). MDN: currency formatting uses the ISO digits by default ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat)). But the local test shows 0 decimals for IDR in `id-ID` | Don't guess the cause. The storage decision is in §6 |
+| Date | `6 Okt 2026` (medium), `6 Oktober 2026` (long), `Selasa, 06 Oktober 2026` (full), `06/10/2026` | Official writing is usually day-month name-year or dd/mm/yyyy; the official rule wasn't found: `[UNVERIFIED]` |
+| Time | `12.00` with a period as the separator | |
+| Time zone | WIB (Western Indonesia Time) UTC+7, WITA (Central Indonesia Time) UTC+8, WIT (Eastern Indonesia Time) UTC+9, no DST ([Wikipedia](https://id.wikipedia.org/wiki/Waktu_di_Indonesia), secondary) | Store the IANA name (`Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`), not the abbreviation; abbreviations depend on the locale: `12.00 WIB`, `13.00 WITA`, `14.00 WIT` for the same instant |
+| Hijri | Five Islamic calendars in the test runtime. For 6 Oct 2026: `islamic` 25, `islamic-umalqura` 25, `islamic-civil` 23, `islamic-tbla` 24, `islamic-rgsa` 25 *Rabiulakhir* (Rabi' al-thani) 1448 | A difference of up to 2 days for the same date. MDN lists `islamic-civil`, `islamic-tbla`, `islamic-umalqura` ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/supportedValuesOf)) but not `islamic-rgsa` |
+| Start of Ramadan 1447 | `islamic-umalqura`, `-civil`, `-rgsa`, `islamic`: 18 Feb 2026; `islamic-tbla`: 17 Feb 2026 | A comparison of algorithms, not the official Indonesian date |
+| Official Hijri months | Kemenag sets them through the *sidang isbat* (the moon-sighting session) ([Wikipedia](https://id.wikipedia.org/wiki/Sidang_isbat), secondary). The latest MABIMS criteria (3 degrees height, 6.4 degrees elongation) couldn't be sourced: `[UNVERIFIED]` | The algorithm in the browser can be off by one day from Kemenag's decision |
+| National holidays | A joint decree of 3 ministers every year; 2026: 17 national holidays and 8 collective leave days ([Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)). No official open dataset found. The unofficial repo [APIHariLibur_V2](https://github.com/guangrei/APIHariLibur_V2) is sourced from Google Calendar, GPL-3.0 licence | A manual seed per year that can be edited. Don't depend on an unofficial API |
+| *Weton*/auspicious days | An optional Javanese practice (*weton* is the Javanese birth-day calendar cycle) ([Wikipedia](https://id.wikipedia.org/wiki/Weton), secondary) | An optional note per date, not a constraint on the schedule |
 
-**Putusan:** Hijri hanya ditampilkan di samping tanggal, berlabel "perkiraan", dengan pilihan kalender dan offset manual ±1-2 hari. **Tidak dipakai menghitung tenggat hukum.** Effort S, satu panggilan `Intl`.
+**Verdict:** Hijri is only shown next to the date, labelled "approximate", with a calendar choice and a manual offset of ±1-2 days. **Not used to compute legal deadlines.** Effort S, one `Intl` call.
 
-### 5.8 Privasi dan dokumen sensitif
+### 5.8 Privacy and sensitive documents
 
-Repo publik dan data dua orang. Dua lapis: apa yang disimpan, dan bagaimana melindunginya.
+A public repo and two people's data. Two layers: what is stored, and how to protect it.
 
-**Hukum (bukan nasihat hukum).** UU 27/2022 tentang Pelindungan Data Pribadi, ditetapkan 17 Oktober 2022 ([BPK](https://peraturan.bpk.go.id/Details/229798/uu-no-27-tahun-2022)). Pasal 2 ayat (2): "Undang-Undang ini tidak berlaku untuk pemrosesan Data Pribadi oleh orang perseorangan dalam kegiatan pribadi atau rumah tangga." Pasal 4 ayat (2) menggolongkan data kesehatan, biometrik, genetika, catatan kejahatan, data anak, dan data keuangan pribadi sebagai "spesifik" ([teks, pasal.id](https://pasal.id/peraturan/uu/uu-no-27-tahun-2022), situs pihak ketiga). Bacaan penulis: dua orang yang menyimpan data untuk pernikahan dan rumah tangga mereka sendiri tampak masuk pengecualian itu. Interpretasi ini `[UNVERIFIED]` terhadap penegakan. Tidak ketemu peraturan pelaksana. Tidak ada panduan resmi soal menyimpan NIK.
+**Law (not legal advice).** Law 27/2022 on Personal Data Protection, issued 17 October 2022 ([BPK](https://peraturan.bpk.go.id/Details/229798/uu-no-27-tahun-2022)). Article 2 paragraph (2): "This Law does not apply to the processing of Personal Data by individuals in the course of personal or household activities" (translated from Indonesian). Article 4 paragraph (2) classifies health, biometric, genetic data, criminal records, children's data, and personal financial data as "specific" ([text, pasal.id](https://pasal.id/peraturan/uu/uu-no-27-tahun-2022), a third-party site). The author's reading: two people storing data for their own wedding and household appear to fall under that exception. This interpretation is `[UNVERIFIED]` against enforcement. No implementing regulation found. No official guidance on storing NIK.
 
-**Kebijakan default:**
+**Default policy:**
 
-| Golongan | Isi | Putusan |
+| Class | Contents | Verdict |
 |---|---|---|
-| Hijau | Tanggal, status siap dokumen, nama vendor dan kontak bisnis, harga, jadwal bayar, catatan | Simpan |
-| Kuning | Nomor HP tamu dan vendor (dibutuhkan untuk ketuk-telepon), nama tamu, jumlah amplop dan tabungan | Simpan, tapi tidak masuk repo dan tidak ada di data uji |
-| Merah | NIK, scan KTP/KK/paspor/buku nikah, hasil pemeriksaan kesehatan atau Elsimil, data anak, nomor rekening pribadi dan PIN | **Jangan simpan di app.** Gunakan boolean "sudah siap", tanggal, lokasi fisik |
+| Green | Dates, document ready status, vendor names and business contacts, prices, payment schedule, notes | Store |
+| Yellow | Guest and vendor phone numbers (needed for tap-to-call), guest names, amounts of *amplop* and savings | Store, but not in the repo and not in test data |
+| Red | NIK, scans of KTP/KK/passport/*Buku Nikah*, health examination or Elsimil results, children's data, personal bank account numbers and PINs | **Don't store in the app.** Use a boolean "ready", a date, a physical location |
 
-Catatan: KK memuat data anggota keluarga termasuk anak, dan hasil pemeriksaan kesehatan termasuk "spesifik" (bacaan penulis).
+Note: the KK contains data of family members including children, and health examination results count as "specific" (the author's reading).
 
-**Jika suatu hari scan ingin disimpan** (opsi, bukan rekomendasi):
+**If one day scans are to be stored** (an option, not a recommendation):
 
-| Opsi | Memberi | Biaya |
+| Option | Gives | Cost |
 |---|---|---|
-| Enkripsi di sisi server (bawaan R2 dan D1: AES-256 saat disimpan: [R2](https://developers.cloudflare.com/r2/reference/data-security/), [D1](https://developers.cloudflare.com/d1/reference/data-security/)) | Tanpa usaha | Cloudflare memegang kunci. Akun yang dibobol membuka isi |
-| Brankas yang ada (Bitwarden: lampiran terenkripsi 5 GB, emergency access, $1,65/bulan: [harga](https://bitwarden.com/pricing/)) | Matang, ada akses darurat | Biaya kecil; di luar app |
-| Enkripsi di client: AES-GCM dengan kunci turunan PBKDF2 ([AES-GCM](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt), [PBKDF2](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey); OWASP menyarankan 600.000 iterasi PBKDF2-HMAC-SHA256: [cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)) | Server tidak pernah melihat isi | **Passphrase hilang berarti data hilang.** Argon2 tidak ada di WebCrypto (hanya draft WICG: [draft](https://wicg.github.io/webcrypto-modern-algos/)); tidak bisa dicari atau di-OCR di server |
-| Dua salinan kunci data (satu per pasangan, atau passphrase + passkey) | Selamat dari kehilangan satu rahasia | Lebih banyak bagian bergerak; kode pemulihan cetak harus disimpan aman |
-| Re-auth WebAuthn sebelum membuka brankas (`userVerification: "required"`: [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)) | HP tidak terkunci yang dicuri tidak membuka brankas | Gerbang tingkat app saja; bukan enkripsi. Dukungan ekstensi `prf` per browser tidak dicek: `[UNVERIFIED]` |
+| Server-side encryption (built into R2 and D1: AES-256 at rest: [R2](https://developers.cloudflare.com/r2/reference/data-security/), [D1](https://developers.cloudflare.com/d1/reference/data-security/)) | No effort | Cloudflare holds the key. A breached account opens the contents |
+| An existing vault (Bitwarden: 5 GB encrypted attachments, emergency access, $1.65/month: [pricing](https://bitwarden.com/pricing/)) | Mature, has emergency access | A small cost; outside the app |
+| Client-side encryption: AES-GCM with a PBKDF2-derived key ([AES-GCM](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt), [PBKDF2](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey); OWASP recommends 600,000 PBKDF2-HMAC-SHA256 iterations: [cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)) | The server never sees the contents | **A lost passphrase means lost data.** Argon2 isn't in WebCrypto (only a WICG draft: [draft](https://wicg.github.io/webcrypto-modern-algos/)); can't be searched or OCRed on the server |
+| Two copies of the data key (one per partner, or passphrase + passkey) | Survives the loss of one secret | More moving parts; the printed recovery code has to be stored safely |
+| WebAuthn re-auth before opening the vault (`userVerification: "required"`: [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)) | A stolen unlocked phone doesn't open the vault | An app-level gate only; not encryption. Support for the `prf` extension per browser wasn't checked: `[UNVERIFIED]` |
 
-Aturan praktis: enkripsi dan re-auth adalah lapisan berbeda. Gerbang WebAuthn menentukan siapa membuka UI; hanya enkripsi di client yang menentukan siapa membaca byte tersimpan. Sesi Cloudflare Access (jika dipakai di lapisan masuk) dapat diatur antara 15 menit sampai satu bulan, default 24 jam ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)).
+Rule of thumb: encryption and re-auth are different layers. The WebAuthn gate decides who opens the UI; only client-side encryption decides who reads the stored bytes. A Cloudflare Access session (if used at the entry layer) can be set between 15 minutes and one month, default 24 hours ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)).
 
-**Item "privat untuk saya"** (kejutan hadiah, bulan madu): studi menunjukkan pasangan berbagi data tapi mengharapkan privasi pada jenis konten tertentu ([Jacobs dkk., GROUP 2016](https://dl.eusset.eu/items/5aee07df-e566-4a00-99da-15cb6e0b986d/full), abstrak). Menambahkannya menyentuh sync dan ekspor: baris privat harus disaring di server, bukan di client. Hanya dibuat bila diminta (§8).
+**"Private to me" items** (gift surprises, honeymoon): a study shows couples share data but expect privacy for certain kinds of content ([Jacobs et al., GROUP 2016](https://dl.eusset.eu/items/5aee07df-e566-4a00-99da-15cb6e0b986d/full), abstract). Adding it touches sync and export: private rows must be filtered on the server, not on the client. Only built if requested (§8).
 
 ---
 
-## 6. Rancangan siap-integrasi
+## 6. Integration-ready design
 
-Tidak ada integrasi yang dibangun. Yang diputuskan sekarang hanya hal yang mahal diubah belakangan.
+No integration is built. What is decided now is only what's expensive to change later.
 
-### 6.1 Keputusan yang diambil sekarang
+### 6.1 Decisions taken now
 
-| # | Keputusan | Pilihan yang disarankan | Alasan | Sumber |
+| # | Decision | Suggested choice | Reason | Source |
 |---|---|---|---|---|
-| 1 | **ID** | Dibuat di client, teks opak. Pakai `crypto.randomUUID()` (UUID v4) | Item punya ID sebelum sinkron pertama; kirim ulang tidak menggandakan baris; impor ulang bisa dideduplikasi. RFC 9562 menyarankan UUIDv7 dibanding v1/v6 karena v4 punya lokalitas indeks yang buruk, tapi pada ribuan baris itu tidak terasa; karena ID opak, format baru boleh bercampur nanti. Token rahasia (feed `.ics`) harus acak: v4 atau byte acak | [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html), [MDN randomUUID](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID) (hanya v4) |
-| 2 | **Waktu** | Instan: RFC 3339 UTC dengan `Z`. Tanggal saja: `YYYY-MM-DD`. Waktu setempat: pasangan (waktu lokal, nama zona IANA) hanya di mana makna lokal penting | Cocok dengan `DTSTAMP`, `LAST-MODIFIED`, dan format ekspor lain | [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html), [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html) |
-| 3 | **Uang** | Integer rupiah utuh + kode mata uang per baris (default `IDR`), tidak pernah float | Seluruh UI memakai rupiah utuh. Menyimpang dari ISO 4217 yang memberi IDR minor unit 2: integrasi berbasis ISO (mis. API pembayaran yang memakai minor unit) perlu konversi ×100. Pilihan lain: simpan `amount_minor` ×100 (ISO-setia, sama dengan bentuk API Stripe: [Stripe](https://docs.stripe.com/currencies)); lebih rumit untuk rumah tangga satu mata uang. Apa pun pilihannya, tulis di skema ekspor | [ISO 4217 (SIX)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml); batas aman integer 2^53-1 jauh di atas kebutuhan ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)) |
-| 4 | **Telepon** | `+<kode negara><digit>` (E.164). Buang `+` hanya saat membuat link `wa.me` | Format sama untuk `tel:`, `wa.me`, vCard | [ITU E.164](https://www.itu.int/rec/T-REC-E.164/en); batas 15 digit dari sumber primer tidak berhasil dikonfirmasi: `[UNVERIFIED]` |
-| 5 | **Umpan perubahan** | Tiap baris: `rev` naik-terus, `updated_at`, `updated_by`, `deleted_at` (tombstone), seperti desain sync brainstorm. Itu sudah umpan perubahan yang bisa ditarik (`WHERE rev > ?`) oleh konsumen mana pun. **Tabel `events` append-only** (bentuk selaras CloudEvents: `id`, `source`, `type`, `time`, `subject`, `data`) diputuskan bentuknya sekarang, dibuat saat konsumen pertama muncul | Riwayat sebelum ada konsumen nilainya rendah (YAGNI). Pola outbox: tulis pesan di transaksi yang sama dengan perubahan data; konsumen harus idempoten dengan melacak ID | [CloudEvents](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md), [pola outbox](https://microservices.io/patterns/data/transactional-outbox.html) |
-| 6 | **Format ekspor** | `export.json` memuat `format_version` dan `$schema` (JSON Schema 2020-12); satu CSV per jenis item dengan nama kolom sama dengan JSON; `calendar.ics`; `contacts.vcf`. Bangun JSON dan CSV dulu (S) | JSON lossless; CSV nyaman. RFC 4180: CSV memakai CRLF dan tanda kutip ganda untuk field yang berisi koma, kutip, atau baris baru | [JSON Schema](https://json-schema.org/specification), [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) |
-| 7 | **Umpan kalender** | UID = ID item; SEQUENCE dari `rev`; LAST-MODIFIED dari `updated_at`; item tanpa jam sebagai tanggal-saja (all-day); tugas sebagai `VTODO` dengan `DUE`; baca-saja; URL stabil dengan token acak di path | UID adalah identifier yang global dan persisten; SEQUENCE adalah penghitung revisi | [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). Untuk kalender secara keseluruhan, RFC 7986 menambah `REFRESH-INTERVAL` yang hanya petunjuk ([RFC 7986](https://www.rfc-editor.org/rfc/rfc7986.html)) |
-| 8 | **vCard vendor** | UID = ID item; `KIND:org` untuk perusahaan | `VERSION:4.0` dan `FN` wajib | [RFC 6350](https://www.rfc-editor.org/rfc/rfc6350.html) |
-| 9 | **Bentuk webhook** (tidak dibuat) | Tanda tangan HMAC-SHA256 atas `msg_id.timestamp.payload`, header `webhook-id`, `webhook-timestamp`, `webhook-signature`; payload `type`, `timestamp`, `data` | Selaras dengan spesifikasi yang sudah ada, tanpa desain ulang | [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md) |
-| 10 | **Lampiran** | Item merujuk berkas lewat ID, SHA-256, mime, ukuran. Blob terenkripsi di client tetap opak | Ekspor dan impor bisa memeriksa integritas | – |
-| 11 | **Rahasia integrasi** | Token pihak ketiga tidak disimpan sebagai teks biasa di D1 | Ekspor dan backup tidak boleh membawa kredensial | – |
+| 1 | **ID** | Created on the client, opaque text. Use `crypto.randomUUID()` (UUID v4) | An item has an ID before the first sync; resending doesn't duplicate rows; re-imports can be deduplicated. RFC 9562 recommends UUIDv7 over v1/v6 because v4 has poor index locality, but at thousands of rows it isn't noticeable; because the ID is opaque, a new format may be mixed in later. Secret tokens (the `.ics` feed) must be random: v4 or random bytes | [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html), [MDN randomUUID](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID) (v4 only) |
+| 2 | **Time** | Instant: RFC 3339 UTC with `Z`. Date only: `YYYY-MM-DD`. Local time: a pair (local time, IANA zone name) only where local meaning matters | Matches `DTSTAMP`, `LAST-MODIFIED`, and other export formats | [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html), [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html) |
+| 3 | **Money** | Whole-rupiah integer + a currency code per row (default `IDR`), never float | The whole UI uses whole rupiah. Departs from ISO 4217 which gives IDR minor unit 2: ISO-based integrations (e.g. payment APIs that use minor units) need a ×100 conversion. The alternative: store `amount_minor` ×100 (ISO-faithful, the same shape as the Stripe API: [Stripe](https://docs.stripe.com/currencies)); more complicated for a single-currency household. Whichever is chosen, write it in the export schema | [ISO 4217 (SIX)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml); the safe integer limit 2^53-1 is far above the need ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)) |
+| 4 | **Phone** | `+<country code><digits>` (E.164). Drop the `+` only when building the `wa.me` link | The same format for `tel:`, `wa.me`, vCard | [ITU E.164](https://www.itu.int/rec/T-REC-E.164/en); the 15-digit limit couldn't be confirmed from a primary source: `[UNVERIFIED]` |
+| 5 | **Change feed** | Per row: an ever-increasing `rev`, `updated_at`, `updated_by`, `deleted_at` (tombstone), like the brainstorm sync design. That is already a change feed that any consumer can pull (`WHERE rev > ?`). An **append-only `events` table** (a shape aligned with CloudEvents: `id`, `source`, `type`, `time`, `subject`, `data`) has its shape decided now, and is created when the first consumer appears | History before there's a consumer has low value (YAGNI). The outbox pattern: write the message in the same transaction as the data change; consumers must be idempotent by tracking IDs | [CloudEvents](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md), [outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html) |
+| 6 | **Export format** | `export.json` holds `format_version` and `$schema` (JSON Schema 2020-12); one CSV per item kind with the same column names as the JSON; `calendar.ics`; `contacts.vcf`. Build JSON and CSV first (S) | JSON is lossless; CSV is convenient. RFC 4180: CSV uses CRLF and double quotes for fields containing commas, quotes, or newlines | [JSON Schema](https://json-schema.org/specification), [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) |
+| 7 | **Calendar feed** | UID = item ID; SEQUENCE from `rev`; LAST-MODIFIED from `updated_at`; items without a time as date-only (all-day); tasks as `VTODO` with `DUE`; read-only; a stable URL with a random token in the path | UID is a global and persistent identifier; SEQUENCE is a revision counter | [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). For the calendar as a whole, RFC 7986 adds `REFRESH-INTERVAL` which is only a hint ([RFC 7986](https://www.rfc-editor.org/rfc/rfc7986.html)) |
+| 8 | **Vendor vCard** | UID = item ID; `KIND:org` for companies | `VERSION:4.0` and `FN` are mandatory | [RFC 6350](https://www.rfc-editor.org/rfc/rfc6350.html) |
+| 9 | **Webhook shape** (not built) | HMAC-SHA256 signature over `msg_id.timestamp.payload`, headers `webhook-id`, `webhook-timestamp`, `webhook-signature`; payload `type`, `timestamp`, `data` | Aligned with an existing specification, no redesign | [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md) |
+| 10 | **Attachments** | An item refers to a file by ID, SHA-256, mime, size. A client-encrypted blob stays opaque | Export and import can check integrity | – |
+| 11 | **Integration secrets** | Third-party tokens aren't stored as plain text in D1 | Export and backup must not carry credentials | – |
 
-Tidak ditambahkan sekarang: kolom `external_refs` atau tabel integrasi. Menambah kolom nanti murah; yang mahal adalah mengubah arti ID, waktu, dan uang, dan itu sudah diputuskan di atas.
+Not added now: an `external_refs` column or an integrations table. Adding a column later is cheap; what's expensive is changing the meaning of ID, time, and money, and that has been decided above.
 
-### 6.2 Fakta Google yang membatasi integrasi
+### 6.2 Google facts that limit integration
 
-- Aplikasi OAuth berstatus Testing: sampai 100 pengguna uji, otorisasi dari pengguna uji kedaluwarsa dalam 7 hari ([Google Cloud Help](https://support.google.com/cloud/answer/15549945)); refresh token berumur 7 hari ([Google Identity](https://developers.google.com/identity/protocols/oauth2)). Produksi tanpa verifikasi menampilkan layar peringatan bila cakupan sensitif.
-- Cakupan Drive `drive.file` dan `drive.appdata` tidak sensitif; `drive` dan `drive.readonly` adalah restricted ([Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)). Klasifikasi cakupan Calendar tidak diverifikasi dengan baik: `[UNVERIFIED]` ([Calendar auth](https://developers.google.com/workspace/calendar/api/auth)).
-- Artinya: integrasi Google di luar login butuh login ulang mingguan atau layar peringatan. Ini fakta platform, bukan rekomendasi. Keputusan login ada di worker stack.
+- An OAuth app in Testing status: up to 100 test users, authorisation from test users expires in 7 days ([Google Cloud Help](https://support.google.com/cloud/answer/15549945)); refresh tokens live 7 days ([Google Identity](https://developers.google.com/identity/protocols/oauth2)). Production without verification shows a warning screen when scopes are sensitive.
+- The Drive scopes `drive.file` and `drive.appdata` are not sensitive; `drive` and `drive.readonly` are restricted ([Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)). The classification of Calendar scopes wasn't verified well: `[UNVERIFIED]` ([Calendar auth](https://developers.google.com/workspace/calendar/api/auth)).
+- This means: a Google integration beyond login needs a weekly re-login or a warning screen. This is a platform fact, not a recommendation. The login decision is with the stack worker.
 
-### 6.3 Kandidat integrasi masa depan: hanya kelayakan
+### 6.3 Future integration candidates: feasibility only
 
-Skala: **murah**, **sedang**, **sulit**, **tidak layak** (untuk app pribadi dua orang di paket gratis).
+Scale: **cheap**, **medium**, **hard**, **not feasible** (for a private two-person app on the free plan).
 
-| Integrasi | Memberi | Cara | Hambatan | Putusan | Sumber |
+| Integration | Gives | How | Obstacle | Verdict | Source |
 |---|---|---|---|---|---|
-| Google Calendar: langganan `.ics` | Tenggat muncul di kalender kedua HP, baca-saja | Feed `text/calendar` di URL rahasia | Google menolak langganan dari app mobile; refresh tidak dipublikasikan (§5.1) | **Murah** | [Google](https://support.google.com/calendar/answer/37100?hl=en) |
-| Google Calendar: API | Dua arah, instan | REST + OAuth | Aplikasi Testing/unverified (§6.2); push butuh endpoint HTTPS dan pembaruan kanal manual | Sedang | [Calendar API](https://developers.google.com/workspace/calendar/api/auth) |
-| Google Sheets | Tampilan atau cadangan CSV | `IMPORTDATA(url)` dari URL CSV rahasia; API untuk tulis | URL CSV harus bisa diakses tanpa login; API butuh OAuth | **Murah** (CSV), sedang (API) | [Sheets](https://developers.google.com/workspace/sheets/api/limits) (batas tertera: 300 baca dan 300 tulis per menit per proyek, 60 per menit per pengguna) |
-| Google Contacts (People API) | Sinkron kontak vendor | `people.connections.list` | OAuth; alternatif tanpa API: ekspor/impor vCard | Sedang | [People API](https://developers.google.com/people/api/rest/v1/people.connections/list) |
-| Google Photos | Melampirkan foto terpilih | Picker API | Library API hanya item buatan app sejak 31 Mar 2025 (§5.3) | Sedang (pilih), **tidak layak** (jelajah pustaka) | [Google](https://developers.google.com/photos/support/updates) |
-| Google Drive | Target backup | Drive API dengan `drive.file` | Manajemen token OAuth | Sedang | [Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth) |
-| Notion | Cermin catatan atau tugas | REST + token internal | Halaman harus dibagikan manual ke integrasi; batas 180 permintaan per menit di paket non-Business | Sedang | [Notion](https://developers.notion.com/reference/request-limits) |
-| Telegram | Notifikasi gratis ke dua HP | `sendMessage` via HTTPS dari cron | Keduanya harus memakai Telegram; token itu rahasia | **Murah** | [Telegram](https://core.telegram.org/bots/faq) |
-| WhatsApp: link klik-ke-chat | Membuka chat dengan teks terisi | `wa.me` | Hanya membuka chat | **Murah** | [WhatsApp](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/) |
-| WhatsApp Business Platform | Pesan otomatis | Cloud API | Harga per pesan sejak 1 Jul 2025, nomor yang sudah dipakai WhatsApp harus dihapus dulu, wajib opt-in, butuh portofolio bisnis dan template | **Sulit**, tidak realistis untuk pemakaian pribadi | [Harga](https://developers.facebook.com/docs/whatsapp/pricing/), [nomor](https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers), [kebijakan](https://whatsappbusiness.com/id/policy/). Klausul "hanya untuk bisnis": `[UNVERIFIED]` |
-| Email dari Worker | Digest ke dua alamat | `send_email` | Alamat tujuan harus terverifikasi; Email Service Beta | **Murah** | [Email Service](https://developers.cloudflare.com/email-service/platform/pricing/) |
-| Web Push | Notifikasi native | Push API + VAPID | iOS hanya dari Home Screen; Worker harus mengerjakan enkripsi | Sedang | [WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/) |
-| Web Share Target | Berbagi ke app dari WhatsApp, dll. | `share_target` di manifest | Chrome 76+ Android dan 89+ desktop dan harus terpasang; bug WebKit 194593 masih terbuka | **Murah** di Android, **tidak layak** di iOS | [Chrome](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target), [WebKit bug](https://bugs.webkit.org/show_bug.cgi?id=194593) |
-| Data bank Indonesia | Impor transaksi otomatis | SNAP, agregator, atau berkas mutasi | Akses konsumen ke SNAP tidak tampak; Plaid tidak mencantumkan Indonesia (§4) | **Tidak layak** otomatis; impor berkas manual sedang sampai sulit | [ASPI](https://apidevportal.aspi-indonesia.or.id/), [Plaid](https://plaid.com/docs/institutions/) |
-| QRIS | Tidak ada data pribadi | – | Standar kode QR pembayaran, bukan umpan transaksi pembayar (inferensi; halaman BI mengembalikan 404 sehingga `[UNVERIFIED]`) | **Tidak layak** | [EMVCo](https://www.emvco.com/emv-technologies/qrcodes/) |
-| Libur nasional | Hitungan hari kerja | Seed tahunan dari SKB | Tidak ada API resmi | **Murah** (seed manual) | [Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026) |
-| Home Assistant, IFTTT | Memicu otomasi rumah | Webhook HTTP | HA: hanya jaringan lokal secara default; IFTTT: webhook butuh Pro ($2,99/bulan) | HA sedang; IFTTT tidak gratis | [Home Assistant](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger), [IFTTT](https://ifttt.com/plans) |
-| OCR struk | Ekstrak teks dari foto | Workers AI model visi | 10.000 neuron per hari di paket gratis; tidak ada model OCR khusus yang teridentifikasi; akurasi tidak diuji | Sedang | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), [model](https://developers.cloudflare.com/workers-ai/models/) |
-| Impor Splitwise/YNAB | Pengeluaran lama | API atau CSV | API ada; dokumentasi CSV tidak ketemu | Murah bila CSV ada, jika tidak sedang | [Splitwise](https://dev.splitwise.com/), [YNAB](https://api.ynab.com/) |
+| Google Calendar: `.ics` subscription | Deadlines show up in both phones' calendars, read-only | A `text/calendar` feed at a secret URL | Google refuses subscriptions from the mobile app; refresh isn't published (§5.1) | **Cheap** | [Google](https://support.google.com/calendar/answer/37100?hl=en) |
+| Google Calendar: API | Two-way, instant | REST + OAuth | Testing/unverified app (§6.2); push needs an HTTPS endpoint and manual channel renewal | Medium | [Calendar API](https://developers.google.com/workspace/calendar/api/auth) |
+| Google Sheets | A CSV view or backup | `IMPORTDATA(url)` from a secret CSV URL; API for writing | The CSV URL must be accessible without login; the API needs OAuth | **Cheap** (CSV), medium (API) | [Sheets](https://developers.google.com/workspace/sheets/api/limits) (stated limits: 300 reads and 300 writes per minute per project, 60 per minute per user) |
+| Google Contacts (People API) | Vendor contact sync | `people.connections.list` | OAuth; an alternative without an API: vCard export/import | Medium | [People API](https://developers.google.com/people/api/rest/v1/people.connections/list) |
+| Google Photos | Attaching selected photos | Picker API | The Library API only has app-created items since 31 March 2025 (§5.3) | Medium (picking), **not feasible** (browsing the library) | [Google](https://developers.google.com/photos/support/updates) |
+| Google Drive | Backup target | Drive API with `drive.file` | OAuth token management | Medium | [Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth) |
+| Notion | Mirror notes or tasks | REST + internal token | Pages must be shared manually with the integration; a limit of 180 requests per minute on non-Business plans | Medium | [Notion](https://developers.notion.com/reference/request-limits) |
+| Telegram | Free notifications to two phones | `sendMessage` via HTTPS from cron | Both must use Telegram; the token is secret | **Cheap** | [Telegram](https://core.telegram.org/bots/faq) |
+| WhatsApp: click-to-chat link | Opens a chat with filled-in text | `wa.me` | Only opens the chat | **Cheap** | [WhatsApp](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/) |
+| WhatsApp Business Platform | Automatic messages | Cloud API | Per-message pricing since 1 July 2025, a number already used on WhatsApp must be removed first, opt-in is mandatory, needs a business portfolio and templates | **Hard**, not realistic for personal use | [Pricing](https://developers.facebook.com/docs/whatsapp/pricing/), [numbers](https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers), [policy](https://whatsappbusiness.com/id/policy/). A "business only" clause: `[UNVERIFIED]` |
+| Email from a Worker | A digest to two addresses | `send_email` | The destination address must be verified; Email Service is Beta | **Cheap** | [Email Service](https://developers.cloudflare.com/email-service/platform/pricing/) |
+| Web Push | Native notifications | Push API + VAPID | On iOS only from the Home Screen; the Worker has to do the encryption | Medium | [WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/) |
+| Web Share Target | Share to the app from WhatsApp, etc. | `share_target` in the manifest | Chrome 76+ Android and 89+ desktop and must be installed; WebKit bug 194593 is still open | **Cheap** on Android, **not feasible** on iOS | [Chrome](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target), [WebKit bug](https://bugs.webkit.org/show_bug.cgi?id=194593) |
+| Indonesian bank data | Automatic transaction import | SNAP, an aggregator, or statement files | Consumer access to SNAP isn't apparent; Plaid doesn't list Indonesia (§4) | **Not feasible** automatically; manual file import medium to hard | [ASPI](https://apidevportal.aspi-indonesia.or.id/), [Plaid](https://plaid.com/docs/institutions/) |
+| QRIS | No personal data | – | A payment QR code standard, not a feed of the payer's transactions (inference; the BI page returned 404 so `[UNVERIFIED]`) | **Not feasible** | [EMVCo](https://www.emvco.com/emv-technologies/qrcodes/) |
+| National holidays | Working-day calculation | A yearly seed from the SKB | No official API | **Cheap** (manual seed) | [Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026) |
+| Home Assistant, IFTTT | Triggers home automation | HTTP webhook | HA: local network only by default; IFTTT: webhooks need Pro ($2.99/month) | HA medium; IFTTT not free | [Home Assistant](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger), [IFTTT](https://ifttt.com/plans) |
+| Receipt OCR | Extract text from a photo | Workers AI vision model | 10,000 neurons per day on the free plan; no dedicated OCR model identified; accuracy not tested | Medium | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), [models](https://developers.cloudflare.com/workers-ai/models/) |
+| Splitwise/YNAB import | Old expenses | API or CSV | An API exists; CSV documentation wasn't found | Cheap if CSV exists, otherwise medium | [Splitwise](https://dev.splitwise.com/), [YNAB](https://api.ynab.com/) |
 
-### 6.4 Kebutuhan platform per kelas fitur
+### 6.4 Platform needs per feature class
 
-Hanya fakta untuk dicocokkan dengan keputusan stack worker lain (paket gratis, dicek 2026-10-06).
+Only facts to match against the stack decisions of the other worker (free plan, checked 6 October 2026).
 
-| Kelas fitur | Storage | Push | File | Cron | Realtime |
+| Feature class | Storage | Push | Files | Cron | Realtime |
 |---|---|---|---|---|---|
-| Daftar, tugas, catatan | D1 | opsional | tidak | tidak | opsional |
-| Reminder | D1 | Web Push (iOS: terpasang) atau Telegram/email | tidak | ya (5 slot per akun) | tidak |
-| Anggaran, pembayaran, pengeluaran | D1 (integer) | opsional | R2 untuk bukti bayar | digest bulanan | tidak |
-| Dokumen | D1 untuk indeks | tidak | R2 + enkripsi client bila scan | tidak | tidak |
-| Umpan kalender | D1 | tidak | tidak | opsional | tidak |
-| Ko-editing langsung | D1 + Durable Object | tidak | tidak | tidak | ya (WebSocket) |
+| Lists, tasks, notes | D1 | optional | no | no | optional |
+| Reminders | D1 | Web Push (iOS: installed) or Telegram/email | no | yes (5 slots per account) | no |
+| Budget, payments, expenses | D1 (integer) | optional | R2 for payment proof | monthly digest | no |
+| Documents | D1 for the index | no | R2 + client encryption if scans | no | no |
+| Calendar feed | D1 | no | no | optional | no |
+| Live co-editing | D1 + Durable Object | no | no | no | yes (WebSocket) |
 
-| Kapabilitas | Batas paket gratis | Sumber |
+| Capability | Free plan limit | Source |
 |---|---|---|
-| Workers | 100.000 permintaan per hari; CPU 10 ms per permintaan dan per cron; 5 cron per akun | [limits](https://developers.cloudflare.com/workers/platform/limits/) |
-| Static assets | Permintaan aset statis gratis dan tanpa batas; 20.000 berkas per versi, 25 MiB per berkas | [static assets](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) |
-| D1 | 5 juta baris dibaca per hari; 100.000 baris ditulis per hari; 5 GB total; 500 MB per database; 50 query per invokasi; 2 MB per baris/string/blob | [pricing](https://developers.cloudflare.com/d1/platform/pricing/), [limits](https://developers.cloudflare.com/d1/platform/limits/) |
-| D1 Time Travel | 7 hari (Free), 30 hari (Paid) | [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/) |
-| R2 | 10 GB-bulan; 1 juta Class A dan 10 juta Class B per bulan; egress gratis; butuh checkout "R2 subscription" | [pricing](https://developers.cloudflare.com/r2/pricing/), [get started](https://developers.cloudflare.com/r2/get-started/) |
-| Durable Objects | Hanya SQLite-backed di Free; 100.000 permintaan per hari; WebSocket Hibernation | [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) |
-| Queues | Tersedia di Free; 10.000 operasi per hari | [pricing](https://developers.cloudflare.com/queues/platform/pricing/) |
-| KV | 1.000 tulis per hari | [pricing](https://developers.cloudflare.com/kv/platform/pricing/) |
-| Workers AI | 10.000 neuron per hari | [pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/) |
-| Email | Kirim ke alamat tujuan terverifikasi gratis; alamat sembarang hanya Paid | [Email Service](https://developers.cloudflare.com/email-service/platform/pricing/) |
+| Workers | 100,000 requests per day; CPU 10 ms per request and per cron; 5 crons per account | [limits](https://developers.cloudflare.com/workers/platform/limits/) |
+| Static assets | Static asset requests are free and unlimited; 20,000 files per version, 25 MiB per file | [static assets](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) |
+| D1 | 5 million rows read per day; 100,000 rows written per day; 5 GB total; 500 MB per database; 50 queries per invocation; 2 MB per row/string/blob | [pricing](https://developers.cloudflare.com/d1/platform/pricing/), [limits](https://developers.cloudflare.com/d1/platform/limits/) |
+| D1 Time Travel | 7 days (Free), 30 days (Paid) | [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/) |
+| R2 | 10 GB-month; 1 million Class A and 10 million Class B per month; free egress; needs the "R2 subscription" checkout | [pricing](https://developers.cloudflare.com/r2/pricing/), [get started](https://developers.cloudflare.com/r2/get-started/) |
+| Durable Objects | SQLite-backed only on Free; 100,000 requests per day; WebSocket Hibernation | [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) |
+| Queues | Available on Free; 10,000 operations per day | [pricing](https://developers.cloudflare.com/queues/platform/pricing/) |
+| KV | 1,000 writes per day | [pricing](https://developers.cloudflare.com/kv/platform/pricing/) |
+| Workers AI | 10,000 neurons per day | [pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/) |
+| Email | Sending to verified destination addresses is free; arbitrary addresses Paid only | [Email Service](https://developers.cloudflare.com/email-service/platform/pricing/) |
 
 ---
 
-## 7. Roadmap berprioritas
+## 7. Prioritised roadmap
 
-### 7.1 Cara menilai
+### 7.1 How to score
 
-Tiap fitur dinilai penulis dengan tiga angka. Ini penilaian, bukan data, jadi bantah bila tidak setuju.
+Each feature is scored by the author with three numbers. This is a judgement, not data, so challenge it if you disagree.
 
-- **V (nilai) 1-5:** seberapa kuat pemicu pemakaian (mingguan, padat-sementara, tebus-nilai tinggi: §1.4) dan seberapa besar masalah yang diselesaikan menurut bukti di §2 dan §4.
+- **V (value) 1-5:** how strong the trigger for use is (weekly, dense-temporary, high-value redemption: §1.4) and how big the problem solved is according to the evidence in §2 and §4.
 - **E (effort):** S = 1, M = 2, L = 3.
-- **R (risiko) 1-3:** 1 rendah; 2 sedang (aturan bisa usang, ketepatan uang, risiko berhenti); 3 tinggi (privasi, ketergantungan platform, risiko berhenti besar).
-- **Skor = 2V − E − R.** Maksimum 8.
-- **Tier:** skor ≥ 6 = **Tier 1** (bangun dulu); 4-5 = **Tier 2**; 1-3 = **Tier 3** (tunda, bangun bila diminta); ≤ 0 = **Serahkan atau tidak dibuat**.
-- **Pengecualian karena tenggat:** fitur yang punya tenggat hari-H (W5, W6, W20) dijadwalkan menurut kalender, bukan skor.
+- **R (risk) 1-3:** 1 low; 2 medium (rules can go stale, money accuracy, risk of quitting); 3 high (privacy, platform dependence, big risk of quitting).
+- **Score = 2V − E − R.** Maximum 8.
+- **Tier:** score ≥ 6 = **Tier 1** (build first); 4-5 = **Tier 2**; 1-3 = **Tier 3** (postpone, build if requested); ≤ 0 = **Hand off or not built**.
+- **Exception because of deadlines:** features with a wedding-day deadline (W5, W6, W20) are scheduled by the calendar, not by score.
 
-| ID | Fitur | V | E | R | Skor | Tier |
+| ID | Feature | V | E | R | Score | Tier |
 |---|---|---|---|---|---|---|
-| W3 | Layar "Minggu ini" | 5 | S | 1 | 8 | 1 |
-| W11 | Buku vendor | 5 | S | 1 | 8 | 1 |
-| H3 | Tagihan dan kewajiban berulang | 5 | M | 1 | 7 | 1 (setelah nikah) |
-| W16 | Daftar tamu | 5 | M | 1 | 7 | 1 |
-| W1 | Hari-H dan countdown | 4 | S | 1 | 6 | 1 |
-| W2 | Timeline tugas dari template | 5 | M | 2 | 6 | 1 |
-| W8 | Acara sebagai grup | 4 | S | 1 | 6 | 1 |
-| W12 | Perbandingan penawaran | 4 | S | 1 | 6 | 1 |
-| W13 | Anggaran dan pembayaran | 5 | M | 2 | 6 | 1 |
-| W14 | Dana nikah | 4 | S | 1 | 6 | 1 |
-| W24 | Checklist pasca-nikah | 4 | S | 1 | 6 | 1 (setelah nikah) |
-| X1 | Ekspor JSON dan CSV | 4 | S | 1 | 6 | 1 |
-| X2 | Tombol "Tambah ke kalender" (`.ics`) | 4 | S | 1 | 6 | 1 |
-| H2 | Target tabungan (pakai ulang W14) | 4 | S | 1 | 6 | 1 (setelah nikah) |
-| H4 | Perpanjangan dokumen dan kendaraan | 4 | S | 1 | 6 | 1 (setelah nikah) |
-| W25 | Buku amplop masuk | 4 | S | 2 | 5 | 2 (validasi dulu) |
-| W4 | Catatan kesepakatan | 3 | S | 1 | 4 | 2 |
-| W5 | Checklist KUA bersyarat | 4 | M | 2 | 4 | 2, **berbatas waktu** |
-| W9 | Seserahan | 3 | S | 1 | 4 | 2 |
-| W15 | Bukti bayar sebagai link | 3 | S | 1 | 4 | 2 |
-| W17 | Tracker undangan + WhatsApp | 3 | S | 1 | 4 | 2 |
-| W20 | Rundown offline | 4 | M | 2 | 4 | 2, **berbatas waktu** |
-| W21 | Bagikan rundown/kontak | 3 | S | 1 | 4 | 2 |
-| W26 | Penutupan dan arsip | 3 | S | 1 | 4 | 2 |
-| X4 | Pencarian di client | 3 | S | 1 | 4 | 2 |
-| H9 | Indeks dokumen (tanpa scan) | 3 | S | 1 | 4 | 2 |
-| H10 | Renovasi sebagai proyek (pakai ulang) | 3 | S | 1 | 4 | 2 (bila ada renovasi) |
-| W6 | Kalender hari kerja | 3 | S | 2 | 3 | 3, **berbatas waktu** (bersama W5) |
-| H7 | Tugas rumah berulang | 3 | S | 2 | 3 | 3 |
-| H12 | Orang dan momen (ulang tahun, kondangan keluar) | 3 | S | 2 | 3 | 3 (validasi dulu) |
-| X7 | Impor CSV generik | 3 | M | 1 | 3 | 3 |
-| W7 | Jalur pranikah | 2 | S | 1 | 2 | 3 |
-| W22 | Daftar lagu | 2 | S | 1 | 2 | 3 |
-| W23 | Checklist malam sebelum | 2 | S | 1 | 2 | 3 |
-| H11 | Perjalanan sebagai proyek | 2 | S | 1 | 2 | 3 |
-| H13 | Timeline "kita" | 2 | S | 1 | 2 | 3 |
-| X3 | Feed `.ics` berlangganan | 3 | M | 2 | 2 | 3 |
-| X5 | Digest mingguan (email/Telegram/push) | 3 | M | 2 | 2 | 3 |
-| W18 | Impor RSVP dari layanan undangan | 2 | M | 1 | 1 | 3 |
-| H1 | Pengeluaran bersama | 3 | M | 3 | 1 | 3 (risiko berhenti tinggi) |
-| W15b | Unggah bukti bayar ke R2 | 3 | L | 3 | 0 | Serahkan (pakai link) |
-| H9b | Brankas scan dokumen | 3 | L | 3 | 0 | Serahkan |
-| H8 | UI kalender buatan sendiri | 2 | L | 2 | −1 | Serahkan |
-| X6 | Item "privat untuk saya" | 2 | M | 3 | −1 | Tunda; hanya bila diminta |
-| W19 | Link baca-saja untuk keluarga/WO | 2 | M | 3 | −1 | Tunda; hanya bila diminta |
-| H5 | Daftar belanja buatan sendiri | 2 | L | 3 | −2 | Serahkan |
+| W3 | "This week" screen | 5 | S | 1 | 8 | 1 |
+| W11 | Vendor book | 5 | S | 1 | 8 | 1 |
+| H3 | Recurring bills and obligations | 5 | M | 1 | 7 | 1 (after the wedding) |
+| W16 | Guest list | 5 | M | 1 | 7 | 1 |
+| W1 | H-day and countdown | 4 | S | 1 | 6 | 1 |
+| W2 | Task timeline from a template | 5 | M | 2 | 6 | 1 |
+| W8 | Events as a group | 4 | S | 1 | 6 | 1 |
+| W12 | Quote comparison | 4 | S | 1 | 6 | 1 |
+| W13 | Budget and payments | 5 | M | 2 | 6 | 1 |
+| W14 | Wedding fund | 4 | S | 1 | 6 | 1 |
+| W24 | Post-wedding checklist | 4 | S | 1 | 6 | 1 (after the wedding) |
+| X1 | JSON and CSV export | 4 | S | 1 | 6 | 1 |
+| X2 | "Add to calendar" button (`.ics`) | 4 | S | 1 | 6 | 1 |
+| H2 | Savings goal (reuse W14) | 4 | S | 1 | 6 | 1 (after the wedding) |
+| H4 | Document and vehicle renewals | 4 | S | 1 | 6 | 1 (after the wedding) |
+| W25 | *Amplop* ledger, incoming | 4 | S | 2 | 5 | 2 (validate first) |
+| W4 | Agreement notes | 3 | S | 1 | 4 | 2 |
+| W5 | Conditional KUA checklist | 4 | M | 2 | 4 | 2, **time-bound** |
+| W9 | *Seserahan* | 3 | S | 1 | 4 | 2 |
+| W15 | Payment proof as a link | 3 | S | 1 | 4 | 2 |
+| W17 | Invitation tracker + WhatsApp | 3 | S | 1 | 4 | 2 |
+| W20 | Offline rundown | 4 | M | 2 | 4 | 2, **time-bound** |
+| W21 | Share rundown/contacts | 3 | S | 1 | 4 | 2 |
+| W26 | Closing out and archive | 3 | S | 1 | 4 | 2 |
+| X4 | Client-side search | 3 | S | 1 | 4 | 2 |
+| H9 | Document index (no scans) | 3 | S | 1 | 4 | 2 |
+| H10 | Renovation as a project (reuse) | 3 | S | 1 | 4 | 2 (if there's a renovation) |
+| W6 | Working-day calendar | 3 | S | 2 | 3 | 3, **time-bound** (together with W5) |
+| H7 | Recurring chores | 3 | S | 2 | 3 | 3 |
+| H12 | People and occasions (birthdays, outgoing *kondangan*) | 3 | S | 2 | 3 | 3 (validate first) |
+| X7 | Generic CSV import | 3 | M | 1 | 3 | 3 |
+| W7 | Prenuptial route | 2 | S | 1 | 2 | 3 |
+| W22 | Song list | 2 | S | 1 | 2 | 3 |
+| W23 | Night-before checklist | 2 | S | 1 | 2 | 3 |
+| H11 | Travel as a project | 2 | S | 1 | 2 | 3 |
+| H13 | "Us" timeline | 2 | S | 1 | 2 | 3 |
+| X3 | Subscribed `.ics` feed | 3 | M | 2 | 2 | 3 |
+| X5 | Weekly digest (email/Telegram/push) | 3 | M | 2 | 2 | 3 |
+| W18 | Import RSVP from an invitation service | 2 | M | 1 | 1 | 3 |
+| H1 | Shared expenses | 3 | M | 3 | 1 | 3 (high risk of quitting) |
+| W15b | Upload payment proof to R2 | 3 | L | 3 | 0 | Hand off (use a link) |
+| H9b | Document scan vault | 3 | L | 3 | 0 | Hand off |
+| H8 | Own calendar UI | 2 | L | 2 | −1 | Hand off |
+| X6 | "Private to me" items | 2 | M | 3 | −1 | Postpone; only if requested |
+| W19 | Read-only link for family/WO | 2 | M | 3 | −1 | Postpone; only if requested |
+| H5 | Own shopping list | 2 | L | 3 | −2 | Hand off |
 
-Fitur lintas (`X`) yang muncul di tabel, dengan effort dan platform-nya:
+Cross-cutting (`X`) features that appear in the table, with their effort and platform:
 
-| ID | Fitur | Effort | Platform | Bagian |
+| ID | Feature | Effort | Platform | Section |
 |---|---|---|---|---|
-| X1 | Ekspor JSON dan CSV | S | client | §5.4 |
+| X1 | JSON and CSV export | S | client | §5.4 |
 | X2 | `.ics` per item | S | client | §5.1 |
-| X3 | Feed `.ics` berlangganan | M | D1 + endpoint baca-saja | §5.1, §6.1 |
-| X4 | Pencarian di client | S | client | §5.2 |
-| X5 | Digest mingguan | M | cron + email, Telegram, atau push | §5.1 |
-| X6 | Item "privat untuk saya" | M | D1 (penyaringan di server) | §5.8 |
-| X7 | Impor CSV generik | M | client | §5.5 |
+| X3 | Subscribed `.ics` feed | M | D1 + read-only endpoint | §5.1, §6.1 |
+| X4 | Client-side search | S | client | §5.2 |
+| X5 | Weekly digest | M | cron + email, Telegram, or push | §5.1 |
+| X6 | "Private to me" items | M | D1 (server-side filtering) | §5.8 |
+| X7 | Generic CSV import | M | client | §5.5 |
 
-### 7.2 Model data terkecil untuk wedding dan household
+### 7.2 The smallest data model for wedding and household
 
-**Dua pilihan.**
+**Two options.**
 
-| | Satu model generik (`items`) | Tabel per fitur |
+| | One generic model (`items`) | A table per feature |
 |---|---|---|
-| Contoh | Satu tabel `items` dengan kolom `kind`, beberapa kolom bertipe untuk yang dihitung atau disortir, dan satu kolom `data` JSON untuk sisanya | 12 tabel di brainstorm §7: `tasks`, `vendors`, `budget_items`, `payments`, `guests`, `rundown_items`, dan seterusnya, dan tabel baru untuk tiap fitur household |
-| Fitur baru | Konfigurasi: daftar kolom, label, total, pengelompokan. Tanpa migrasi | Migrasi baru, whitelist baru di Worker, kode sinkron baru, kode ekspor baru |
-| Sinkron | Satu indeks `rev`, satu tabel untuk di-pull | Satu indeks `rev` per tabel |
-| Ekspor, impor, integrasi | Seragam: satu bentuk baris, satu umpan perubahan | Satu per tabel |
-| Batasan SQL | Lemah per `kind`: `CHECK` hanya yang berlaku umum (`amount >= 0`). Validasi per `kind` dilakukan di kode lewat registry | Kuat: kolom bertipe, `NOT NULL`, `CHECK` per tabel, foreign key sungguhan |
-| Kueri | Perlu indeks `(kind, due_on)`; isi `data` tidak bisa diindeks murah | SQL polos dan jelas; agregasi sederhana |
-| Risiko | Salah ketik `kind` atau isi JSON diam-diam lolos tanpa registry | Banyak kode berulang; menambah fitur terasa mahal sehingga fitur kecil tidak dibuat |
-| Pindah arah nanti | Memindah satu `kind` ke tabel sendiri = satu `INSERT ... SELECT` per `kind` (inferensi penulis) | Menggabung tabel ke generik = lebih banyak kerja (inferensi penulis) |
+| Example | One `items` table with a `kind` column, a few typed columns for what is summed or sorted, and one JSON `data` column for the rest | 12 tables in brainstorm §7: `tasks`, `vendors`, `budget_items`, `payments`, `guests`, `rundown_items`, and so on, and a new table for each household feature |
+| New feature | Configuration: column list, labels, totals, grouping. No migration | A new migration, a new whitelist in the Worker, new sync code, new export code |
+| Sync | One `rev` index, one table to pull | One `rev` index per table |
+| Export, import, integration | Uniform: one row shape, one change feed | One per table |
+| SQL constraints | Weak per `kind`: `CHECK` only for what applies generally (`amount >= 0`). Per-`kind` validation is done in code through a registry | Strong: typed columns, `NOT NULL`, `CHECK` per table, real foreign keys |
+| Queries | Needs an index on `(kind, due_on)`; the contents of `data` can't be indexed cheaply | Plain, clear SQL; simple aggregation |
+| Risk | A typo in `kind` or JSON contents silently slips through without a registry | Lots of repeated code; adding a feature feels expensive so small features don't get built |
+| Switching direction later | Moving one `kind` to its own table = one `INSERT ... SELECT` per `kind` (the author's inference) | Merging tables into a generic one = more work (the author's inference) |
 
-**Rekomendasi: model generik, dengan satu aturan keluar.** Semua daftar, checklist, dan buku catatan di §3 dan §4 adalah baris dengan beberapa field, status, dan total. Tabel kolom yang dipertahankan sekecil mungkin:
+**Recommendation: the generic model, with one exit rule.** All the lists, checklists and notebooks in §3 and §4 are rows with a few fields, a status, and a total. The column table is kept as small as possible:
 
 ```sql
 CREATE TABLE settings (
@@ -737,150 +737,150 @@ CREATE INDEX items_kind_due ON items (kind, due_on);
 CREATE INDEX items_parent ON items (parent_id);
 ```
 
-Ini sketsa, bukan skema final; konvensi sync (`rev`, tombstone, `sort` REAL) mengikuti brainstorm §5 dan §7. `who` berisi `a`/`b`/`both`, dipetakan ke dua akun masuk di server atau `settings` yang tidak masuk repo. Proyek (pernikahan, renovasi, perjalanan) adalah baris `kind = project`, dan `project_id` menunjuk ke situ, jadi tidak perlu tabel `projects`.
+This is a sketch, not the final schema; the sync conventions (`rev`, tombstone, `sort` REAL) follow brainstorm §5 and §7. `who` holds `a`/`b`/`both`, mapped to the two login accounts on the server or in `settings` which doesn't go into the repo. A project (wedding, renovation, trip) is a row with `kind = project`, and `project_id` points to it, so there's no need for a `projects` table.
 
-**Registry `kind`** (satu objek di kode, dipakai client dan Worker untuk validasi, pembuatan layar daftar, dan total):
+**The `kind` registry** (one object in code, used by the client and the Worker for validation, building list screens, and totals):
 
-| `kind` | Dipakai oleh | Kolom yang bermakna | Isi `data` |
+| `kind` | Used by | Meaningful columns | Contents of `data` |
 |---|---|---|---|
-| `project` | semua | `title`, `status` (aktif/arsip) | – |
-| `task` | W2, W5, W7, W23, W24, H7 | `due_on`, `done_on`, `who`, `group_key` (fase) | flag keputusan, aturan template |
-| `vendor` | W11, W12 | `group_key` (kategori), `status` (opsi/fix/batal), `amount` (penawaran) | telepon E.164, PIC, link kontrak, fakta kunci |
-| `budget` | W13, H10 | `group_key` (acara), `amount` (rencana), `parent_id` (vendor, opsional) | – |
-| `payment` | W13 | `parent_id` (butir anggaran), `amount`, `due_on`, `done_on`, `who` (pembayar) | link bukti |
-| `saving`, `contribution` | W14, H2 | target di `amount` dan `due_on`; kontribusi punya `parent_id`, `amount`, `done_on`, `who` | sumber dana |
-| `guest` | W16, W17 | `group_key` (sisi dan kategori), `qty` (pax), `status` | telepon |
-| `seserahan` | W9 | `group_key` (kategori), `amount` (harga), `status`, `who` | link beli |
-| `rundown` | W20 | `group_key` (acara), `due_on`, `done_on`, `sort` | jam mulai dan selesai, PIC |
-| `song` | W22 | `group_key` (momen) | penyanyi |
+| `project` | all | `title`, `status` (active/archived) | – |
+| `task` | W2, W5, W7, W23, W24, H7 | `due_on`, `done_on`, `who`, `group_key` (phase) | decision flag, template rules |
+| `vendor` | W11, W12 | `group_key` (category), `status` (option/fix/cancelled), `amount` (quote) | E.164 phone, PIC, contract link, key facts |
+| `budget` | W13, H10 | `group_key` (event), `amount` (planned), `parent_id` (vendor, optional) | – |
+| `payment` | W13 | `parent_id` (budget item), `amount`, `due_on`, `done_on`, `who` (payer) | proof link |
+| `saving`, `contribution` | W14, H2 | the target in `amount` and `due_on`; a contribution has `parent_id`, `amount`, `done_on`, `who` | source of funds |
+| `guest` | W16, W17 | `group_key` (side and category), `qty` (pax), `status` | phone |
+| `seserahan` | W9 | `group_key` (category), `amount` (price), `status`, `who` | purchase link |
+| `rundown` | W20 | `group_key` (event), `due_on`, `done_on`, `sort` | start and end time, PIC |
+| `song` | W22 | `group_key` (moment) | singer |
 | `note` | W4, H13 | `note`, `due_on` | – |
-| `gift` | W25, H12 | `group_key` (acara), `amount`, `done_on` | arah (masuk/keluar) |
-| `recurring` | H3, H4, H7 | `amount`, `due_on` (jatuh tempo berikutnya), `done_on` (terakhir), `who` | periode, tanggal berulang |
-| `doc` | H9 | `due_on` (kedaluwarsa) | lokasi fisik, pemegang |
-| `expense` | H1 | `amount`, `done_on`, `who` (pembayar), `group_key` (kategori) | pembagian |
+| `gift` | W25, H12 | `group_key` (event), `amount`, `done_on` | direction (incoming/outgoing) |
+| `recurring` | H3, H4, H7 | `amount`, `due_on` (next due), `done_on` (last), `who` | period, recurring date |
+| `doc` | H9 | `due_on` (expiry) | physical location, holder |
+| `expense` | H1 | `amount`, `done_on`, `who` (payer), `group_key` (category) | split |
 
-**Aturan keluar:** pindahkan satu `kind` ke tabel sendiri hanya bila ia (a) butuh integritas relasional di luar `parent_id`, (b) butuh `CHECK` per jenis yang penting untuk uang, (c) memindai ribuan baris per kueri, atau (d) punya aturan retensi atau privasi berbeda (mis. `doc` bila suatu hari menyimpan scan). Hari ini tidak ada yang memenuhinya.
+**Exit rule:** move a `kind` to its own table only if it (a) needs relational integrity beyond `parent_id`, (b) needs a per-kind `CHECK` that matters for money, (c) scans thousands of rows per query, or (d) has a different retention or privacy rule (e.g. `doc` if one day it stores scans). Today none of them qualifies.
 
-**Beban D1:** baris yang dibaca dihitung menurut baris yang dipindai ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)), jadi indeks `rev` dan `(kind, due_on)` penting. Pada ribuan baris dan batas 5 juta baca per hari, tidak ada masalah selama tidak ada polling atau pemindaian berulang.
+**D1 load:** rows read are counted by rows scanned ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)), so the `rev` and `(kind, due_on)` indexes matter. At thousands of rows and a limit of 5 million reads per day, there's no problem as long as there's no polling or repeated scanning.
 
-**Catatan jujur:** brainstorm menyketsa 12 tabel per-fitur dan itu juga masuk akal untuk wedding saja. Rekomendasi generik ini didorong oleh perluasan ke household: tiap tabel baru membawa migrasi, whitelist, sync, dan ekspor, dan itu yang membuat fitur kecil seperti H4 atau W22 terasa tidak sepadan. Bila kalian lebih suka kejelasan SQL daripada fleksibilitas, jalur tengah adalah menjaga tabel per-fitur hanya untuk W13 (anggaran dan pembayaran, tempat ketepatan uang paling penting) dan generik untuk sisanya.
+**An honest note:** the brainstorm sketches 12 per-feature tables and that also makes sense for the wedding alone. This generic recommendation is driven by the extension to household: every new table brings a migration, a whitelist, sync, and export, and that's what makes small features like H4 or W22 feel not worth it. If you two prefer SQL clarity over flexibility, the middle path is to keep per-feature tables only for W13 (budget and payments, where money accuracy matters most) and generic for the rest.
 
-### 7.3 Inti yang dibangun pertama
+### 7.3 The core that gets built first
 
-**Inti = satu model, lima layar (Minggu ini, tugas, anggaran dan dana, vendor, tamu), satu tombol ekspor:**
+**Core = one model, five screens (This week, tasks, budget and fund, vendors, guests), one export button:**
 
-1. Model `items` + `settings` + sinkron (urusan worker stack).
-2. Layar daftar generik yang dikonfigurasi lewat registry.
-3. "Minggu ini" (W3).
-4. Tugas dari template (W2) dengan hari-H (W1).
-5. Anggaran + pembayaran + jatuh tempo (W13) dan dana nikah (W14).
-6. Buku vendor (W11) dan daftar tamu (W16).
-7. Ekspor JSON dan CSV (X1), `.ics` per item (X2).
+1. The `items` + `settings` model + sync (the stack worker's business).
+2. A generic list screen configured through the registry.
+3. "This week" (W3).
+4. Tasks from a template (W2) with H-day (W1).
+5. Budget + payments + due dates (W13) and the wedding fund (W14).
+6. Vendor book (W11) and guest list (W16).
+7. JSON and CSV export (X1), `.ics` per item (X2).
 
-Alasannya: itu lima hal yang menggerakkan sesi mingguan (§1.2), semuanya berskor Tier 1, dan sisanya adalah konfigurasi di atas model yang sama.
+The reason: those are the five things that drive the weekly session (§1.2), all scoring Tier 1, and the rest is configuration on top of the same model.
 
-**Tahapan.** Hari-H sekitar satu tahun lagi; target berikut relatif terhadap H dan bisa digeser.
+**Stages.** The wedding day is about a year away; the following targets are relative to H and can shift.
 
-| Tahap | Kapan (relatif H) | Isi | Tanda selesai |
+| Stage | When (relative to H) | Contents | Done when |
 |---|---|---|---|
-| M0: spike | minggu pertama | Login, sinkron, satu `kind` ujung ke ujung (keputusan worker stack) | Dua HP melihat data yang sama, ada edit offline |
-| M1: inti | H-11 bulan | Butir 1-7 di atas, plus impor sekali jalan dari spreadsheet lama | Kalian berdua memakai layar "Minggu ini" tiga minggu berturut-turut (ukuran: kedua pihak menyentuh daftar minggu itu) |
-| M2: administrasi dan vendor | selesai sebelum H-6 bulan | W5 dan W6 (checklist KUA, hari kerja), W8, W9, W12, W4, template W24, pencarian (X4) | Checklist KUA terisi dan ditinjau di sesi mingguan |
-| M3: hari-H | selesai sebelum H-3 bulan | W20 (rundown offline), W21, W17, W22, W23; rutinitas backup bulanan | Latihan hari-H di H-2 minggu: rundown terbuka di mode pesawat |
-| M4: setelah acara | H sampai H+3 bulan | W25, W26, W24 aktif; arsip ekspor | Semua pembayaran vendor tuntas dan ada salinan ekspor di luar Cloudflare |
-| M5: household v1 | setelah M4 | H3, H4, H2, lalu H12 bila divalidasi; H7, H1, H10 bila diminta | Tagihan dan perpanjangan nyata ada di app dan muncul di "Minggu ini" |
-| Nanti | tanpa tanggal | X3 feed berlangganan, X5 digest, W19 link keluarga, X7 impor CSV generik | Hanya bila ada alasan nyata |
+| M0: spike | first week | Login, sync, one `kind` end to end (a stack worker decision) | Two phones see the same data, with an offline edit |
+| M1: core | H-11 months | Items 1-7 above, plus the one-time import from the old spreadsheet | You two use the "This week" screen three weeks in a row (measure: both sides touch that week's list) |
+| M2: administration and vendors | done before H-6 months | W5 and W6 (KUA checklist, working days), W8, W9, W12, W4, the W24 template, search (X4) | The KUA checklist is filled in and reviewed in the weekly session |
+| M3: wedding day | done before H-3 months | W20 (offline rundown), W21, W17, W22, W23; the monthly backup routine | Wedding-day rehearsal at H-2 weeks: the rundown opens in airplane mode |
+| M4: after the event | H to H+3 months | W25, W26, W24 active; the export archive | All vendor payments settled and an export copy exists outside Cloudflare |
+| M5: household v1 | after M4 | H3, H4, H2, then H12 if validated; H7, H1, H10 if requested | Real bills and renewals are in the app and show up in "This week" |
+| Later | undated | X3 subscribed feed, X5 digest, W19 family link, X7 generic CSV import | Only if there's a real reason |
 
-**Bukan deliverable:** UI dan komponen tampilan, pilihan framework, dan IaC, yang diputuskan worker lain dan tidak diriset di sini.
+**Not a deliverable:** UI and view components, the framework choice, and IaC, which other workers decide and which aren't researched here.
 
-### 7.4 Risiko utama
+### 7.4 Main risks
 
-| Risiko | Mitigasi |
+| Risk | Mitigation |
 |---|---|
-| App ditinggalkan di minggu ketiga sampai kedelapan (§1.2 #11) | Inti kecil; sesi mingguan sebagai cue; berguna tanpa kebiasaan harian; ukur "kedua pihak menyentuh minggu ini" |
-| Satu pasangan merasa jadi manajer (§1.2 #8) | Default belum di-assign; tanpa notifikasi assign; Partner B ikut memilih fitur |
-| Terlalu banyak dibangun | Tier dan daftar tidak dibuat (§8); tiap fitur lolos uji §1.4 |
-| Aturan KUA berubah atau berbeda antar kantor | Template diberi tanggal verifikasi; butir "tanya KUA" dengan kolom catatan; tidak ada aturan keras |
-| Data hilang atau dikunci | Ekspor sejak M1; salinan di luar Cloudflare; Time Travel hanya 7 hari |
-| Kebocoran data pribadi lewat repo publik | Kebijakan hijau/kuning/merah (§5.8); data uji palsu; tanpa NIK dan scan |
-| Keunikan iOS (Home Screen, tanpa Background Sync) | Uji di iPhone sejak M0; jangan bergantung pada push |
+| The app is abandoned in the third to eighth week (§1.2 #11) | A small core; the weekly session as a cue; useful without a daily habit; measure "both sides touch this week" |
+| One partner feels like the manager (§1.2 #8) | Default unassigned; no assignment notifications; Partner B also picks the features |
+| Too much gets built | Tiers and the not-built list (§8); every feature passes the §1.4 test |
+| KUA rules change or differ between offices | Templates carry a verification date; "ask the KUA" items with a notes column; no hard rules |
+| Data lost or locked | Export from M1; a copy outside Cloudflare; Time Travel is only 7 days |
+| Personal data leaking through the public repo | The green/yellow/red policy (§5.8); fake test data; no NIK and no scans |
+| iOS quirks (Home Screen, no Background Sync) | Test on an iPhone from M0; don't depend on push |
 
 ---
 
-## 8. Daftar tidak dibuat dan pertanyaan terbuka
+## 8. The not-built list and open questions
 
-### 8.1 Tidak dibuat
+### 8.1 Not built
 
-| Yang tidak dibuat | Alasan | Pertimbangkan ulang bila |
+| Not built | Reason | Reconsider if |
 |---|---|---|
-| Situs, RSVP, atau undangan digital publik | Sudah dilayani banyak platform (§2.3); halaman publik membuka data tamu dan harus dijaga dari enumerasi (brainstorm §4). Satu artikel menyarankan mengirim undangan cetak untuk tamu lanjut usia ([Good News from Indonesia](https://www.goodnewsfromindonesia.id/2022/11/22/mengenal-apa-itu-undangan-digital-trending-di-media-sosial)) | Kalian memutuskan tidak memakai layanan apa pun |
-| Marketplace atau rekomendasi vendor | Model bisnis vendor-iklan; tuduhan lead palsu di sisi The Knot (§2.1) | Tidak |
-| Registry atau wishlist kado | Tradisi ngamplop dan buwuhan (§2.5); wishlist ditangani Giftster/Giftful/GoWish | Tidak |
-| Seating chart | Tidak lolos uji mingguan; satu kali pakai | Resepsi dengan meja bernomor dan tamu banyak |
-| Moodboard dan inspirasi | Pinterest adalah platform inspirasi yang paling banyak dipakai ([Knot 2026](https://www.theknotww.com/press-releases/the-knot-worldwide-unveils-2026-real-weddings-study)) | Tidak |
-| Chat di dalam app | WhatsApp sudah ada | Tidak |
-| Poin, streak, peringkat | Pengingat menghambat kebiasaan dan penguatan positif tidak efektif ([Stawarz dkk.](https://research-information.bris.ac.uk/en/publications/beyond-self-tracking-and-reminders-designing-smartphone-apps-that/)); aplikasi chores terasa seperti mengasuh pasangan ([MIT TR](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/)) | Tidak |
-| Assign dengan notifikasi; tampilan "pasangan belum membuka" | Lihat §1.3 #3 dan #4 | Tidak |
-| Sinkron bank otomatis; deteksi langganan | Tidak layak di Indonesia (§4, §6.3) | Ada agregator konsumen yang terbukti |
-| Daftar belanja dan UI kalender sendiri | Diserahkan (H5, H8) | Aplikasi yang dipakai berhenti |
-| Brankas scan KTP/KK/paspor | Data paling berisiko; Bitwarden sudah ada (§4.2 H9) | Ada kebutuhan nyata dan kalian siap menanggung enkripsi di client dan kunci pemulihan |
-| Fitur AI | Hanya 36% pasangan AS memakai AI untuk planning ([Knot 2026](https://www.theknotww.com/press-releases/the-knot-worldwide-unveils-2026-real-weddings-study)); tidak ada masalah mingguan yang jelas; Workers AI gratis 10.000 neuron per hari dan tidak ada model OCR khusus yang teridentifikasi (§6.3) | Ada pekerjaan berulang yang bisa dibuktikan memakai AI |
-| "Mode hari-H" untuk pengantin | Pengantin meninggalkan HP ([Massimi dkk.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)); sebagai gantinya, run sheet untuk koordinator (W20, W21) | Tidak |
-| Ko-editing waktu nyata | Dua orang jarang menyunting baris yang sama persis bersamaan; brainstorm §3.2 menaruhnya sebagai opsi | Konflik sinkron benar-benar terjadi |
-| Multi-pasangan, wizard onboarding, banyak bahasa | Tidak ada kebutuhan | Tidak |
-| Otomasi WhatsApp Business API | Sulit dan tidak realistis untuk pemakaian pribadi (§6.3) | Tidak |
-| Album foto dan foto tamu | Google Photos/iCloud; app hanya menyimpan link | Tidak |
-| Kalkulator KPR dan konten relasi | BCA, Rumah123, Paired, Gottman (§4.2) | Tidak |
-| Hitung weton otomatis | Praktik opsional dan beragam; cukup catatan opsional (§5.7) | Kalian memintanya |
-| Push sebagai loop inti | iOS hanya untuk app terpasang; pengingat menghambat kebiasaan (§1.2 #5, §5.1) | Layar "Minggu ini" dan `.ics` terbukti tidak cukup |
+| A public site, RSVP, or digital invitation | Already served by many platforms (§2.3); a public page exposes guest data and has to be guarded against enumeration (brainstorm §4). One article suggests sending printed invitations to elderly guests ([Good News from Indonesia](https://www.goodnewsfromindonesia.id/2022/11/22/mengenal-apa-itu-undangan-digital-trending-di-media-sosial)) | You two decide not to use any service |
+| A vendor marketplace or recommendations | A vendor-advertising business model; the fake-lead allegation on The Knot's side (§2.1) | No |
+| A registry or gift wishlist | The *ngamplop* (giving gift envelopes) and *buwuhan* (traditional wedding contribution) traditions (§2.5); wishlists are handled by Giftster/Giftful/GoWish | No |
+| A seating chart | Fails the weekly test; single use | A reception with numbered tables and many guests |
+| Moodboard and inspiration | Pinterest is the most used inspiration platform ([Knot 2026](https://www.theknotww.com/press-releases/the-knot-worldwide-unveils-2026-real-weddings-study)) | No |
+| Chat inside the app | WhatsApp already exists | No |
+| Points, streaks, rankings | Reminders hinder habit and positive reinforcement isn't effective ([Stawarz et al.](https://research-information.bris.ac.uk/en/publications/beyond-self-tracking-and-reminders-designing-smartphone-apps-that/)); chore apps feel like parenting your partner ([MIT TR](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/)) | No |
+| Assigning with notifications; a "partner hasn't opened it" view | See §1.3 #3 and #4 | No |
+| Automatic bank sync; subscription detection | Not feasible in Indonesia (§4, §6.3) | A proven consumer aggregator appears |
+| Own shopping list and calendar UI | Handed off (H5, H8) | The app in use shuts down |
+| A vault for KTP/KK/passport scans | The riskiest data; Bitwarden already exists (§4.2 H9) | There's a real need and you two are ready to bear client-side encryption and recovery keys |
+| AI features | Only 36% of US couples use AI for planning ([Knot 2026](https://www.theknotww.com/press-releases/the-knot-worldwide-unveils-2026-real-weddings-study)); no clear weekly problem; Workers AI is free for 10,000 neurons per day and no dedicated OCR model was identified (§6.3) | There's repeated work that can be shown to use AI |
+| A wedding-day mode for the couple | Couples leave their phones ([Massimi et al.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)); instead, a run sheet for the coordinator (W20, W21) | No |
+| Real-time co-editing | Two people rarely edit exactly the same row at exactly the same time; brainstorm §3.2 lists it as an option | Sync conflicts actually happen |
+| Multi-couple, onboarding wizard, multiple languages | No need | No |
+| WhatsApp Business API automation | Hard and unrealistic for personal use (§6.3) | No |
+| Photo albums and guest photos | Google Photos/iCloud; the app only stores the link | No |
+| Mortgage calculator and relationship content | BCA, Rumah123, Paired, Gottman (§4.2) | No |
+| Automatic *weton* calculation | An optional and varied practice; an optional note is enough (§5.7) | You ask for it |
+| Push as the core loop | iOS only for installed apps; reminders hinder habit (§1.2 #5, §5.1) | The "This week" screen and `.ics` prove insufficient |
 
-### 8.2 Lima keputusan yang paling menentukan (untuk operator)
+### 8.2 The five most decisive decisions (for the operator)
 
-1. **Model data: generik `items` atau tabel per fitur** (§7.2). Rekomendasi: generik, dengan pengecualian opsional untuk anggaran dan pembayaran. Ini menentukan apakah fitur household yang kecil layak dibuat.
-2. **Cakupan inti** (§7.3). Rekomendasi: model + "Minggu ini" + tugas + anggaran/pembayaran + vendor + tamu + ekspor. Semua lainnya menunggu.
-3. **Representasi uang** (§6.1 #3). Rekomendasi: rupiah utuh sebagai integer plus kode mata uang. Alternatif: ×100 agar sesuai ISO 4217. Harus ditulis di skema ekspor sebelum data pertama.
-4. **Strategi reminder** (§5.1). Rekomendasi: layar "Minggu ini" + `.ics` per item dulu; satu digest mingguan nanti; push hanya bila terbukti perlu.
-5. **Kebijakan dokumen sensitif** (§5.8). Rekomendasi: tanpa NIK dan tanpa scan; indeks dokumen saja; scan di Bitwarden atau Drive.
+1. **Data model: generic `items` or a table per feature** (§7.2). Recommendation: generic, with an optional exception for budget and payments. This decides whether small household features are worth building.
+2. **Core scope** (§7.3). Recommendation: model + "This week" + tasks + budget/payments + vendors + guests + export. Everything else waits.
+3. **Money representation** (§6.1 #3). Recommendation: whole rupiah as an integer plus a currency code. Alternative: ×100 to match ISO 4217. It has to be written in the export schema before the first data.
+4. **Reminder strategy** (§5.1). Recommendation: the "This week" screen + `.ics` per item first; one weekly digest later; push only if proven necessary.
+5. **Sensitive document policy** (§5.8). Recommendation: no NIK and no scans; a document index only; scans in Bitwarden or Drive.
 
-### 8.3 Pertanyaan untuk operator
+### 8.3 Questions for the operator
 
-1. Perkiraan tanggal akad, atau jendela waktunya? (Menentukan template dan jadwal M1-M3.)
-2. Apakah platform pilihan worker stack bisa menjamin tulis offline, atau ada fitur yang harus dipangkas? (Menentukan W20 dan capture offline.)
-3. Apakah R2 boleh dipakai (checkout "R2 subscription" dan kemungkinan metode pembayaran, §5.3)? Bila tidak, lampiran tetap link selamanya.
-4. Apakah satu tabel generik bisa diterima untuk semua data, atau anggaran dan pembayaran perlu tabel sendiri?
-5. Spreadsheet lama dijalankan paralel berapa lama, dan data mana yang asli (brainstorm §9)?
-6. Siapa yang merawat app setelah acara, dan kapan diarsipkan atau dimatikan (brainstorm §9 #10)?
+1. The estimated *akad* date, or its time window? (Decides the templates and the M1-M3 schedule.)
+2. Can the platform the stack worker chose guarantee offline writes, or do some features have to be cut? (Decides W20 and offline capture.)
+3. Is R2 allowed (the "R2 subscription" checkout and possibly a payment method, §5.3)? If not, attachments stay links forever.
+4. Is one generic table acceptable for all data, or do budget and payments need their own table?
+5. How long is the old spreadsheet run in parallel, and which data is real (brainstorm §9)?
+6. Who maintains the app after the event, and when is it archived or shut down (brainstorm §9 #10)?
 
-### 8.4 Pertanyaan untuk kalian berdua
+### 8.4 Questions for you two
 
-1. Akad di KUA atau di luar, dan di kecamatan domisili salah satu atau di tempat lain (numpang nikah)? (Rp0 atau Rp600.000; butuh rekomendasi atau tidak.)
-2. Android atau iPhone masing-masing? (Push, instal ke Home Screen.)
-3. Siapa memegang apa sekarang? Setuju dengan default "belum di-assign, ambil dengan satu ketukan"? Apakah Partner B ikut memilih fitur? Pasangan yang tidak memilih app adalah risiko berhenti (§1.2 #8).
-4. Perlu item "privat untuk saya" (kejutan hadiah, bulan madu), atau semua boleh terlihat?
-5. Apakah orang tua atau WO perlu akses baca-saja, dan ke apa saja?
-6. Kanal pengingat apa yang benar-benar dilihat tiap hari: WhatsApp, email, kalender HP?
-7. Hari dan jam sesi mingguan, dan apakah mau dijadikan ritual tetap? (Cue berbasis kejadian: §1.2 #5.)
-8. Undangan: layanan digital mana, atau cetak? Perlu impor CSV hasil RSVP?
-9. Amplop dan kondangan: apakah mencatat amplop masuk dan keluar benar-benar kebutuhan? Seberapa sering menghadiri kondangan, dan apakah ada arisan yang dijalankan? (Permintaan belum divalidasi: W25, H12.)
-10. Setelah menikah, mana yang paling dulu: tagihan dan pajak kendaraan, target tabungan, pengeluaran bersama, atau lainnya? Bagian mana yang sudah beres di app bank (Kantong, bluGether)?
-11. Perlu mata uang selain rupiah (bulan madu)?
-12. Perjanjian pranikah: relevan untuk kalian, atau lewati W7?
-13. Perlu mencatat nomor HP tamu di app (konsekuensinya masuk golongan kuning di §5.8)?
+1. The *akad* at the KUA or outside, and in the home sub-district of one of you or elsewhere (*numpang nikah*, marrying at a KUA away from home)? (Rp0 or Rp600,000; a recommendation needed or not.)
+2. Android or iPhone for each of you? (Push, installing to the Home Screen.)
+3. Who holds what right now? Do you agree with the default "unassigned, take with one tap"? Does Partner B also pick the features? A partner who didn't choose the app is a quitting risk (§1.2 #8).
+4. Do you need "private to me" items (gift surprises, honeymoon), or can everything be visible?
+5. Do parents or the WO need read-only access, and to what?
+6. Which reminder channel do you actually look at every day: WhatsApp, email, the phone calendar?
+7. The day and time of the weekly session, and do you want to make it a fixed ritual? (An event-based cue: §1.2 #5.)
+8. Invitations: which digital service, or print? Do you need a CSV import of RSVP results?
+9. *Amplop* and *kondangan*: is recording incoming and outgoing *amplop* really a need? How often do you attend *kondangan*, and is there an *arisan* you run? (Demand not yet validated: W25, H12.)
+10. After the wedding, which comes first: bills and vehicle tax, savings goals, shared expenses, or something else? Which part is already sorted in the bank app (Kantong, bluGether)?
+11. Do you need a currency other than rupiah (honeymoon)?
+12. Prenuptial agreement: relevant for you, or skip W7?
+13. Do you need to record guests' phone numbers in the app (the consequence is they fall in the yellow class in §5.8)?
 
 ---
 
-## Lampiran A: Hal yang tidak terverifikasi dan celah riset
+## Appendix A: Unverified items and research gaps
 
-- **Kebiasaan pasangan Indonesia memakai Sheets/Notion/WhatsApp untuk planning:** tidak ada sumber Indonesia yang ketemu; kuota pencarian habis. Perlu tindak lanjut (Reddit, Kaskus, Hipwee, Brilio, blog Bridestory/Weddingku).
-- **Ulasan Play Store** Bridestory, Weddingku, Wevitation: hanya rating dan jumlah ulasan yang terbaca. Tema ulasan Weddingku dan Wevitation tidak terverifikasi. Ulasan iOS Bridestory berasal dari feed Apple yang hanya mengekspos sekitar 50 ulasan terbaru.
-- **theknot.com, Hitched, Etsy, Reddit, Brides, Cosmopolitan, NYT/Wirecutter** tidak bisa dibuka. Tidak ada kutipan Wirecutter atau NYT. Studi yang memeringkat fitur mana yang paling dipakai pasangan tidak ketemu (hanya adopsi kanal).
-- **Statistik retensi dan kebiasaan populer** ("25% app dipakai sekali", "66 hari median") tidak punya sumber primer yang ketemu.
-- **Angka WhatsApp di Indonesia:** tidak ada angka bersih (§1.1).
-- **Proses KUA:** durasi dan jadwal bimwin; apakah Keputusan Dirjen 373/2017 masih berlaku; langkah RT/RW; aturan "15 HK" setelah daftar online (bertentangan); Elsimil wajib atau tidak di KUA tertentu; TT; lampiran PP 59/2018 berupa gambar; teks PMA dibaca dari salinan PDF di situs pemerintah desa dan dicocokkan hanya dengan metadata BPK.
-- **Setelah nikah:** tenggat KK, KTP-el, BPJS Kesehatan (pasangan), BPJS Ketenagakerjaan, paspor, bank, asuransi, STNK, HR; angka PTKP.
-- **Hijri:** kriteria MABIMS baru; dataset libur terbuka resmi.
-- **UU PDP:** teks pasal dibaca dari situs pihak ketiga; peraturan pelaksana dan lembaga pengawas tidak ketemu; tidak ada panduan resmi menyimpan NIK; interpretasi pengecualian rumah tangga adalah bacaan penulis, bukan nasihat hukum.
-- **Aplikasi uang Indonesia:** batas anggota dan ekspor Jago/blu; Finansialku; Sribuu; bank lain; dukungan bank Indonesia di Wallet.
-- **Integrasi:** interval refresh `.ics` Google; apakah Google menghormati `REFRESH-INTERVAL`; apakah R2 butuh metode pembayaran; apakah email terverifikasi butuh domain; klausul "hanya bisnis" WhatsApp; dukungan `share_target` Firefox; dukungan `prf` WebAuthn per browser; dokumentasi ekspor Splitwise/YNAB/Money Manager; klasifikasi cakupan Calendar; QRIS di halaman BI.
-- **Kutipan ulasan** dibaca lewat tool fetch yang meringkas; kutipan dan angka yang jadi tumpuan dicek ulang di halaman sumbernya, sisanya bertanda sesuai tingkat verifikasinya.
-- **Angka ulasan dan rating** adalah snapshot 2026-10-06 dan berubah tiap hari.
+- **How Indonesian couples use Sheets/Notion/WhatsApp for planning:** no Indonesian source found; the search quota ran out. Needs follow-up (Reddit, Kaskus, Hipwee, Brilio, the Bridestory/Weddingku blogs).
+- **Play Store reviews** of Bridestory, Weddingku, Wevitation: only the rating and the number of reviews could be read. The review themes of Weddingku and Wevitation are unverified. Bridestory's iOS reviews come from the Apple feed, which only exposes about the latest 50 reviews.
+- **theknot.com, Hitched, Etsy, Reddit, Brides, Cosmopolitan, NYT/Wirecutter** couldn't be opened. No Wirecutter or NYT quotes. A study ranking which features couples use most wasn't found (only channel adoption).
+- **Popular retention and habit statistics** ("25% of apps are used once", "66-day median") have no primary source found.
+- **WhatsApp figures in Indonesia:** no clean figure (§1.1).
+- **The KUA process:** the duration and schedule of *bimwin*; whether Director General Decision 373/2017 is still in force; the RT/RW step; the "15 HK" rule after online registration (contradictory); whether Elsimil is mandatory at particular KUAs; TT; the PP 59/2018 appendix being an image; the PMA text was read from a PDF copy on a village government site and matched only against BPK metadata.
+- **After the wedding:** the deadlines for KK, KTP-el, BPJS Kesehatan (spouse), BPJS Ketenagakerjaan, passport, bank, insurance, STNK, HR; the PTKP (non-taxable income threshold) figures.
+- **Hijri:** the new MABIMS criteria; an official open holiday dataset.
+- **The PDP Law (UU PDP):** the article text was read from a third-party site; the implementing regulation and the supervisory body weren't found; no official guidance on storing NIK; the interpretation of the household exception is the author's reading, not legal advice.
+- **Indonesian money apps:** member limits and export of Jago/blu; Finansialku; Sribuu; other banks; Indonesian bank support in Wallet.
+- **Integration:** the `.ics` refresh interval of Google; whether Google honours `REFRESH-INTERVAL`; whether R2 needs a payment method; whether verified email needs a domain; the WhatsApp "business only" clause; Firefox `share_target` support; WebAuthn `prf` support per browser; export documentation for Splitwise/YNAB/Money Manager; the classification of Calendar scopes; QRIS on the BI page.
+- **Review quotes** were read through a summarising fetch tool; the quotes and figures this document leans on were rechecked on the source pages, and the rest are marked according to their level of verification.
+- **Review and rating figures** are a snapshot of 6 October 2026 and change every day.
