@@ -201,11 +201,13 @@ main {
 }
 
 .sync[data-state="rejected"] a::before,
+.sync[data-state="storage"] a::before,
 .sync[data-state="login"] button::before {
   background: var(--danger);
 }
 
 .sync[data-state="login"] button,
+.sync[data-state="storage"] a,
 .sync[data-state="rejected"] a {
   color: var(--danger);
   font-weight: 600;

@@ -9,6 +9,7 @@ import { text } from "./ui/text.ts";
 import { Title } from "./ui/title.tsx";
 import { Budget } from "./views/budget.tsx";
 import { BudgetLine } from "./views/budget-line.tsx";
+import { Connect } from "./views/connect.tsx";
 import { FirstRun } from "./views/first-run.tsx";
 import { GenericItem } from "./views/generic-item.tsx";
 import { GenericList } from "./views/generic-list.tsx";
@@ -38,7 +39,7 @@ function Page({ section, id }: { section: string; id?: string }) {
 }
 
 function App() {
-  const { ready } = useSnapshot();
+  const { ready, me } = useSnapshot();
   const project = useProject();
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
@@ -58,7 +59,7 @@ function App() {
   });
 
   if (!ready) return <p className="splash" role="status">{text.loading}</p>;
-  if (!project) return <FirstRun />;
+  if (!project) return me === null ? <Connect /> : <FirstRun />;
   return (
     <Shell title={project.title} section={section === "payments" ? "budget" : section}>
       <Page section={section} id={id} />

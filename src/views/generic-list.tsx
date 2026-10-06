@@ -5,12 +5,12 @@ import { usePartner } from "../hooks/use-plan.ts";
 import { useTable } from "../hooks/use-store.ts";
 import { ItemLine } from "../ui/item-line.tsx";
 import { QuickAdd } from "../ui/quick-add.tsx";
-import { statusRank } from "../ui/registry.ts";
-import type { ViewName } from "../ui/registry.ts";
+import { statusRank, views } from "../ui/registry.ts";
+import type { ListName, ViewName } from "../ui/registry.ts";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
-export function GenericList({ name }: { name: "task" | "vendor" | "guest" }) {
+export function GenericList({ name }: { name: ListName }) {
   const items = useTable("items");
   const { label } = usePartner();
   const rows = useMemo(
@@ -24,7 +24,7 @@ export function GenericList({ name }: { name: "task" | "vendor" | "guest" }) {
 
   return (
     <>
-      <Title>{text.nav[`${name}s` as "tasks" | "vendors" | "guests"]}</Title>
+      <Title>{text.nav[views[name].route]}</Title>
       {count && (
         <dl className="totals">
           {(["a", "b"] as const).map((side) => (

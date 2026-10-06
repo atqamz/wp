@@ -3,8 +3,10 @@ import type { FormEvent } from "react";
 import type { BudgetEntryRow, ItemRow } from "../../shared/tables.ts";
 import { EVENT_ORDER } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
+import { useBusy } from "../hooks/use-busy.ts";
 import { usePartner, useStamp } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
+import { failureOf } from "./failure.ts";
 import { Field } from "./field.tsx";
 import type { Control } from "./field.tsx";
 import { fieldLabel, optionLabel } from "./labels.ts";
@@ -27,6 +29,7 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
   const [initial] = useState(row);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<string[]>([]);
+  const { busy, once } = useBusy();
   const { label } = usePartner();
   const stamp = useStamp();
   const siblings = useTable(view.table);
@@ -60,9 +63,13 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
     return [title, ...rest];
   }, [row, siblings, name, view, label]);
 
-  const save = async (event: FormEvent<HTMLFormElement>) => {
+  const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    return once(() => store(form));
+  };
+
+  const store = async (form: FormData) => {
     const change: Record<string, unknown> = {};
     const data: Record<string, unknown> = {};
     const invalid: Record<string, string> = {};
@@ -84,8 +91,14 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
     if (Object.keys(data).length > 0) change.data = data;
     const result = await actions.update(view.table, row.id, change as never);
     if (result.ok) location.hash = backHref(name, row).slice(1);
-    else setFailure(result.errors);
+    else setFailure(failureOf(result));
   };
+
+  const remove = () =>
+    once(async () => {
+      const result = await actions.remove(view.table, row.id);
+      setFailure(failureOf(result));
+    });
 
   return (
     <form className="form" onSubmit={save}>
@@ -98,11 +111,13 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
         </p>
       )}
       <div className="form-actions">
-        <button type="submit">{text.save}</button>
+        <button type="submit" disabled={busy}>
+          {text.save}
+        </button>
         <a className="button secondary" href={backHref(name, row)}>
           {text.cancel}
         </a>
-        <button type="button" className="danger" onClick={() => actions.remove(view.table, row.id)}>
+        <button type="button" className="danger" disabled={busy} onClick={remove}>
           {text.delete}
         </button>
       </div>

@@ -1,14 +1,57 @@
+import { tables } from "../../shared/tables.ts";
+import { usePartner } from "../hooks/use-plan.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
+import type { Pending } from "../hooks/use-store.ts";
+import { formatDate, formatMoney } from "../ui/format.ts";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
+const hidden = ["id", "key", "kind", "entry_type", "project_id", "created_at", "updated_at"];
+
 export function Sync() {
-  const { link, pending, rejected } = useSnapshot();
+  const { link, pending, rejected, storage, rows } = useSnapshot();
+  const { label } = usePartner();
+
+  const nameOf = (entry: Pending) => {
+    if (typeof entry.patch.title === "string") return entry.patch.title;
+    const known = (rows[entry.table] as Record<string, unknown>[]).find((row) => row[tables[entry.table].key] === entry.row_id);
+    return typeof known?.title === "string" ? known.title : entry.table === "settings" ? entry.row_id : text.sync.unknownRow;
+  };
+
+  const shown = (field: string, value: unknown) =>
+    value === null
+      ? text.sync.cleared
+      : field === "amount" && typeof value === "number"
+        ? formatMoney(value)
+        : /_on$/.test(field) && typeof value === "string"
+          ? formatDate(value)
+          : field === "who"
+            ? label(String(value))
+            : value === true
+              ? text.sync.yes
+              : String(value);
+
+  const changesOf = (entry: Pending) =>
+    Object.entries(entry.patch)
+      .flatMap(([field, value]) =>
+        field === "data" && typeof value === "object" && value !== null
+          ? Object.entries(value).map(([key, inner]) => [`data.${key}`, inner] as const)
+          : [[field, value] as const],
+      )
+      .filter(([field]) => !hidden.includes(field))
+      .map(([field, value]) => `${(text.field.common as Record<string, string>)[field] ?? field}: ${shown(field, value)}`);
+
   return (
     <>
       <Title>{text.sync.title}</Title>
       <p role="status">
-        {link === "expired" ? text.sync.expiredBody : link === "offline" ? text.sync.offlineBody : text.sync.onlineBody}
+        {storage === "failed"
+          ? text.sync.storageBody
+          : link === "expired"
+            ? text.sync.expiredBody
+            : link === "offline"
+              ? text.sync.offlineBody
+              : text.sync.onlineBody}
       </p>
       <p>{text.sync.waiting(pending)}</p>
       <div className="form-actions">
@@ -31,10 +74,14 @@ export function Sync() {
                 <div className="line-row">
                   <div className="line-main">
                     <span className="title">
-                      {text.sync.op[entry.op]} {text.sync.table[entry.table]}
-                      {typeof entry.patch.title === "string" ? `: ${entry.patch.title}` : ""}
+                      {text.sync.op[entry.op]} {text.sync.table[entry.table]}: {nameOf(entry)}
                     </span>
                     <span className="meta">
+                      {changesOf(entry).map((change) => (
+                        <span key={change}>{change}</span>
+                      ))}
+                    </span>
+                    <span className="meta reason">
                       {entry.rejected?.map((reason) => (
                         <span key={reason}>{reason}</span>
                       ))}

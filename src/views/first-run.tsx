@@ -1,33 +1,20 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { actions, useSnapshot } from "../hooks/use-store.ts";
+import { useBusy } from "../hooks/use-busy.ts";
+import { actions } from "../hooks/use-store.ts";
+import { failureOf } from "../ui/failure.ts";
 import { text } from "../ui/text.ts";
 
 export function FirstRun() {
   const [errors, setErrors] = useState<string[]>([]);
-  const { link } = useSnapshot();
+  const { busy, once } = useBusy();
 
-  const start = async (event: FormEvent<HTMLFormElement>) => {
+  const start = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = String(new FormData(event.currentTarget).get("title") ?? "").trim();
     if (title === "") return;
-    const result = await actions.create("items", { kind: "project", title, status: "active" });
-    if (!result.ok) setErrors(result.errors);
+    return once(async () => setErrors(failureOf(await actions.create("items", { kind: "project", title, status: "active" }))));
   };
-
-  if (link === "expired") {
-    return (
-      <main className="first-run">
-        <h1>{text.sync.login}</h1>
-        <p>{text.sync.expiredBody}</p>
-        <div className="form-actions">
-          <button type="button" onClick={actions.logIn}>
-            {text.sync.login}
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="first-run">
@@ -43,7 +30,9 @@ export function FirstRun() {
           </p>
         )}
         <div className="form-actions">
-          <button type="submit">{text.firstRun.submit}</button>
+          <button type="submit" disabled={busy}>
+            {text.firstRun.submit}
+          </button>
         </div>
       </form>
     </main>

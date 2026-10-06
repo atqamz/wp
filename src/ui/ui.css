@@ -181,6 +181,10 @@ button.danger {
   font-size: 0.875rem;
 }
 
+.meta.reason {
+  color: var(--danger);
+}
+
 .meta [data-late] {
   color: var(--danger);
   font-weight: 600;
@@ -324,5 +328,10 @@ progress {
 .trail a {
   display: inline-flex;
   align-items: center;
+  min-width: 2.75rem;
   min-height: 2.75rem;
+}
+
+.line > .error {
+  padding: 0 0.75rem 0.5rem;
 }

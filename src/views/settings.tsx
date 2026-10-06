@@ -1,20 +1,24 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { tables } from "../../shared/tables.ts";
 import { DEFAULT_ZONE, settingKeys } from "../domain/settings.ts";
 import { useProject, useSettings } from "../hooks/use-plan.ts";
+import { useBusy } from "../hooks/use-busy.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
+import { failureOf } from "../ui/failure.ts";
 import { Field } from "../ui/field.tsx";
 import type { Control } from "../ui/field.tsx";
+import { views } from "../ui/registry.ts";
+import type { ViewName } from "../ui/registry.ts";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
 const exports = [
   { label: text.settings.exportAll, query: "format=json" },
-  { label: text.nav.tasks, query: "format=csv&table=items&kind=task" },
-  { label: text.nav.vendors, query: "format=csv&table=items&kind=vendor" },
-  { label: text.nav.guests, query: "format=csv&table=items&kind=guest" },
-  { label: text.settings.exportLines, query: "format=csv&table=budget_entries&entry_type=planned" },
-  { label: text.settings.exportPayments, query: "format=csv&table=budget_entries&entry_type=payment" },
+  ...(Object.keys(views) as ViewName[]).map((name) => ({
+    label: text.export[name],
+    query: `format=csv&table=${views[name].table}&${tables[views[name].table].by}=${views[name].variant}`,
+  })),
 ];
 
 export function Settings() {
@@ -23,6 +27,7 @@ export function Settings() {
   const { me } = useSnapshot();
   const [failure, setFailure] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const { busy, once } = useBusy();
 
   const [initial] = useState<Record<string, string>>(() => ({
     title: project?.title ?? "",
@@ -47,9 +52,12 @@ export function Settings() {
   ];
   const controls = fields.map((control) => ({ ...control, required: initial[control.name] !== "" }));
 
-  const save = async (event: FormEvent<HTMLFormElement>) => {
+  const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    return once(() => store(new FormData(event.currentTarget)));
+  };
+
+  const store = async (form: FormData) => {
     const errors: string[] = [];
     for (const control of controls) {
       const value = String(form.get(control.name) ?? "").trim();
@@ -58,7 +66,7 @@ export function Settings() {
         control.name === "title" && project
           ? await actions.update("items", project.id, { title: value })
           : await actions.setSetting(control.name, value);
-      if (!result.ok) errors.push(...result.errors);
+      errors.push(...failureOf(result));
     }
     setFailure(errors);
     setSaved(errors.length === 0);
@@ -79,7 +87,9 @@ export function Settings() {
         )}
         {saved && <p role="status">{text.saved}</p>}
         <div className="form-actions">
-          <button type="submit">{text.save}</button>
+          <button type="submit" disabled={busy}>
+            {text.save}
+          </button>
         </div>
       </form>
       <section aria-labelledby="export">
