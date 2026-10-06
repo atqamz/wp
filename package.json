@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "node --test",
-    "check": "npm run typecheck && npm test && npm run build && test -s dist/wp/wrangler.json && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && test -d worker && test -d shared && ! grep -rEq \"from [\\\"']react\" worker shared src/domain src/store && ! grep -rEq \"fetch\\(|indexedDB\" src/views src/ui src/hooks"
+    "check": "npm run typecheck && npm test && npm run build && test -s dist/wp/wrangler.json && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && test -d worker && test -d shared && (grep -rEq \"(from|import)[ (]*[\\\"']react\" worker shared src/domain src/store; test $? = 1) && (grep -rEq \"fetch *\\(|indexedDB|XMLHttpRequest|sendBeacon\" src/views src/ui src/hooks; test $? = 1)"
   },
   "dependencies": {
     "jose": "6.2.12",
