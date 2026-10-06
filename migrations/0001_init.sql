@@ -16,7 +16,6 @@ CREATE TABLE settings (
 
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   kind TEXT NOT NULL,
   parent_id TEXT REFERENCES items (id),
   title TEXT NOT NULL,
@@ -43,7 +42,6 @@ CREATE INDEX items_parent ON items (parent_id);
 
 CREATE TABLE budget_entries (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   entry_type TEXT NOT NULL CHECK (entry_type IN ('planned', 'payment')),
   budget_id TEXT REFERENCES budget_entries (id),
   vendor_id TEXT REFERENCES items (id),

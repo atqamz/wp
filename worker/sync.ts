@@ -17,9 +17,8 @@ const NEW_REV = "(SELECT rev FROM sync_state WHERE id = 1)";
 
 const refs: Record<TableName, Record<string, readonly ["items" | "budget_entries", string]>> = {
   settings: {},
-  items: { project_id: ["items", "project"] },
+  items: {},
   budget_entries: {
-    project_id: ["items", "project"],
     vendor_id: ["items", "vendor"],
     budget_id: ["budget_entries", "planned"],
   },
@@ -62,10 +61,7 @@ const load = async (db: Db, mutations: Mutation[]): Promise<World> => {
   const ids = (name: TableName) => [...wanted[name]];
   const queries: Record<TableName, [string, unknown[]]> = {
     settings: [`SELECT * FROM settings WHERE key IN (${marks(ids("settings"))})`, ids("settings")],
-    items: [
-      `SELECT * FROM items WHERE id IN (${marks(ids("items"))}) OR id IN (SELECT vendor_id FROM budget_entries WHERE id IN (${marks(budgetRows)}))`,
-      [...ids("items"), ...budgetRows],
-    ],
+    items: [`SELECT * FROM items WHERE id IN (${marks(ids("items"))})`, ids("items")],
     budget_entries: [
       `SELECT * FROM budget_entries WHERE id IN (${marks(ids("budget_entries"))}) OR id IN (SELECT budget_id FROM budget_entries WHERE id IN (${marks(budgetRows)}))`,
       [...ids("budget_entries"), ...budgetRows],
@@ -90,12 +86,7 @@ const checkRefs = (world: World, name: TableName, before: Raw | undefined, after
     else if (target[tables[targetTable].by] !== kind) errors.push(`${column}: must point at a ${kind} row`);
   }
   if (errors.length > 0 || name !== "budget_entries") return errors;
-  if (!["project_id", "vendor_id", "budget_id", "currency"].some(changed)) return errors;
-  for (const column of ["budget_id", "vendor_id"]) {
-    if (after[column] === null) continue;
-    const target = world[refs.budget_entries[column][0]].get(after[column] as string);
-    if (target?.project_id !== after.project_id) errors.push(`${column}: must belong to the same project`);
-  }
+  if (!["budget_id", "currency"].some(changed)) return errors;
   if (after.budget_id !== null && world.budget_entries.get(after.budget_id as string)?.currency !== after.currency) {
     errors.push("currency: must equal the currency of the planned row");
   }
@@ -157,9 +148,6 @@ const update = (ctx: Context, name: TableName, id: string, patch: Raw, stored: R
 
 const remove = (ctx: Context, name: TableName, id: string, stored: Raw): Failure | Statement | undefined => {
   if (stored.deleted_at !== null) return undefined;
-  if (name === "items" && stored.kind === "project") {
-    return { status: 409, errors: ["row_id: a project is archived with status, never deleted"] };
-  }
   ctx.world[name].set(id, { ...stored, deleted_at: ctx.stamp, updated_at: ctx.stamp, updated_by: ctx.who });
   return updateStatement(ctx, name, id, { deleted_at: ctx.stamp }, {});
 };

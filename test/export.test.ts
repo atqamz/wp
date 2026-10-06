@@ -3,19 +3,18 @@ import assert from "node:assert/strict";
 import type { Rejection } from "../shared/api.ts";
 import { exportData } from "../worker/export.ts";
 import { pull } from "../worker/sync.ts";
-import { STAMP, apply, createDb, id, mutation, payment, planned, project, setting, task, vendor } from "./sync-db.ts";
+import { STAMP, apply, createDb, id, mutation, payment, planned, setting, task, vendor } from "./sync-db.ts";
 
 const get = (db: ReturnType<typeof createDb>["db"], query: string) => exportData(new URL(`https://wp.example.test/api/export?${query}`), db);
 
 const seeded = async () => {
   const env = createDb();
   const result = await apply(env.db, [
-    project(1),
-    vendor(20, 1, { data: { phone: "+628123456789", pic: "Sam" }, amount: 5000 }),
-    task(4, 1, { title: "Book the venue", sort: 2, note: "line one\nline two", data: { decision: true } }),
-    task(5, 1, { title: "Gone" }),
-    planned(10, 1, { vendor_id: id(20) }),
-    payment(30, 10, 1, { data: { proof_url: "https://example.test/p" } }),
+    vendor(20, { data: { phone: "+628123456789", pic: "Sam" }, amount: 5000 }),
+    task(4, { title: "Book the venue", sort: 2, note: "line one\nline two", data: { decision: true } }),
+    task(5, { title: "Gone" }),
+    planned(10, { vendor_id: id(20) }),
+    payment(30, 10, { data: { proof_url: "https://example.test/p" } }),
     setting("timezone", "Asia/Jakarta"),
   ]);
   assert.equal("errors" in result, false);
@@ -37,7 +36,7 @@ test("json export is a lossless dump of all three tables with tombstones", async
   assert.equal(body.rev, 2);
   assert.deepEqual(Object.keys(body.tables).sort(), ["budget_entries", "items", "settings"]);
   assert.deepEqual(body.tables, (await pull(db, 0)).changes);
-  assert.equal(body.tables.items.length, 4);
+  assert.equal(body.tables.items.length, 3);
   assert.equal(body.tables.items.find((row) => row.id === id(5))?.deleted_at, STAMP);
   assert.deepEqual(body.tables.items.find((row) => row.id === id(20))?.data, { phone: "+628123456789", pic: "Sam" });
   for (const [table, rows] of Object.entries(body.tables)) {
@@ -61,10 +60,10 @@ test("csv export has a header from the registry and one row per live row of the 
   const lines = parse(await res.text());
   assert.equal(
     lines[0],
-    "id,project_id,kind,title,status,group_key,due_on,done_on,amount,currency,qty,who,note,sort,rev,created_at,updated_at,updated_by,deleted_at,data.start_on,data.decision,data.rules",
+    "id,kind,title,status,group_key,due_on,done_on,amount,currency,qty,who,note,sort,rev,created_at,updated_at,updated_by,deleted_at,data.start_on,data.decision,data.rules",
   );
   assert.equal(lines.length, 2);
-  assert.match(lines[1], new RegExp(`^${id(4)},${id(1)},task,Book the venue,todo,,,,,IDR,,,"line one\nline two",2,1,.*,a,,,true,$`));
+  assert.match(lines[1], new RegExp(`^${id(4)},task,Book the venue,todo,,,,,IDR,,,"line one\nline two",2,1,.*,a,,,true,$`));
   const text = await (await get(db, "format=csv&table=items&kind=task")).text();
   assert.equal(text.endsWith("\r\n"), true);
   assert.equal(text.includes("Gone"), false);
@@ -73,20 +72,20 @@ test("csv export has a header from the registry and one row per live row of the 
 test("csv export covers the other items kinds and budget entries", async () => {
   const { db } = await seeded();
   const vendors = parse(await (await get(db, "format=csv&table=items&kind=vendor")).text());
-  assert.equal(vendors[0], "id,project_id,kind,title,status,group_key,amount,currency,sort,rev,created_at,updated_at,updated_by,deleted_at,data.phone,data.pic,data.contract_url,data.facts");
+  assert.equal(vendors[0], "id,kind,title,status,group_key,amount,currency,sort,rev,created_at,updated_at,updated_by,deleted_at,data.phone,data.pic,data.contract_url,data.facts");
   assert.match(vendors[1], /,'\+628123456789,Sam,,$/);
   const payments = parse(await (await get(db, "format=csv&table=budget_entries&entry_type=payment")).text());
-  assert.equal(payments[0], "id,project_id,entry_type,budget_id,title,status,amount,currency,due_on,done_on,who,sort,rev,created_at,updated_at,updated_by,deleted_at,data.proof_url");
+  assert.equal(payments[0], "id,entry_type,budget_id,title,status,amount,currency,due_on,done_on,who,sort,rev,created_at,updated_at,updated_by,deleted_at,data.proof_url");
   assert.match(payments[1], /,https:\/\/example.test\/p$/);
   const plans = parse(await (await get(db, "format=csv&table=budget_entries&entry_type=planned")).text());
-  assert.equal(plans[0], "id,project_id,entry_type,vendor_id,title,group_key,amount,currency,sort,rev,created_at,updated_at,updated_by,deleted_at");
+  assert.equal(plans[0], "id,entry_type,vendor_id,title,group_key,amount,currency,sort,rev,created_at,updated_at,updated_by,deleted_at");
   assert.equal(plans.length, 2);
   assert.equal(parse(await (await get(db, "format=csv&table=items&kind=guest")).text()).length, 1);
 });
 
 test("csv cells are quoted per RFC 4180", async () => {
   const { db } = createDb();
-  await apply(db, [project(1), task(4, 1, { title: 'He said "hi", twice', note: "a\nb" })]);
+  await apply(db, [task(4, { title: 'He said "hi", twice', note: "a\nb" })]);
   const text = await (await get(db, "format=csv&table=items&kind=task")).text();
   assert.match(text, /"He said ""hi"", twice"/);
   assert.match(text, /"a\nb"/);
@@ -95,8 +94,8 @@ test("csv cells are quoted per RFC 4180", async () => {
 test("csv cells starting with = + - @ cannot become formulas", async () => {
   const { db } = createDb();
   const titles = ["=1+1", "+1", "-1", "@SUM(A1)", '=HYPERLINK("http://example.test")'];
-  const mutations = titles.map((title, i) => task(10 + i, 1, { title, note: title, data: { rules: title } }));
-  assert.equal("errors" in (await apply(db, [project(1), ...mutations, task(20, 1, { note: "\t=1" })])), false);
+  const mutations = titles.map((title, i) => task(10 + i, { title, note: title, data: { rules: title } }));
+  assert.equal("errors" in (await apply(db, [...mutations, task(20, { note: "\t=1" })])), false);
   const text = await (await get(db, "format=csv&table=items&kind=task")).text();
   for (const title of titles.slice(0, 4)) {
     assert.equal(text.split(`'${title}`).length - 1, 3, title);
@@ -108,7 +107,7 @@ test("csv cells starting with = + - @ cannot become formulas", async () => {
 
 test("a negative number is not a formula", async () => {
   const { db } = createDb();
-  await apply(db, [project(1), task(4, 1, { sort: -1.5 })]);
+  await apply(db, [task(4, { sort: -1.5 })]);
   const lines = parse(await (await get(db, "format=csv&table=items&kind=task")).text());
   assert.match(lines[1], /,-1.5,/);
 });
@@ -141,7 +140,7 @@ test("csv export rejects bad parameters with a Rejection and no index", async ()
 
 test("imported rows may carry CR: it is quoted and a leading CR is guarded", async () => {
   const { db, sqlite } = createDb();
-  await apply(db, [project(1), task(4, 1), task(5, 1, { sort: 1 })]);
+  await apply(db, [task(4), task(5, { sort: 1 })]);
   sqlite.prepare("UPDATE items SET title = ? WHERE id = ?").run("a\rb", id(4));
   sqlite.prepare("UPDATE items SET title = ? WHERE id = ?").run("\r=1", id(5));
   const text = await (await get(db, "format=csv&table=items&kind=task")).text();

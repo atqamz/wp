@@ -4,7 +4,7 @@ import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { createAuthenticator } from "../worker/auth.ts";
 import worker, { createWorker } from "../worker/index.ts";
 import type { Bindings } from "../worker/index.ts";
-import { createDb, id, mutation, project, task } from "./sync-db.ts";
+import { createDb, id, mutation, task } from "./sync-db.ts";
 
 const url = (path: string) => `https://wp.example.test${path}`;
 
@@ -78,18 +78,18 @@ test("GET /api/login redirects to /, whatever the query says", async () => {
 
 test("a sync round trip through the router", async () => {
   const { env, sqlite } = setup();
-  const post = await postJson(env, { mutations: [project(1), task(2, 1)] });
+  const post = await postJson(env, { mutations: [task(2)] });
   assert.equal(post.status, 200);
   const result = (await post.json()) as { rev: number; rows: { items: { id: string; updated_by: string; updated_at: string }[] } };
   assert.equal(result.rev, 1);
-  assert.equal(result.rows.items.length, 2);
+  assert.equal(result.rows.items.length, 1);
   assert.equal(result.rows.items[0].updated_by, "b");
   assert.match(result.rows.items[0].updated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.notEqual(result.rows.items[0].updated_at, "2026-10-01T00:00:00Z");
   const pull = await call(env, "/api/sync?since=0");
   const pulled = (await pull.json()) as { rev: number; me: string; changes: { items: unknown[] } };
-  assert.deepEqual([pulled.rev, pulled.me, pulled.changes.items.length], [1, "b", 2]);
-  assert.equal((sqlite.prepare("SELECT count(*) AS n FROM items").get() as { n: number }).n, 2);
+  assert.deepEqual([pulled.rev, pulled.me, pulled.changes.items.length], [1, "b", 1]);
+  assert.equal((sqlite.prepare("SELECT count(*) AS n FROM items").get() as { n: number }).n, 1);
 });
 
 test("a rejection keeps the Rejection shape and the matching http status", async () => {
@@ -152,7 +152,7 @@ test("no response leaks a stack trace or internals", async (t) => {
     [env, "/api/export?format=csv&table=settings"],
     [{ ...env, AUTH_MODE: undefined }, "/api/sync"],
     [failing, "/api/sync"],
-    [failing, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [project(1)] }), headers: JSON_HEADERS }],
+    [failing, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [task(1)] }), headers: JSON_HEADERS }],
     [failing, "/api/export?format=json"],
   ];
   for (const [bindings, path, init] of requests) {
@@ -172,7 +172,7 @@ const rowCount = (sqlite: ReturnType<typeof createDb>["sqlite"]) => (sqlite.prep
 
 const unsafe = async (headers: Record<string, string>) => {
   const { env, sqlite } = setup();
-  const res = await call(env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [project(1)] }), headers });
+  const res = await call(env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [task(1)] }), headers });
   return { res, written: rowCount(sqlite) };
 };
 

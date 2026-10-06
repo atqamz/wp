@@ -20,17 +20,14 @@ type Obj = Record<string, unknown>;
 
 const instant = "2026-10-06T05:00:00Z";
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const projectId = uuid(1);
 const plannedId = uuid(10);
 const stamps = { created_at: instant, updated_at: instant };
 const phone = "+628123456789";
 
-const project = { id: projectId, kind: "project", title: "Plan", status: "active", ...stamps };
 const task = {
   id: uuid(2),
   kind: "task",
   title: "Book a hall",
-  project_id: projectId,
   status: "todo",
   due_on: "2026-12-31",
   done_on: "2026-10-06",
@@ -48,7 +45,6 @@ const vendor = {
   id: uuid(3),
   kind: "vendor",
   title: "Caterer",
-  project_id: projectId,
   status: "option",
   group_key: "food",
   amount: 0,
@@ -59,7 +55,6 @@ const guest = {
   id: uuid(4),
   kind: "guest",
   title: "Guest",
-  project_id: projectId,
   status: "todo",
   who: "a",
   group_key: "friends",
@@ -71,7 +66,6 @@ const planned = {
   id: plannedId,
   entry_type: "planned",
   title: "Hall",
-  project_id: projectId,
   group_key: "reception",
   amount: 5000000,
   ...stamps,
@@ -80,7 +74,6 @@ const payment = {
   id: uuid(11),
   entry_type: "payment",
   title: "Down payment",
-  project_id: projectId,
   budget_id: plannedId,
   status: "due",
   amount: 1000000,
@@ -91,7 +84,7 @@ const payment = {
 };
 const setting = { key: "ceremony_date", value: "2027-06-01", ...stamps };
 
-const items = { project, task, vendor, guest };
+const items = { task, vendor, guest };
 
 const sqlRow = (row: Obj) =>
   Object.fromEntries(
@@ -112,7 +105,6 @@ const insert = (db: DatabaseSync, table: string, row: Obj) => {
 
 const seeded = () => {
   const db = migrated();
-  insert(db, "items", project);
   insert(db, "budget_entries", planned);
   return db;
 };
@@ -180,7 +172,7 @@ test("registry is internally consistent", () => {
       if (v.doneOnStatus) assert.ok(v.status?.includes(v.doneOnStatus), `${label} doneOnStatus`);
     }
   }
-  assert.deepEqual(Object.keys(tables.items.variants), ["project", "task", "vendor", "guest"]);
+  assert.deepEqual(Object.keys(tables.items.variants), ["task", "vendor", "guest"]);
   assert.deepEqual(Object.keys(tables.budget_entries.variants), ["planned", "payment"]);
 });
 
@@ -219,11 +211,7 @@ test("accepts a valid row of every kind and entry type", () => {
 });
 
 test("minimal rows are accepted", () => {
-  assert.deepEqual(validateCreate("items", { id: uuid(20), kind: "project", title: "t", status: "archived", ...stamps }), []);
-  assert.deepEqual(
-    validateCreate("items", { id: uuid(20), kind: "task", title: "t", project_id: projectId, status: "done", ...stamps }),
-    [],
-  );
+  assert.deepEqual(validateCreate("items", { id: uuid(20), kind: "task", title: "t", status: "done", ...stamps }), []);
 });
 
 test("a planned row needs no amount, a payment does", () => {
@@ -247,6 +235,10 @@ test("rejects unknown tables, kinds, entry types and columns", () => {
   rejects("items", { ...task, kind: 5 }, /kind: must be/);
   rejects("budget_entries", { ...payment, entry_type: "refund" }, /entry_type: unknown entry_type/);
   rejects("items", { ...task, colour: "red" }, /colour: unknown column/);
+  rejects("items", { ...task, kind: "project" }, /kind: unknown kind/);
+  rejects("items", { ...task, project_id: uuid(1) }, /project_id: unknown column/);
+  rejects("budget_entries", { ...planned, project_id: uuid(1) }, /project_id: unknown column/);
+  rejects("budget_entries", { ...payment, project_id: uuid(1) }, /project_id: unknown column/);
   rejects("items", JSON.parse('{"__proto__": 1}'), /__proto__: unknown column/);
   rejects("settings", { ...setting, id: uuid(1) }, /id: unknown column/);
 });
@@ -261,17 +253,15 @@ test("requires the columns the table and the kind need", () => {
     ["vendor", vendor],
     ["guest", guest],
   ] as const) {
-    for (const column of ["project_id", "status"]) {
+    for (const column of ["status"]) {
       const { [column]: _removed, ...rest } = row as Obj;
       rejects("items", rest, new RegExp(`${column}: required for kind ${kind}`));
       rejects("items", { ...row, [column]: null }, new RegExp(`${column}: required for kind ${kind}`));
     }
   }
-  const { status: _status, ...project2 } = project;
-  rejects("items", project2, /status: required for kind project/);
   const { group_key: _group, ...planned2 } = planned;
   rejects("budget_entries", planned2, /group_key: required for entry_type planned/);
-  for (const column of ["project_id", "budget_id", "status"]) {
+  for (const column of ["budget_id", "status"]) {
     const { [column]: _removed, ...rest } = payment as Obj;
     rejects("budget_entries", rest, new RegExp(`${column}: required for entry_type payment`));
   }
@@ -285,7 +275,7 @@ test("requires the columns the table and the kind need", () => {
 test("ids are lowercase UUIDs", () => {
   for (const id of ["abc", "", "0190A1B2-C3D4-7E5F-8A6B-7C8D9E0F1A2B", "00000000-0000-0000-8000-000000000001", 5, null])
     rejects("items", { ...task, id }, /id:/);
-  rejects("items", { ...task, project_id: "abc" }, /project_id: must be a lowercase UUID/);
+  rejects("budget_entries", { ...payment, budget_id: "abc" }, /budget_id: must be a lowercase UUID/);
   assert.deepEqual(validateCreate("items", { ...task, id: "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b" }), []);
 });
 
@@ -367,7 +357,6 @@ test("who is a, b or both, and a guest side is a or b", () => {
 
 test("status is checked per kind and per entry type", () => {
   const good = {
-    project: ["active", "archived"],
     task: ["todo", "done"],
     vendor: ["option", "confirmed", "cancelled"],
     guest: ["todo", "sent", "confirmed", "declined"],
@@ -385,8 +374,6 @@ test("status is checked per kind and per entry type", () => {
 });
 
 test("columns a kind does not use must be empty", () => {
-  rejects("items", { ...project, amount: 1 }, /amount: not used by kind project/);
-  rejects("items", { ...project, project_id: projectId }, /project_id: not used by kind project/);
   rejects("items", { ...vendor, qty: 1 }, /qty: not used by kind vendor/);
   rejects("items", { ...vendor, who: "a" }, /who: not used by kind vendor/);
   rejects("items", { ...guest, amount: 1 }, /amount: not used by kind guest/);
@@ -396,7 +383,7 @@ test("columns a kind does not use must be empty", () => {
   rejects("budget_entries", { ...planned, done_on: "2026-11-01" }, /done_on: not used/);
   rejects("budget_entries", { ...planned, budget_id: plannedId }, /budget_id: not used/);
   rejects("budget_entries", { ...payment, vendor_id: uuid(3) }, /vendor_id: not used by entry_type payment/);
-  assert.deepEqual(validateCreate("items", { ...project, amount: null, project_id: null }), []);
+  assert.deepEqual(validateCreate("items", { ...vendor, qty: null }), []);
   assert.deepEqual(validateCreate("budget_entries", { ...planned, vendor_id: uuid(3) }), []);
 });
 
@@ -408,7 +395,6 @@ test("a payment date needs a paid payment", () => {
 
 test("data key sets are exact", () => {
   const keys = (v: { data: object }) => Object.keys(v.data).sort();
-  assert.deepEqual(keys(tables.items.variants.project), []);
   assert.deepEqual(keys(tables.items.variants.task), ["decision", "rules", "start_on"]);
   assert.deepEqual(keys(tables.items.variants.vendor), ["contract_url", "facts", "phone", "pic"]);
   assert.deepEqual(keys(tables.items.variants.guest), ["channel", "import_batch", "phone", "rsvp_qty"]);
@@ -417,8 +403,7 @@ test("data key sets are exact", () => {
 });
 
 test("data holds only the keys the kind allows", () => {
-  assert.deepEqual(validateCreate("items", { ...project, data: null }), []);
-  rejects("items", { ...project, data: { phone } }, /data.phone: unknown key/);
+  assert.deepEqual(validateCreate("items", { ...task, data: null }), []);
   rejects("items", { ...task, data: { phone } }, /data.phone: unknown key/);
   rejects("items", { ...vendor, data: { channel: "print" } }, /data.channel: unknown key/);
   rejects("items", { ...guest, data: { pic: "x" } }, /data.pic: unknown key/);
@@ -656,7 +641,6 @@ test("deleted_at can only be cleared in a patch", () => {
 test("a row cannot be created already deleted", () => {
   const rows: [string, Obj][] = [
     ["items", task],
-    ["items", project],
     ["items", vendor],
     ["items", guest],
     ["budget_entries", planned],
@@ -691,7 +675,7 @@ test("created_at cannot be patched", () => {
 const stored = (row: Obj): Obj => ({ ...row, rev: 3, updated_by: "a" });
 
 test("validateRow accepts stored rows and checks server columns", () => {
-  for (const row of [project, task, vendor, guest]) assert.deepEqual(validateRow("items", stored(row)), []);
+  for (const row of [task, vendor, guest]) assert.deepEqual(validateRow("items", stored(row)), []);
   for (const row of [planned, payment]) assert.deepEqual(validateRow("budget_entries", stored(row)), []);
   assert.deepEqual(validateRow("settings", stored(setting)), []);
   for (const updated_by of ["a", "b", "import", null]) assert.deepEqual(validateRow("items", { ...stored(task), updated_by }), []);
@@ -724,7 +708,6 @@ test("applyPatch merges shallowly and data key by key", () => {
 });
 
 const patches: [string, string, string, Obj, Obj][] = [
-  ["items", "project", "project", project, { status: "archived", title: "Renamed" }],
   ["items", "task", "task", task, { status: "done", done_on: "2026-10-07", amount: null, data: { decision: false, rules: null } }],
   ["items", "vendor", "vendor", vendor, { status: "confirmed", amount: 100, data: { pic: null, phone: "+628111222333" } }],
   ["items", "guest", "guest", guest, { who: "b", qty: 1, data: { channel: "print", rsvp_qty: 2 } }],
@@ -737,8 +720,6 @@ const patches: [string, string, string, Obj, Obj][] = [
 
 const dbFor = (row: Obj) => {
   const db = migrated();
-  if (row.id === project.id) return db;
-  insert(db, "items", project);
   if (row.id !== vendor.id) insert(db, "items", vendor);
   if (row.id !== planned.id) insert(db, "budget_entries", planned);
   return db;
@@ -1014,7 +995,8 @@ test("patch rejects what create rejects, field by field", () => {
   patchRejects("items", "task", { colour: "red" }, /colour: unknown column/);
   patchRejects("items", "task", { updated_by: "a" }, /updated_by: set by the server/);
   patchRejects("items", "task", { rev: 9 }, /rev: set by the server/);
-  patchRejects("items", "project", { amount: 1 }, /amount: not used by kind project/);
+  patchRejects("items", "task", { project_id: uuid(1) }, /project_id: unknown column/);
+  patchRejects("items", "project", { status: "active" }, /kind: unknown kind/);
   patchRejects("items", "vendor", { data: { channel: "print" } }, /data.channel: unknown key/);
   patchRejects("items", "vendor", { data: { phone: "0812" } }, /data.phone/);
   patchRejects("items", "task", { data: null }, /data: must be an object/);
@@ -1028,7 +1010,6 @@ test("patch rejects what create rejects, field by field", () => {
 test("patch cannot clear required fields or change identity", () => {
   patchRejects("items", "task", { title: null }, /title: must not be null/);
   patchRejects("items", "task", { status: null }, /status: required for kind task/);
-  patchRejects("items", "task", { project_id: null }, /project_id: required for kind task/);
   patchRejects("items", "task", { created_at: null }, /created_at: cannot be changed/);
   patchRejects("items", "task", { currency: null }, /currency: must not be null/);
   patchRejects("items", "task", { id: uuid(9) }, /id: cannot be changed/);

@@ -24,18 +24,16 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
     }
     assert.ok(ready, "dev server did not start");
     assert.deepEqual(await (await fetch(`${base}/api/health`)).json(), { ok: true });
-    const projectId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     const create = (table: string, row: Record<string, unknown>) => ({ id: crypto.randomUUID(), table, op: "create", row_id: row.id, patch: row });
     const mutations = [
-      create("items", { id: projectId, kind: "project", title: "Project", status: "active", created_at: now, updated_at: now }),
-      create("items", { id: taskId, kind: "task", project_id: projectId, title: "Task", status: "todo", created_at: now, updated_at: now }),
+      create("items", { id: taskId, kind: "task", title: "Task", status: "todo", created_at: now, updated_at: now }),
     ];
     const post = (body: unknown) => fetch(`${base}/api/sync`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
     const first = await post({ mutations });
     assert.equal(first.status, 200);
     const result = (await first.json()) as { rev: number; rows: { items: { id: string; updated_by: string }[] } };
-    assert.deepEqual(result.rows.items.map((row) => row.id).sort(), [projectId, taskId].sort());
+    assert.deepEqual(result.rows.items.map((row) => row.id), [taskId]);
     assert.equal(result.rows.items[0].updated_by, "a");
     const replay = (await (await post({ mutations })).json()) as { rev: number };
     assert.equal(replay.rev, result.rev);

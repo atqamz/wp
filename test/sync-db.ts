@@ -75,20 +75,16 @@ export const mutation = (op: Mutation["op"], table: Mutation["table"], rowId: st
 
 const stamps = { created_at: CLIENT_STAMP, updated_at: CLIENT_STAMP };
 
-export const project = (n: number, extra: Patch = {}) =>
-  mutation("create", "items", id(n), { id: id(n), kind: "project", title: "Project", status: "active", ...stamps, ...extra });
+export const task = (n: number, extra: Patch = {}) =>
+  mutation("create", "items", id(n), { id: id(n), kind: "task", title: "Task", status: "todo", ...stamps, ...extra });
 
-export const task = (n: number, projectN: number, extra: Patch = {}) =>
-  mutation("create", "items", id(n), { id: id(n), kind: "task", project_id: id(projectN), title: "Task", status: "todo", ...stamps, ...extra });
+export const vendor = (n: number, extra: Patch = {}) =>
+  mutation("create", "items", id(n), { id: id(n), kind: "vendor", title: "Vendor", status: "option", ...stamps, ...extra });
 
-export const vendor = (n: number, projectN: number, extra: Patch = {}) =>
-  mutation("create", "items", id(n), { id: id(n), kind: "vendor", project_id: id(projectN), title: "Vendor", status: "option", ...stamps, ...extra });
-
-export const planned = (n: number, projectN: number, extra: Patch = {}) =>
+export const planned = (n: number, extra: Patch = {}) =>
   mutation("create", "budget_entries", id(n), {
     id: id(n),
     entry_type: "planned",
-    project_id: id(projectN),
     group_key: "reception",
     title: "Planned",
     amount: 1000,
@@ -96,11 +92,10 @@ export const planned = (n: number, projectN: number, extra: Patch = {}) =>
     ...extra,
   });
 
-export const payment = (n: number, plannedN: number, projectN: number, extra: Patch = {}) =>
+export const payment = (n: number, plannedN: number, extra: Patch = {}) =>
   mutation("create", "budget_entries", id(n), {
     id: id(n),
     entry_type: "payment",
-    project_id: id(projectN),
     budget_id: id(plannedN),
     title: "Payment",
     status: "due",

@@ -36,6 +36,38 @@ test("creates the four tables", () => {
   );
 });
 
+const columns = (table: string) =>
+  (migrated().prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as { name: string }[]).map((r) => r.name);
+
+const references = (table: string) =>
+  (migrated().prepare(`SELECT "from", "table" FROM pragma_foreign_key_list('${table}') ORDER BY "from"`).all() as { from: string; table: string }[]).map(
+    (r) => `${r.from} -> ${r.table}`,
+  );
+
+test("items has no project_id and refers only to its parent", () => {
+  assert.deepEqual(columns("items"), [
+    "id", "kind", "parent_id", "title", "status", "group_key", "due_on", "done_on", "amount", "currency", "qty", "who", "note", "data", "sort", "rev", "created_at", "updated_at", "updated_by", "deleted_at",
+  ]);
+  assert.deepEqual(references("items"), ["parent_id -> items"]);
+});
+
+test("budget_entries has no project_id and refers to its planned row and vendor", () => {
+  assert.deepEqual(columns("budget_entries"), [
+    "id", "entry_type", "budget_id", "vendor_id", "title", "group_key", "status", "amount", "currency", "due_on", "done_on", "who", "note", "data", "sort", "rev", "created_at", "updated_at", "updated_by", "deleted_at",
+  ]);
+  assert.deepEqual(references("budget_entries"), ["budget_id -> budget_entries", "vendor_id -> items"]);
+});
+
+test("nothing in the schema mentions a project", () => {
+  const sql = (migrated().prepare("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL").all() as { sql: string }[]).map((r) => r.sql).join("\n");
+  assert.doesNotMatch(sql, /project/i);
+});
+
+test("a project_id column is rejected", () => {
+  assert.throws(() => insert(migrated(), "items", itemRow({ project_id: "p" })), /no column named project_id/);
+  assert.throws(() => insert(migrated(), "budget_entries", plannedRow({ project_id: "p" })), /no column named project_id/);
+});
+
 test("sync_state starts at rev 0", () => {
   assert.deepEqual({ ...migrated().prepare("SELECT id, rev FROM sync_state").get() }, { id: 1, rev: 0 });
 });
