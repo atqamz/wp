@@ -456,7 +456,7 @@ test("a pull whose persist fails neither advances the cursor nor rejects", async
   const b = client(server, "b");
   const real = b.persistence;
   let failing = false;
-  const flaky = { load: () => real.load(), write: async (write: Parameters<typeof real.write>[0]) => {
+  const flaky = { ...real, write: async (write: Parameters<typeof real.write>[0]) => {
     if (failing && write.meta) throw new Error("quota");
     return real.write(write);
   } };

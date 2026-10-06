@@ -11,7 +11,6 @@ export type Meta = { rev: number; me: Side | null; epoch: string | null };
 export type Persisted = { rows: Rows; outbox: Pending[]; meta: Meta };
 
 export type Write = {
-  reset?: true;
   rows?: Partial<Rows>;
   outbox?: { put?: Pending[]; drop?: number[] };
   meta?: Partial<Meta>;
@@ -20,6 +19,7 @@ export type Write = {
 export type Persistence = {
   load(): Promise<Persisted>;
   write(write: Write): Promise<void>;
+  reset(expected: string | null, meta: Meta): Promise<boolean>;
 };
 
 export const assemble = (results: readonly unknown[]): Persisted => {

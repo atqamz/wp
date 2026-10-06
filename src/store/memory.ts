@@ -17,17 +17,19 @@ export const memoryPersistence = (): Persistence => {
       }) as Persisted,
     write: async (write) => {
       const copy = structuredClone(write);
-      if (copy.reset) {
-        for (const table of tableNames) rows.get(table)!.clear();
-        outbox.clear();
-        Object.assign(meta, { rev: 0, me: null, epoch: null });
-      }
       for (const table of tableNames) {
         for (const row of (copy.rows?.[table] ?? []) as Dict[]) rows.get(table)!.set(row[tables[table].key] as string, row);
       }
       for (const entry of copy.outbox?.put ?? []) outbox.set(entry.seq, entry);
       for (const seq of copy.outbox?.drop ?? []) outbox.delete(seq);
       Object.assign(meta, copy.meta);
+    },
+    reset: async (expected, next) => {
+      if (meta.epoch !== expected) return false;
+      for (const table of tableNames) rows.get(table)!.clear();
+      outbox.clear();
+      Object.assign(meta, structuredClone(next));
+      return true;
     },
   };
 };

@@ -2,26 +2,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApi } from "../src/store/api.ts";
 import { memoryPersistence } from "../src/store/memory.ts";
-import type { Persistence, Write } from "../src/store/persistence.ts";
+import type { Persistence } from "../src/store/persistence.ts";
 import { createStore } from "../src/store/store.ts";
 import { createServer } from "./store-server.ts";
 import type { Server } from "./store-server.ts";
 import { idOf, task, titles } from "./store-client.ts";
 
 const recording = (real: Persistence) => {
-  const control = { failing: false, writes: [] as Write[] };
+  const control = { failing: false, resets: 0 };
   const persistence: Persistence = {
     load: () => real.load(),
-    write: async (write) => {
-      if (control.failing && write.reset) throw new Error("QuotaExceededError");
-      control.writes.push(write);
-      return real.write(write);
+    write: (write) => real.write(write),
+    reset: async (expected, meta) => {
+      if (control.failing) throw new Error("QuotaExceededError");
+      const applied = await real.reset(expected, meta);
+      if (applied) control.resets += 1;
+      return applied;
     },
   };
   return { control, persistence };
 };
-
-const resets = (writes: Write[]) => writes.filter((write) => write.reset).length;
 
 const posts = (server: Server) => server.seen.filter((request) => request.method === "POST");
 
@@ -160,7 +160,7 @@ test("the same epoch and a revision at or above the cursor never resets", async 
   await p.store.sync();
   await p.store.sync();
   assert.equal(p.store.getSnapshot().notice, null);
-  assert.equal(resets(p.control.writes), 0);
+  assert.equal(p.control.resets, 0);
   const other = createStore({ persistence: memoryPersistence(), api: createApi(server.as("b")) });
   await other.open();
   idOf(await other.create("items", task("from the other phone")));
@@ -168,7 +168,7 @@ test("the same epoch and a revision at or above the cursor never resets", async 
   idOf(await p.store.create("items", task("from this phone")));
   await p.store.sync();
   assert.equal(p.store.getSnapshot().notice, null);
-  assert.equal(resets(p.control.writes), 0);
+  assert.equal(p.control.resets, 0);
   assert.deepEqual(titles(p.store.getSnapshot().rows.items), ["from the other phone", "from this phone", "task 1", "task 2"]);
   const reopened = await reopen(server, p.real);
   assert.equal(reopened.getSnapshot().notice, null);
@@ -187,7 +187,7 @@ test("an empty phone adopts the epoch without a notice and without a reset", asy
   const server = createServer();
   const p = await phone(server);
   assert.equal(p.store.getSnapshot().notice, null);
-  assert.equal(resets(p.control.writes), 0);
+  assert.equal(p.control.resets, 0);
   assert.equal((await p.real.load()).meta.epoch, server.epoch);
   server.wipe();
   await p.store.sync();
@@ -204,7 +204,7 @@ test("a phone that never synced keeps its first offline writes and sends them", 
   await p.store.sync();
   const snap = p.store.getSnapshot();
   assert.equal(snap.notice, null);
-  assert.equal(resets(p.control.writes), 0);
+  assert.equal(p.control.resets, 0);
   assert.deepEqual([titles(snap.rows.items), snap.pending], [["written before the first sync"], 0]);
   assert.equal((await p.real.load()).meta.epoch, server.epoch);
 });
@@ -231,7 +231,7 @@ test("a failed clear reports a storage problem, adopts nothing and resets on the
   const after = store.getSnapshot();
   assert.deepEqual([after.storage, after.notice, after.pending], ["ok", { discarded: 2 }, 0]);
   assert.deepEqual(titles(after.rows.items), ["server 1", "server 2", "server 3", "server 4"]);
-  assert.equal(resets(p.control.writes), 1);
+  assert.equal(p.control.resets, 1);
   assert.equal((await p.real.load()).meta.epoch, server.epoch);
 });
 
@@ -271,7 +271,7 @@ test("one mismatch resets once, however often the phone syncs, and a dismissed n
   const store = await restart(p, server);
   await store.sync();
   await Promise.all([store.sync(), store.sync()]);
-  assert.equal(resets(p.control.writes), 1);
+  assert.equal(p.control.resets, 1);
   assert.deepEqual(store.getSnapshot().notice, { discarded: 1 });
   store.dismissNotice();
   assert.equal(store.getSnapshot().notice, null);
@@ -279,20 +279,36 @@ test("one mismatch resets once, however often the phone syncs, and a dismissed n
   assert.equal(store.getSnapshot().notice, null);
   const reopened = await reopen(server, p.real);
   assert.equal(reopened.getSnapshot().notice, null);
-  assert.equal(resets(p.control.writes), 1);
+  assert.equal(p.control.resets, 1);
 });
 
-test("a new epoch seen in a push result resets the phone too", async () => {
+test("a new epoch seen in a push result resets the phone and does not call the batch that landed lost", async () => {
   const server = createServer();
   const p = await synced(server);
   server.wipe();
   idOf(await p.store.create("items", task("written after the wipe")));
   await p.store.sync();
   const snap = p.store.getSnapshot();
-  assert.equal(snap.notice?.discarded, 1);
-  assert.equal(resets(p.control.writes), 1);
+  assert.deepEqual(snap.notice, { discarded: 0 });
+  assert.equal(p.control.resets, 1);
   assert.equal((await p.real.load()).meta.epoch, server.epoch);
   assert.deepEqual([snap.pending, snap.link], [0, "online"]);
+  assert.deepEqual(titles(snap.rows.items), ["written after the wipe"]);
+  assert.equal(server.row("items", snap.rows.items[0].id)?.title, "written after the wipe");
+});
+
+test("only the changes that were really discarded are counted when a push result reveals the reset", async () => {
+  const server = createServer();
+  const p = await synced(server);
+  await offlineWrites(p, server, 25);
+  server.wipe();
+  server.control.down = false;
+  await p.store.sync();
+  const snap = p.store.getSnapshot();
+  assert.deepEqual(snap.notice, { discarded: 5 });
+  assert.equal(p.control.resets, 1);
+  assert.equal(snap.rows.items.length, 20);
+  assert.equal(snap.pending, 0);
 });
 
 test("a response without an epoch is retry-later, never a reset", async () => {
@@ -302,4 +318,67 @@ test("a response without an epoch is retry-later, never a reset", async () => {
   const store = createStore({ persistence: p.persistence, api: createApi(bare) });
   await store.open();
   assert.deepEqual([store.getSnapshot().link, store.getSnapshot().notice, titles(store.getSnapshot().rows.items)], ["offline", null, ["task 1", "task 2"]]);
+});
+
+test("a push result without an epoch is retry-later, never a reset", async () => {
+  const server = createServer();
+  const p = await synced(server);
+  await offlineWrites(p, server, 1);
+  server.control.down = false;
+  const real = server.as("a");
+  const bare = async (url: string, init: RequestInit) =>
+    init.method === "POST" ? Response.json({ rev: 99, rows: { items: [], budget_entries: [], settings: [] } }) : real(url, init);
+  const store = createStore({ persistence: p.persistence, api: createApi(bare) });
+  await store.open();
+  const snap = store.getSnapshot();
+  assert.deepEqual([snap.link, snap.notice, snap.pending, p.control.resets], ["offline", null, 1, 0]);
+  assert.deepEqual(titles(snap.rows.items), ["offline 1", "task 1", "task 2"]);
+  const saved = await p.real.load();
+  assert.deepEqual([saved.outbox.length, saved.rows.items.length, saved.meta.epoch], [1, 2, server.epoch]);
+});
+
+test("a stale second tab adopts another tab's reset and never erases that tab's unsent writes", async () => {
+  const server = createServer();
+  const real = memoryPersistence();
+  const { control, persistence } = recording(real);
+  const real1 = server.as("a");
+  let tab1Down = false;
+  const tab1 = createStore({
+    persistence,
+    api: createApi(async (url, init) => {
+      if (tab1Down) throw new TypeError("fetch failed");
+      return real1(url, init);
+    }),
+  });
+  const tab2 = createStore({ persistence, api: createApi(server.as("a")) });
+  await tab1.open();
+  idOf(await tab1.create("items", task("shared before the wipe")));
+  await tab1.sync();
+  await tab2.open();
+  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["shared before the wipe"]);
+
+  server.wipe();
+  await tab1.sync();
+  assert.deepEqual(tab1.getSnapshot().notice, { discarded: 0 });
+  assert.equal(control.resets, 1);
+
+  tab1Down = true;
+  const kept = idOf(await tab1.create("items", task("tab1 pending")));
+  assert.equal((await real.load()).outbox.length, 1);
+
+  await tab2.sync();
+  assert.equal(control.resets, 1);
+  assert.deepEqual(tab2.getSnapshot().notice, { discarded: 0 });
+  assert.equal(tab2.getSnapshot().storage, "ok");
+  assert.equal(tab2.getSnapshot().pending, 1);
+  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["tab1 pending"]);
+  assert.deepEqual((await real.load()).outbox.map((entry) => entry.row_id), [kept]);
+
+  tab1Down = false;
+  await tab1.sync();
+  assert.equal(server.row("items", kept)?.title, "tab1 pending");
+  const reopened = await reopen(server, real);
+  assert.deepEqual(titles(reopened.getSnapshot().rows.items), ["tab1 pending"]);
+  assert.equal(reopened.getSnapshot().notice, null);
+  assert.equal(control.resets, 1);
 });

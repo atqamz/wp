@@ -74,9 +74,10 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     emit();
   };
 
-  const persist = async (write: Write) => {
+  const persisting = async <T>(run: () => Promise<T>): Promise<T> => {
+    let result: T;
     try {
-      await persistence.write(write);
+      result = await run();
     } catch {
       storage = "failed";
       emit();
@@ -86,11 +87,14 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       storage = "ok";
       emit();
     }
+    return result;
   };
+
+  const persist = (write: Write) => persisting(() => persistence.write(write));
 
   const holdsServerData = () => rev > 0 || tableNames.some((table) => base[table].size > 0);
 
-  const reconcile = async (served: { epoch: string; rev: number; me?: Side }): Promise<"same" | "reset"> => {
+  const reconcile = async (served: { epoch: string; rev: number; me?: Side }, landed = 0): Promise<"same" | "reset"> => {
     const differs = epoch === null ? holdsServerData() : epoch !== served.epoch;
     if (!differs && served.rev >= rev) {
       if (epoch === null) {
@@ -99,16 +103,28 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       }
       return "same";
     }
-    const discarded = outbox.length;
+    const discarded = outbox.length - landed;
     const lost = holdsServerData() || discarded > 0;
     const next = served.me ?? me;
-    await persist({ reset: true, meta: { epoch: served.epoch, rev: 0, me: next } });
-    base = toMaps({ items: [], budget_entries: [], settings: [] });
-    outbox = [];
-    rev = 0;
-    me = next;
-    epoch = served.epoch;
-    notice = lost ? { discarded } : null;
+    const cleared = await persisting(() => persistence.reset(epoch, { epoch: served.epoch, rev: 0, me: next }));
+    if (cleared) {
+      base = toMaps({ items: [], budget_entries: [], settings: [] });
+      outbox = [];
+      rev = 0;
+      me = next;
+      epoch = served.epoch;
+      notice = lost ? { discarded } : null;
+    } else {
+      const saved = await persisting(() => persistence.load());
+      const gone = outbox.filter((entry) => !saved.outbox.some((kept) => kept.seq === entry.seq)).length - landed;
+      base = toMaps(saved.rows);
+      outbox = saved.outbox.sort((a, b) => a.seq - b.seq);
+      nextSeq = Math.max(nextSeq, outbox.reduce((top, entry) => Math.max(top, entry.seq), 0) + 1);
+      rev = saved.meta.rev;
+      me = saved.meta.me ?? me;
+      epoch = saved.meta.epoch;
+      notice = lost ? { discarded: Math.max(gone, 0) } : null;
+    }
     emit();
     return "reset";
   };
@@ -144,7 +160,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       const batch = takeBatch(queue);
       const res = await api.push(batch.map(wire));
       if (res.kind === "ok") {
-        if ((await reconcile(res.body)) === "reset") continue;
+        if ((await reconcile(res.body, batch.length)) === "reset") continue;
         const rows = newer(base, res.body.rows);
         await persist({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
         absorb(base, rows);

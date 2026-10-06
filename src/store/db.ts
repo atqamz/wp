@@ -39,9 +39,21 @@ export const indexedDbPersistence = (name = "wp"): Persistence => {
       ];
       return assemble(await Promise.all(reads.map(wait)));
     },
-    write: async ({ reset, rows, outbox, meta }) => {
+    reset: async (expected, next) => {
       const tx = (await open()).transaction(stores, "readwrite");
-      if (reset) for (const name of stores) tx.objectStore(name).clear();
+      const current = tx.objectStore("meta").get("epoch");
+      let applied = false;
+      current.onsuccess = () => {
+        if ((current.result ?? null) !== expected) return;
+        applied = true;
+        for (const name of stores) tx.objectStore(name).clear();
+        for (const [key, value] of Object.entries(next)) tx.objectStore("meta").put(value, key);
+      };
+      await finished(tx);
+      return applied;
+    },
+    write: async ({ rows, outbox, meta }) => {
+      const tx = (await open()).transaction(stores, "readwrite");
       for (const table of tableNames) for (const row of rows?.[table] ?? []) tx.objectStore(table).put(row);
       for (const entry of outbox?.put ?? []) tx.objectStore("outbox").put(entry);
       for (const seq of outbox?.drop ?? []) tx.objectStore("outbox").delete(seq);
