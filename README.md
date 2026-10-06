@@ -5,7 +5,7 @@ React + TypeScript SPA served by a Cloudflare Worker with D1.
 
 ## Run locally
 
-The newest Node release (`.node-version` is `latest`). Locally run `mise install node@latest` to follow it; CI resolves it from nodejs.org on every run.
+CI uses the newest Node release: `.node-version` is `latest`, and `actions/setup-node` resolves it from nodejs.org on every run. mise ignores `.node-version` by default; run `mise settings add idiomatic_version_file_enable_tools node` to read it, or `mise use node@latest`. `latest` means the newest installed version, so run `mise install node@latest` to move it forward; a local machine can lag CI until you do.
 
 ```sh
 npm ci
