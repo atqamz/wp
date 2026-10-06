@@ -157,7 +157,6 @@ export const text = {
     table: { items: "item", budget_entries: "budget entry", settings: "setting" },
   },
   settings: {
-    project: "Project name",
     ceremonyDate: "Akad date (marriage contract ceremony)",
     timezone: "Time zone",
     zoneUnsupported: "This phone does not support the saved time zone, so dates use the default zone. You can still edit it.",
@@ -179,11 +178,5 @@ export const text = {
     title: "Can't reach the server yet",
     body: "This phone has not loaded your plan yet. Check your connection and try again. Nothing is created until the plan has loaded once.",
     retry: "Try again",
-  },
-  firstRun: {
-    title: "What are you planning?",
-    label: "Project name",
-    placeholder: "Our plan",
-    submit: "Start",
   },
 };

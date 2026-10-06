@@ -3,7 +3,6 @@ const technical = new Set([
   "key",
   "kind",
   "entry_type",
-  "project_id",
   "budget_id",
   "vendor_id",
   "parent_id",

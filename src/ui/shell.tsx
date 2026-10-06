@@ -12,11 +12,11 @@ const tabs: { section: string; icon: IconName; label: string }[] = [
   { section: "guests", icon: "guests", label: text.nav.guests },
 ];
 
-export function Shell({ title, section, children }: { title: string; section: string; children: ReactNode }) {
+export function Shell({ section, children }: { section: string; children: ReactNode }) {
   return (
     <>
       <header className="bar">
-        <span className="project">{title}</span>
+        <span className="app-title">{text.appName}</span>
         <SyncBadge />
         <a className="icon-link" href="#/settings" aria-label={text.nav.settings} aria-current={section === "settings" ? "page" : undefined}>
           <Icon name="settings" />

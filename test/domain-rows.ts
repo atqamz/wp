@@ -13,7 +13,6 @@ const id = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, "0")}
 
 export const item = (fields: Partial<ItemRow>): ItemRow => ({
   id: id(),
-  project_id: null,
   kind: "task",
   parent_id: null,
   title: "Item",
@@ -34,7 +33,6 @@ export const item = (fields: Partial<ItemRow>): ItemRow => ({
 
 export const entry = (fields: Partial<BudgetEntryRow>): BudgetEntryRow => ({
   id: id(),
-  project_id: null,
   entry_type: "planned",
   budget_id: null,
   vendor_id: null,

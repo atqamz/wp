@@ -22,7 +22,6 @@ export type Seen = {
 };
 
 const references = [
-  ["project_id", "items", "kind", "project"],
   ["vendor_id", "items", "kind", "vendor"],
   ["budget_id", "budget_entries", "entry_type", "planned"],
 ] as const;
@@ -59,8 +58,6 @@ export const createServer = () => {
       const target = draft[targetTable].get(row[column] as string);
       if (!target || target.deleted_at !== null || target[kindColumn] !== kind) {
         errors.push(`${column}: must point at a live ${kind}`);
-      } else if (column !== "project_id" && target.project_id !== row.project_id) {
-        errors.push(`${column}: must belong to the same project`);
       } else if (column === "budget_id" && target.currency !== row.currency) {
         errors.push("currency: must equal the planned row's currency");
       }
@@ -94,7 +91,6 @@ export const createServer = () => {
     }
     if (!row) return { status: 404, errors: ["row_id: no such row"] };
     if (mutation.op === "delete") {
-      if (table === "items" && row.kind === "project") return { status: 409, errors: ["row_id: a project is archived, never deleted"] };
       if (row.deleted_at === null) write({ ...row, deleted_at: at });
       return null;
     }

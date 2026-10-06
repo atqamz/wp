@@ -5,7 +5,6 @@ import type { Totals } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
 import { sortBefore } from "../domain/order.ts";
 import { useBusy } from "../hooks/use-busy.ts";
-import { useProject } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
 import { formatMoney } from "../ui/format.ts";
@@ -51,7 +50,6 @@ function Summary({ totals, lines }: { totals: Totals; lines: number }) {
 
 export function Budget() {
   const entries = useTable("budget_entries");
-  const project = useProject();
   const budget = useMemo(() => budgetOf(entries), [entries]);
   const [errors, setErrors] = useState<string[]>([]);
   const { busy, once } = useBusy();
@@ -63,14 +61,13 @@ export function Budget() {
     const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
     const amount = parseField("int", String(data.get("amount") ?? ""));
-    if (title === "" || !project) return;
+    if (title === "") return;
     if (!amount.ok) return setErrors([text.invalid.int]);
     return once(async () => {
       const result = await actions.create("budget_entries", {
         entry_type: "planned",
         title,
         group_key: String(data.get("group_key")),
-        project_id: project.id,
         amount: amount.value as number | null,
         sort: sortBefore(entries.filter((entry) => entry.entry_type === "planned")),
       });

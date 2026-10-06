@@ -10,13 +10,11 @@ import type { ViewName } from "../src/ui/registry.ts";
 
 const healthy: Health = { storage: "ok", link: "online", rejected: 0, pending: 0 };
 
-test("first run is offered only after the server has been heard and there is still no project", () => {
-  assert.equal(screenFor(false, false, false), "loading");
-  assert.equal(screenFor(false, true, true), "loading");
-  assert.equal(screenFor(true, false, false), "connect");
-  assert.equal(screenFor(true, true, false), "first-run");
-  assert.equal(screenFor(true, true, true), "app");
-  assert.equal(screenFor(true, false, true), "app");
+test("the app opens once the server has been heard, with or without data, and never offers creation before that", () => {
+  assert.equal(screenFor(false, false), "loading");
+  assert.equal(screenFor(false, true), "loading");
+  assert.equal(screenFor(true, false), "connect");
+  assert.equal(screenFor(true, true), "app");
 });
 
 test("the badge shows the worst state first: storage, login, rejected, offline, pending, synced", () => {
@@ -42,7 +40,6 @@ test("parked values: data keys are flattened, technical columns are hidden, a cl
     changedValues({
       id: "x",
       kind: "task",
-      project_id: "p",
       budget_id: "b",
       currency: "IDR",
       sort: 0,

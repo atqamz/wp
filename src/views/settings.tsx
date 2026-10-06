@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { zoneSupported } from "../domain/dates.ts";
 import { DEFAULT_ZONE, settingKeys } from "../domain/settings.ts";
-import { useProject, useSettings } from "../hooks/use-plan.ts";
+import { useSettings } from "../hooks/use-plan.ts";
 import { useBusy } from "../hooks/use-busy.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
@@ -22,7 +22,6 @@ const exports = [
 ];
 
 export function Settings() {
-  const project = useProject();
   const settings = useSettings();
   const { me } = useSnapshot();
   const [failure, setFailure] = useState<string[]>([]);
@@ -30,7 +29,6 @@ export function Settings() {
   const { busy, once } = useBusy();
 
   const [initial] = useState<Record<string, string>>(() => ({
-    title: project?.title ?? "",
     [settingKeys.ceremonyDate]: settings.ceremonyDate ?? "",
     [settingKeys.timezone]: settings.timezone,
     [settingKeys.partnerA]: settings.partnerA ?? "",
@@ -38,7 +36,6 @@ export function Settings() {
   }));
 
   const fields: Control[] = [
-    { name: "title", label: text.settings.project, type: "text", value: initial.title },
     { name: settingKeys.ceremonyDate, label: text.settings.ceremonyDate, type: "date", value: initial[settingKeys.ceremonyDate] },
     {
       name: settingKeys.timezone,
@@ -62,11 +59,7 @@ export function Settings() {
     for (const control of controls) {
       const value = String(form.get(control.name) ?? "").trim();
       if (value === "" || value === initial[control.name]) continue;
-      const result =
-        control.name === "title" && project
-          ? await actions.update("items", project.id, { title: value })
-          : await actions.setSetting(control.name, value);
-      errors.push(...failureOf(result));
+      errors.push(...failureOf(await actions.setSetting(control.name, value)));
     }
     setFailure(errors);
     setSaved(errors.length === 0);

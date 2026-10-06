@@ -2,7 +2,6 @@ import { StrictMode, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
-import { useProject } from "./hooks/use-plan.ts";
 import { useRoute } from "./router.ts";
 import { ErrorBoundary } from "./ui/error-boundary.tsx";
 import { Shell } from "./ui/shell.tsx";
@@ -12,7 +11,6 @@ import { Title } from "./ui/title.tsx";
 import { Budget } from "./views/budget.tsx";
 import { BudgetLine } from "./views/budget-line.tsx";
 import { Connect } from "./views/connect.tsx";
-import { FirstRun } from "./views/first-run.tsx";
 import { GenericItem } from "./views/generic-item.tsx";
 import { GenericList } from "./views/generic-list.tsx";
 import { Home } from "./views/home.tsx";
@@ -42,7 +40,6 @@ function Page({ section, id }: { section: string; id?: string }) {
 
 function App() {
   const { ready, me } = useSnapshot();
-  const project = useProject();
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
   const first = useRef(true);
@@ -60,12 +57,11 @@ function App() {
     document.title = heading ? `${heading} · ${text.appName}` : text.appName;
   });
 
-  const screen = screenFor(ready, me !== null, project !== undefined);
+  const screen = screenFor(ready, me !== null);
   if (screen === "loading") return <p className="splash" role="status">{text.loading}</p>;
   if (screen === "connect") return <Connect />;
-  if (screen === "first-run") return <FirstRun />;
   return (
-    <Shell title={project.title} section={section === "payments" ? "budget" : section}>
+    <Shell section={section === "payments" ? "budget" : section}>
       <Page section={section} id={id} />
     </Shell>
   );
