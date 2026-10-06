@@ -33,8 +33,10 @@ export type SyncResult = {
 export type Rejection = {
   status: number;
   errors: string[];
-  index: number;
+  index?: number;
 };
+
+export type ErrorBody = { error: string };
 
 export const MAX_MUTATIONS = 20;
 
