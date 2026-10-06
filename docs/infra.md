@@ -790,6 +790,8 @@ Do M5, M7 and M8 before the first push to `main` that contains `ci.yml`: that pu
 7. Does Partner B use Android or iPhone? (from the brainstorm; decides the test order in M9)
 8. Do we need periodic D1 exports? If yes, where to (not a public repo artifact)?
 
+**Answered on 6 October 2026:** item 1: `atqamz.com` is in an account with one member, no other organisation shares it (scenario A); item 2: the account already has a Zero Trust organisation, so no new onboarding is needed; item 7: one partner uses Android and the other an iPhone.
+
 **Settled by the operator (no longer open):** hand-written service worker (§5.7); hash routing (§5.1); `en-ID` for `Intl` with the `en-GB` fallback noted in `docs/features.md` §5.7; every identifier in the D1 schema is English; the data model is one generic `items` table plus one `budget_entries` table (`docs/brainstorm.md` §7, `docs/features.md` §7.2).
 
 ### 9.3 What this revision supersedes

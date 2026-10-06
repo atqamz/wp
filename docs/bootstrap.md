@@ -10,14 +10,16 @@ Written 6 October 2026. This is the operator's checklist for steps M1 to M8 of [
 
 | Step | What | Who | Time (estimate) | Blocks | Done |
 |---|---|---|---|---|---|
-| [M1](#m1-find-the-cloudflare-account) | Find the account that holds `atqamz.com`, and who else is in it | Operator | 20 min | Everything: it decides the account for M2 to M8 and [infra §2.6](infra.md#26-boundary-recommendation) | [ ] |
-| [M2](#m2-zero-trust-free-onboarding) | Zero Trust Free onboarding (team name, plan, payment details) | Operator | 10 min | M3 (team name is in the redirect URI), M6, M7 | [ ] |
+| [M1](#m1-find-the-cloudflare-account) | Find the account that holds `atqamz.com`, and who else is in it | Supervisor, via `npx cf` | 20 min | Everything: it decides the account for M2 to M8 and [infra §2.6](infra.md#26-boundary-recommendation) | [x] |
+| [M2](#m2-zero-trust-free-onboarding) | Zero Trust Free onboarding (team name, plan, payment details) | Supervisor, via `npx cf` | 10 min | M3 (team name is in the redirect URI), M6, M7 | [x] |
 | [M3](#m3-google-oauth-client) | Google Cloud project, consent screen, Web OAuth client, `google` identity provider | Operator (owner of the Google Cloud project) | 30 min | M6 (the Access app pins this identity provider) | [ ] |
-| [M4](#m4-cloudflare-api-tokens) | Create the tokens `wp-ci` and `wp-access-setup` | Operator | 20 min | M5, M6, M7, M8 | [ ] |
-| [M5](#m5-create-the-d1-database) | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` | Operator | 10 min | The CI migration step (A2) | [ ] |
-| [M6](#m6-create-the-access-app-and-note-the-aud) | Create the Access app and policy, note the AUD, revoke `wp-access-setup` | Operator | 20 min | M7 (needs the AUD) | [ ] |
-| [M7](#m7-set-the-three-worker-secrets) | Set the three Worker secrets | Operator | 10 min | The first deploy (`secrets.required`) | [ ] |
-| [M8](#m8-set-the-github-actions-secrets) | Set the two GitHub Actions secrets | Operator | 5 min | The first deploy from CI | [ ] |
+| [M4](#m4-cloudflare-api-tokens) | Create the tokens `wp-ci` and `wp-access-setup` | Supervisor, via `npx cf` | 20 min | M5, M6, M7, M8 | [ ] |
+| [M5](#m5-create-the-d1-database) | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` | Supervisor, via `npx cf` | 10 min | The CI migration step (A2) | [ ] |
+| [M6](#m6-create-the-access-app-and-note-the-aud) | Create the Access app and policy, note the AUD, revoke `wp-access-setup` | Supervisor, via `npx cf` | 20 min | M7 (needs the AUD) | [ ] |
+| [M7](#m7-set-the-three-worker-secrets) | Set the three Worker secrets | Supervisor, via `npx cf` | 10 min | The first deploy (`secrets.required`) | [ ] |
+| [M8](#m8-set-the-github-actions-secrets) | Set the two GitHub Actions secrets | Supervisor, via `npx cf` | 5 min | The first deploy from CI | [ ] |
+
+**Status, 6 October 2026.** The operator delegated all Cloudflare work to the supervisor, who runs it with `npx cf` (the Cloudflare CLI, already logged in as the operator through OAuth). M1 is done: `atqamz.com` is active on the Free plan in an account with one member, so no other organisation shares it ([infra §2.6](infra.md#26-boundary-recommendation) scenario A). M2 is done: the account already has a Zero Trust organisation; its only identity provider is One-time PIN, and there are no Access applications yet. M3 (the Google OAuth client) stays with the operator and no longer blocks the first deploy: the first deploy can pin One-time PIN and switch to Google later by changing only the Access application's identity provider, because the Worker verifies the same Access JWT either way (expected; check it in M9).
 
 Out of scope here: M0 (scaffold the app) is code work; M9 (test on two phones) needs a deployed app; M10 is done (see [infra §7.5](infra.md#75-adding-wp-to-atqamzgithub-later)).
 
