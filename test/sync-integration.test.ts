@@ -31,7 +31,7 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
       create("items", { id: projectId, kind: "project", title: "Project", status: "active", created_at: now, updated_at: now }),
       create("items", { id: taskId, kind: "task", project_id: projectId, title: "Task", status: "todo", created_at: now, updated_at: now }),
     ];
-    const post = (body: unknown) => fetch(`${base}/api/sync`, { method: "POST", body: JSON.stringify(body) });
+    const post = (body: unknown) => fetch(`${base}/api/sync`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
     const first = await post({ mutations });
     assert.equal(first.status, 200);
     const result = (await first.json()) as { rev: number; rows: { items: { id: string; updated_by: string }[] } };
@@ -45,6 +45,9 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
     const rejected = await post({ mutations: [{ id: crypto.randomUUID(), table: "items", op: "delete", row_id: crypto.randomUUID(), patch: {} }] });
     assert.equal(rejected.status, 404);
     assert.equal((await fetch(`${base}/api/sync`, { method: "PUT" })).status, 405);
+    assert.equal((await fetch(`${base}/api/sync`, { method: "POST", body: JSON.stringify({ mutations }) })).status, 415);
+    const foreign = await fetch(`${base}/api/sync`, { method: "POST", body: "{}", headers: { "content-type": "application/json", origin: "https://evil.example.test" } });
+    assert.equal(foreign.status, 403);
   } finally {
     server.kill();
     if (!exited) await new Promise((resolve) => server.once("exit", resolve));

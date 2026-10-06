@@ -17,6 +17,11 @@ const setup = (extra: Partial<Bindings> = {}) => {
 
 const call = (env: Bindings, path: string, init?: RequestInit) => worker.fetch(new Request(url(path), init), env);
 
+const JSON_HEADERS = { "content-type": "application/json" };
+
+const postJson = (env: Bindings, body: unknown, headers: Record<string, string> = {}) =>
+  call(env, "/api/sync", { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers: { ...JSON_HEADERS, ...headers } });
+
 const LEAK = /\bat .+[(:]|Error:|node_modules|\.ts:\d+|SQLITE|\/home\//;
 
 test("GET /api/health returns ok for an authenticated caller", async () => {
@@ -62,17 +67,18 @@ test("wrong methods are 405 with Allow", async () => {
   }
 });
 
-test("GET /api/login redirects to /", async () => {
+test("GET /api/login redirects to /, whatever the query says", async () => {
   const { env } = setup();
-  const res = await call(env, "/api/login", { redirect: "manual" });
-  assert.equal(res.status, 302);
-  assert.equal(res.headers.get("location"), "/");
+  for (const query of ["", "?next=https://evil.example.test", "?redirect=//evil.example.test"]) {
+    const res = await call(env, `/api/login${query}`, { redirect: "manual" });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get("location"), "/");
+  }
 });
 
 test("a sync round trip through the router", async () => {
   const { env, sqlite } = setup();
-  const body = JSON.stringify({ mutations: [project(1), task(2, 1)] });
-  const post = await call(env, "/api/sync", { method: "POST", body });
+  const post = await postJson(env, { mutations: [project(1), task(2, 1)] });
   assert.equal(post.status, 200);
   const result = (await post.json()) as { rev: number; rows: { items: { id: string; updated_by: string; updated_at: string }[] } };
   assert.equal(result.rev, 1);
@@ -88,7 +94,7 @@ test("a sync round trip through the router", async () => {
 
 test("a rejection keeps the Rejection shape and the matching http status", async () => {
   const { env } = setup();
-  const res = await call(env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [mutation("update", "items", id(9), { title: "x" })] }) });
+  const res = await postJson(env, { mutations: [mutation("update", "items", id(9), { title: "x" })] });
   assert.equal(res.status, 404);
   assert.deepEqual(await res.json(), { status: 404, errors: ["row_id: no such row"], index: 0 });
 });
@@ -137,14 +143,16 @@ test("no response leaks a stack trace or internals", async (t) => {
     [env, "/api/nope"],
     [env, "/api/sync", { method: "DELETE" }],
     [env, "/api/sync?since=zzz"],
-    [env, "/api/sync", { method: "POST", body: "{" }],
-    [env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [{}] }) }],
-    [env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [mutation("update", "items", id(9))] }) }],
+    [env, "/api/sync", { method: "POST", body: "{", headers: JSON_HEADERS }],
+    [env, "/api/sync", { method: "POST", body: "{}" }],
+    [env, "/api/sync", { method: "POST", body: "{}", headers: { ...JSON_HEADERS, origin: "https://evil.example.test" } }],
+    [env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [{}] }), headers: JSON_HEADERS }],
+    [env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [mutation("update", "items", id(9))] }), headers: JSON_HEADERS }],
     [env, "/api/export?format=xml"],
     [env, "/api/export?format=csv&table=settings"],
     [{ ...env, AUTH_MODE: undefined }, "/api/sync"],
     [failing, "/api/sync"],
-    [failing, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [project(1)] }) }],
+    [failing, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [project(1)] }), headers: JSON_HEADERS }],
     [failing, "/api/export?format=json"],
   ];
   for (const [bindings, path, init] of requests) {
@@ -158,4 +166,114 @@ test("no response leaks a stack trace or internals", async (t) => {
   assert.deepEqual(await res.json(), { error: "internal" });
   assert.ok(log.mock.callCount() > 0);
   assert.doesNotMatch(JSON.stringify(log.mock.calls.map((c) => c.arguments)), /SQLITE|someone|locked/);
+});
+
+const rowCount = (sqlite: ReturnType<typeof createDb>["sqlite"]) => (sqlite.prepare("SELECT count(*) AS n FROM items").get() as { n: number }).n;
+
+const unsafe = async (headers: Record<string, string>) => {
+  const { env, sqlite } = setup();
+  const res = await call(env, "/api/sync", { method: "POST", body: JSON.stringify({ mutations: [project(1)] }), headers });
+  return { res, written: rowCount(sqlite) };
+};
+
+for (const [name, headers] of [
+  ["text/plain", { "content-type": "text/plain;charset=UTF-8" }],
+  ["a missing content type", {}],
+  ["a url-encoded form", { "content-type": "application/x-www-form-urlencoded" }],
+  ["a multipart form", { "content-type": "multipart/form-data; boundary=x" }],
+  ["a lookalike json type", { "content-type": "application/jsonp" }],
+  ["a json suffix type", { "content-type": "application/vnd.api+json" }],
+  ["json only as a parameter", { "content-type": "text/plain; x=application/json" }],
+] as [string, Record<string, string>][]) {
+  test(`POST /api/sync with ${name} is 415 and writes nothing`, async () => {
+    const { res, written } = await unsafe(headers);
+    assert.equal(res.status, 415);
+    assert.deepEqual(await res.json(), { error: "unsupported_media_type" });
+    assert.equal(written, 0);
+  });
+}
+
+for (const type of ["application/json", "application/json; charset=utf-8", "Application/JSON;charset=UTF-8", "application/json ; charset=utf-8"]) {
+  test(`POST /api/sync accepts ${type}`, async () => {
+    const { res, written } = await unsafe({ "content-type": type });
+    assert.equal(res.status, 200);
+    assert.equal(written, 1);
+  });
+}
+
+for (const [name, headers] of [
+  ["a cross-origin Origin", { origin: "https://evil.example.test" }],
+  ["a sibling subdomain Origin", { origin: "https://other.example.test" }],
+  ["the same host over http", { origin: "http://wp.example.test" }],
+  ["the same host on another port", { origin: "https://wp.example.test:8443" }],
+  ["a null Origin", { origin: "null" }],
+  ["an empty Origin", { origin: "" }],
+  ["Sec-Fetch-Site cross-site", { "sec-fetch-site": "cross-site" }],
+  ["Sec-Fetch-Site same-site", { "sec-fetch-site": "same-site" }],
+  ["an unknown Sec-Fetch-Site", { "sec-fetch-site": "whatever" }],
+  ["an empty Sec-Fetch-Site", { "sec-fetch-site": "" }],
+  ["a matching Origin but Sec-Fetch-Site cross-site", { origin: "https://wp.example.test", "sec-fetch-site": "cross-site" }],
+  ["a cross-origin Origin but Sec-Fetch-Site same-origin", { origin: "https://evil.example.test", "sec-fetch-site": "same-origin" }],
+] as [string, Record<string, string>][]) {
+  test(`POST /api/sync with ${name} is 403 and writes nothing`, async () => {
+    const { res, written } = await unsafe({ ...JSON_HEADERS, ...headers });
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: "forbidden" });
+    assert.equal(written, 0);
+  });
+}
+
+for (const [name, headers] of [
+  ["no Origin and no Sec-Fetch-Site", {}],
+  ["the same-origin Origin", { origin: "https://wp.example.test" }],
+  ["Sec-Fetch-Site same-origin", { "sec-fetch-site": "same-origin" }],
+  ["Sec-Fetch-Site none", { "sec-fetch-site": "none" }],
+  ["both same-origin signals", { origin: "https://wp.example.test", "sec-fetch-site": "same-origin" }],
+] as [string, Record<string, string>][]) {
+  test(`POST /api/sync with ${name} is accepted`, async () => {
+    const { res, written } = await unsafe({ ...JSON_HEADERS, ...headers });
+    assert.equal(res.status, 200);
+    assert.equal(written, 1);
+  });
+}
+
+test("the unsafe-request checks run after authentication and before parsing", async () => {
+  const { env } = setup({ AUTH_MODE: undefined });
+  const res = await call(env, "/api/sync", { method: "POST", body: "{", headers: { origin: "https://evil.example.test" } });
+  assert.equal(res.status, 401);
+  const authed = setup().env;
+  assert.equal((await call(authed, "/api/sync", { method: "POST", body: "{", headers: { origin: "https://evil.example.test", ...JSON_HEADERS } })).status, 403);
+  assert.equal((await call(authed, "/api/sync", { method: "POST", body: "{", headers: JSON_HEADERS })).status, 400);
+});
+
+test("GET routes ignore Origin and Sec-Fetch-Site and need no content type", async () => {
+  const { env } = setup();
+  const foreign = { origin: "https://evil.example.test", "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors" };
+  for (const path of ["/api/health", "/api/sync", "/api/sync?since=0", "/api/export?format=json", "/api/export?format=csv&table=items&kind=task"]) {
+    assert.equal((await call(env, path, { headers: foreign })).status, 200, path);
+  }
+  assert.equal((await call(env, "/api/login", { headers: foreign, redirect: "manual" })).status, 302);
+});
+
+test("wrong methods stay 405 whatever the content type or Origin", async () => {
+  const { env } = setup();
+  const res = await call(env, "/api/health", { method: "POST", headers: { origin: "https://evil.example.test" } });
+  assert.equal(res.status, 405);
+});
+
+test("no response carries CORS headers", async () => {
+  const { env } = setup();
+  const anonymous = { ...env, AUTH_MODE: undefined };
+  const requests: [Bindings, string, RequestInit?][] = [
+    [env, "/api/sync", { headers: { origin: "https://evil.example.test" } }],
+    [env, "/api/sync", { method: "OPTIONS", headers: { origin: "https://evil.example.test", "access-control-request-method": "POST" } }],
+    [env, "/api/sync", { method: "POST", body: "{}", headers: { ...JSON_HEADERS, origin: "https://evil.example.test" } }],
+    [env, "/api/sync", { method: "POST", body: "{}", headers: { origin: "https://evil.example.test" } }],
+    [env, "/api/health", { headers: { origin: "https://wp.example.test" } }],
+    [anonymous, "/api/sync", { method: "OPTIONS", headers: { origin: "https://evil.example.test" } }],
+  ];
+  for (const [bindings, path, init] of requests) {
+    const res = await call(bindings, path, init);
+    assert.deepEqual([...res.headers.keys()].filter((name) => name.startsWith("access-control-")), [], `${init?.method ?? "GET"} ${path}`);
+  }
 });
