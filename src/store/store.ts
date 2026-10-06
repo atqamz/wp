@@ -5,7 +5,7 @@ import type { Patch, Row, TableName } from "../../shared/tables.ts";
 import { validateChange, validateMutation } from "../../shared/validate.ts";
 import type { Api } from "./api.ts";
 import { absorb, changedFields, live, newer, overlay, takeBatch, toMaps, wire } from "./outbox.ts";
-import type { Pending, Persistence, Rows } from "./persistence.ts";
+import type { Pending, Persistence, Rows, Write } from "./persistence.ts";
 
 export type Link = "online" | "offline" | "expired";
 
@@ -16,9 +16,10 @@ export type Snapshot = {
   pending: number;
   rejected: Pending[];
   link: Link;
+  storage: "ok" | "failed";
 };
 
-export type Written = { ok: true; id: string } | { ok: false; errors: string[] };
+export type Written = { ok: true; id: string } | { ok: false; errors: string[]; storage?: true };
 
 export type Draft<T extends TableName> = Partial<
   Omit<Row<T>, "id" | "rev" | "updated_by" | "deleted_at" | "created_at" | "updated_at">
@@ -28,6 +29,10 @@ type Dict = Record<string, unknown>;
 
 const notFound: Written = { ok: false, errors: ["row: not found"] };
 
+const unsaved: Written = { ok: false, errors: [], storage: true };
+
+class StorageFailure extends Error {}
+
 export const createStore = ({ persistence, api }: { persistence: Persistence; api: Api }) => {
   let base = toMaps({ items: [], budget_entries: [], settings: [] });
   let view = base;
@@ -35,12 +40,13 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   let rev = 0;
   let me: Side | null = null;
   let link: Link = "online";
+  let storage: Snapshot["storage"] = "ok";
   let loaded = false;
   let attempted = false;
   let nextSeq = 1;
   let running: Promise<void> | null = null;
   let again = false;
-  let snapshot: Snapshot = { ready: false, me, rows: live(base), pending: 0, rejected: [], link };
+  let snapshot: Snapshot = { ready: false, me, rows: live(base), pending: 0, rejected: [], link, storage };
   const listeners = new Set<() => void>();
 
   const emit = () => {
@@ -53,6 +59,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       pending: sendable.length,
       rejected: outbox.filter((entry) => entry.rejected),
       link,
+      storage,
     };
     for (const listener of listeners) listener();
   };
@@ -60,6 +67,20 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   const failed = (kind: "offline" | "expired") => {
     link = kind;
     emit();
+  };
+
+  const persist = async (write: Write) => {
+    try {
+      await persistence.write(write);
+    } catch {
+      storage = "failed";
+      emit();
+      throw new StorageFailure();
+    }
+    if (storage === "failed") {
+      storage = "ok";
+      emit();
+    }
   };
 
   const cycle = async () => {
@@ -70,18 +91,18 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       const res = await api.push(batch.map(wire));
       if (res.kind === "ok") {
         const rows = newer(base, res.body.rows);
-        await persistence.write({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
+        await persist({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
         absorb(base, rows);
         outbox = outbox.filter((entry) => !batch.includes(entry));
         link = "online";
         emit();
       } else if (res.kind === "rejected") {
-        const index = res.rejection.index ?? 0;
-        const culprit = batch[Number.isInteger(index) && index >= 0 && index < batch.length ? index : 0];
-        const parked = { ...culprit, rejected: res.rejection.errors.map(String) };
-        outbox = outbox.map((entry) => (entry === culprit ? parked : entry));
+        const { index } = res.rejection;
+        const named = typeof index === "number" && Number.isInteger(index) && index >= 0 && index < batch.length;
+        const parked = (named ? [batch[index]] : batch).map((entry) => ({ ...entry, rejected: res.rejection.errors.map(String) }));
+        await persist({ outbox: { put: parked } });
+        outbox = outbox.map((entry) => parked.find((candidate) => candidate.seq === entry.seq) ?? entry);
         link = "online";
-        await persistence.write({ outbox: { put: [parked] } });
         emit();
       } else {
         return failed(res.kind);
@@ -91,7 +112,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     if (res.kind !== "ok") return failed(res.kind);
     const rows = newer(base, res.body.changes);
     const next = Math.max(rev, res.body.rev);
-    await persistence.write({ rows, meta: { rev: next, me: res.body.me } });
+    await persist({ rows, meta: { rev: next, me: res.body.me } });
     absorb(base, rows);
     rev = next;
     me = res.body.me;
@@ -109,7 +130,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       try {
         do {
           again = false;
-          await cycle().catch(() => failed("offline"));
+          await cycle().catch((error) => (error instanceof StorageFailure ? undefined : failed("offline")));
         } while (again);
       } finally {
         running = null;
@@ -142,11 +163,11 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     outbox = [...outbox, entry];
     emit();
     try {
-      await persistence.write({ outbox: { put: [entry] } });
-    } catch (error) {
+      await persist({ outbox: { put: [entry] } });
+    } catch {
       outbox = outbox.filter((queued) => queued !== entry);
       emit();
-      throw error;
+      return unsaved;
     }
     if (link !== "expired") void sync();
     return { ok: true, id: mutation.row_id };
@@ -182,10 +203,15 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   const setSetting = (key: string, value: string) =>
     view.settings.has(key) ? update("settings", key, { value }) : create("settings", { key, value });
 
-  const discard = async (seq: number) => {
+  const discard = async (seq: number): Promise<Written> => {
+    try {
+      await persist({ outbox: { drop: [seq] } });
+    } catch {
+      return unsaved;
+    }
     outbox = outbox.filter((entry) => entry.seq !== seq);
-    await persistence.write({ outbox: { drop: [seq] } });
     emit();
+    return { ok: true, id: String(seq) };
   };
 
   return {

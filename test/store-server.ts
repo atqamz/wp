@@ -8,9 +8,18 @@ import type { Fetch } from "../src/store/api.ts";
 type Dict = Record<string, unknown>;
 type State = Record<TableName, Map<string, Dict>>;
 
-export type Session = "ok" | "redirect" | "html" | "unauthorized";
+export type Session = "ok" | "redirect" | "html" | "unauthorized" | "forbidden";
 
-export type Seen = { method: string; mutations: number; bytes: number; since?: number; contentType: string | null; origin: string | null };
+export type Seen = {
+  method: string;
+  mutations: number;
+  bytes: number;
+  since?: number;
+  contentType: string | null;
+  origin: string | null;
+  redirect: string | null;
+  signal: boolean;
+};
 
 const references = [
   ["project_id", "items", "kind", "project"],
@@ -114,7 +123,7 @@ export const createServer = () => {
     return Object.fromEntries(tableNames.map((table) => [table, [...out[table].values()]])) as unknown as Changes;
   };
 
-  const post = (side: Side, text: string, headers: Headers) => {
+  const post = (side: Side, text: string, headers: Headers, init: RequestInit) => {
     const bytes = Buffer.byteLength(text);
     if (bytes > MAX_BODY_BYTES) return refuse(413, ["body: too large"]);
     let body: unknown;
@@ -128,7 +137,7 @@ export const createServer = () => {
       return refuse(400, ["body: must be an object with only a mutations array"]);
     }
     const mutations = dict.mutations as Mutation[];
-    seen.push({ method: "POST", mutations: mutations.length, bytes, contentType: headers.get("content-type"), origin: headers.get("origin") });
+    seen.push({ method: "POST", mutations: mutations.length, bytes, ...meta(headers, init) });
     if (mutations.length > MAX_MUTATIONS) return refuse(400, [`mutations: at most ${MAX_MUTATIONS}`]);
     for (const [index, mutation] of mutations.entries()) {
       const errors = validateMutation(mutation);
@@ -146,21 +155,32 @@ export const createServer = () => {
     return json(200, { rev, rows: rowsOf(mutations) });
   };
 
-  const get = (side: Side, url: URL, headers: Headers) => {
+  const get = (side: Side, url: URL, headers: Headers, init: RequestInit) => {
     const since = url.searchParams.get("since") ?? "0";
     if (!/^\d+$/.test(since) || !Number.isSafeInteger(Number(since))) return refuse(400, ["since: must be a non-negative integer"]);
-    seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since), contentType: headers.get("content-type"), origin: headers.get("origin") });
+    seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since), ...meta(headers, init) });
     return json(200, { rev, me: side, changes: changesSince(Number(since)) });
   };
+
+  const meta = (headers: Headers, init: RequestInit) => ({
+    contentType: headers.get("content-type"),
+    origin: headers.get("origin"),
+    redirect: init.redirect ?? null,
+    signal: init.signal instanceof AbortSignal,
+  });
 
   const as =
     (side: Side): Fetch =>
     async (input, init) => {
       if (control.down) throw new TypeError("fetch failed");
       const url = new URL(input, "https://wp.example.test");
-      if (control.session === "redirect") return new Response(null, { status: 302, headers: { location: "https://team.example.test/login" } });
+      if (control.session === "redirect") {
+        if (init.redirect !== "manual") throw new TypeError("fetch failed: the login redirect was followed across origins");
+        return new Response(null, { status: 302, headers: { location: "https://team.example.test/login" } });
+      }
       if (control.session === "html") return new Response("<!doctype html><title>Sign in</title>", { headers: { "content-type": "text/html" } });
       if (control.session === "unauthorized") return json(401, { error: "unauthorized" });
+      if (control.session === "forbidden") return json(403, { error: "forbidden" });
       const failure = control.fail.shift();
       if (failure !== undefined) return new Response("upstream error", { status: failure });
       if (url.pathname !== "/api/sync") return json(404, { error: "not_found" });
@@ -172,7 +192,7 @@ export const createServer = () => {
       if (init.method === "POST" && !headers.get("content-type")?.startsWith("application/json")) {
         return refuse(415, ["content-type: must be application/json"]);
       }
-      return init.method === "POST" ? post(side, String(init.body), headers) : get(side, url, headers);
+      return init.method === "POST" ? post(side, String(init.body), headers, init) : get(side, url, headers, init);
     };
 
   return {

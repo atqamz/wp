@@ -78,3 +78,12 @@ test("a pending create appears with defaults and rev 0; an existing settings key
   ]);
   assert.equal(view.settings.get(setting.key)?.value, "new");
 });
+
+test("a pending create of a row the server already has does not replace it", () => {
+  const row = item({ title: "server", amount: 5, rev: 3 });
+  const base = toMaps({ ...empty, items: [row] });
+  const view = overlay(base, [
+    mutation({ op: "create", row_id: row.id, patch: { id: row.id, kind: "task", title: "replay", created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:00Z" } }),
+  ]);
+  assert.deepEqual([view.items.get(row.id)?.title, view.items.get(row.id)?.amount, view.items.get(row.id)?.rev], ["server", 5, 3]);
+});

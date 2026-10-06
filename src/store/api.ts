@@ -37,7 +37,7 @@ const call = async (
   const redirected = res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400);
   if (redirected || res.status === 401 || res.status === 403) return { kind: "expired" };
   if (res.status >= 500) return { kind: "offline" };
-  if (!res.headers.get("content-type")?.includes("application/json")) return { kind: "expired" };
+  if (!res.headers.get("content-type")?.includes("application/json")) return { kind: res.status < 300 ? "expired" : "offline" };
   try {
     return { kind: "response", status: res.status, body: await res.json() };
   } catch {
