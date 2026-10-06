@@ -4,7 +4,7 @@ import { tables } from "../../shared/tables.ts";
 import type { Patch, Row, TableName } from "../../shared/tables.ts";
 import { validateChange, validateMutation } from "../../shared/validate.ts";
 import type { Api } from "./api.ts";
-import { changedFields, live, merge, overlay, takeBatch, toMaps, wire } from "./outbox.ts";
+import { absorb, changedFields, live, newer, overlay, takeBatch, toMaps, wire } from "./outbox.ts";
 import type { Pending, Persistence, Rows } from "./persistence.ts";
 
 export type Link = "online" | "offline" | "expired";
@@ -69,10 +69,11 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       const batch = takeBatch(queue);
       const res = await api.push(batch.map(wire));
       if (res.kind === "ok") {
-        const rows = merge(base, res.body.rows);
+        const rows = newer(base, res.body.rows);
+        await persistence.write({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
+        absorb(base, rows);
         outbox = outbox.filter((entry) => !batch.includes(entry));
         link = "online";
-        await persistence.write({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
         emit();
       } else if (res.kind === "rejected") {
         const index = res.rejection.index ?? 0;
@@ -88,11 +89,13 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     }
     const res = await api.pull(rev);
     if (res.kind !== "ok") return failed(res.kind);
-    const rows = merge(base, res.body.changes);
-    rev = Math.max(rev, res.body.rev);
+    const rows = newer(base, res.body.changes);
+    const next = Math.max(rev, res.body.rev);
+    await persistence.write({ rows, meta: { rev: next, me: res.body.me } });
+    absorb(base, rows);
+    rev = next;
     me = res.body.me;
     link = "online";
-    await persistence.write({ rows, meta: { rev, me } });
     emit();
   };
 
@@ -103,13 +106,15 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       return running;
     }
     running = (async () => {
-      do {
-        again = false;
-        await cycle();
-      } while (again);
-    })().finally(() => {
-      running = null;
-    });
+      try {
+        do {
+          again = false;
+          await cycle().catch(() => failed("offline"));
+        } while (again);
+      } finally {
+        running = null;
+      }
+    })();
     return running;
   };
 
@@ -131,7 +136,9 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   const enqueue = async (mutation: Omit<Pending, "seq">): Promise<Written> => {
     const errors = validateMutation(wire(mutation));
     if (errors.length > 0) return { ok: false, errors };
-    const entry = { ...mutation, seq: nextSeq++ };
+    const seq = Math.max(nextSeq, Date.now() * 1000 + Math.floor(Math.random() * 1000));
+    nextSeq = seq + 1;
+    const entry = { ...mutation, seq };
     outbox = [...outbox, entry];
     emit();
     try {

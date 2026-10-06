@@ -10,7 +10,7 @@ type State = Record<TableName, Map<string, Dict>>;
 
 export type Session = "ok" | "redirect" | "html" | "unauthorized";
 
-export type Seen = { method: string; mutations: number; bytes: number; since?: number };
+export type Seen = { method: string; mutations: number; bytes: number; since?: number; contentType: string | null; origin: string | null };
 
 const references = [
   ["project_id", "items", "kind", "project"],
@@ -114,7 +114,7 @@ export const createServer = () => {
     return Object.fromEntries(tableNames.map((table) => [table, [...out[table].values()]])) as unknown as Changes;
   };
 
-  const post = (side: Side, text: string) => {
+  const post = (side: Side, text: string, headers: Headers) => {
     const bytes = Buffer.byteLength(text);
     if (bytes > MAX_BODY_BYTES) return refuse(413, ["body: too large"]);
     let body: unknown;
@@ -128,7 +128,7 @@ export const createServer = () => {
       return refuse(400, ["body: must be an object with only a mutations array"]);
     }
     const mutations = dict.mutations as Mutation[];
-    seen.push({ method: "POST", mutations: mutations.length, bytes });
+    seen.push({ method: "POST", mutations: mutations.length, bytes, contentType: headers.get("content-type"), origin: headers.get("origin") });
     if (mutations.length > MAX_MUTATIONS) return refuse(400, [`mutations: at most ${MAX_MUTATIONS}`]);
     for (const [index, mutation] of mutations.entries()) {
       const errors = validateMutation(mutation);
@@ -146,10 +146,10 @@ export const createServer = () => {
     return json(200, { rev, rows: rowsOf(mutations) });
   };
 
-  const get = (side: Side, url: URL) => {
+  const get = (side: Side, url: URL, headers: Headers) => {
     const since = url.searchParams.get("since") ?? "0";
     if (!/^\d+$/.test(since) || !Number.isSafeInteger(Number(since))) return refuse(400, ["since: must be a non-negative integer"]);
-    seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since) });
+    seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since), contentType: headers.get("content-type"), origin: headers.get("origin") });
     return json(200, { rev, me: side, changes: changesSince(Number(since)) });
   };
 
@@ -164,7 +164,15 @@ export const createServer = () => {
       const failure = control.fail.shift();
       if (failure !== undefined) return new Response("upstream error", { status: failure });
       if (url.pathname !== "/api/sync") return json(404, { error: "not_found" });
-      return init.method === "POST" ? post(side, String(init.body)) : get(side, url);
+      const headers = new Headers(init.headers);
+      const origin = headers.get("origin");
+      if ((origin !== null && origin !== url.origin) || ["cross-site", "same-site"].includes(headers.get("sec-fetch-site") ?? "")) {
+        return refuse(403, ["origin: cross-origin requests are refused"]);
+      }
+      if (init.method === "POST" && !headers.get("content-type")?.startsWith("application/json")) {
+        return refuse(415, ["content-type: must be application/json"]);
+      }
+      return init.method === "POST" ? post(side, String(init.body), headers) : get(side, url, headers);
     };
 
   return {

@@ -409,3 +409,89 @@ test("an update aimed at a row the server does not have is parked with the serve
   assert.deepEqual([store.getSnapshot().pending, store.getSnapshot().rejected.length], [0, 1]);
   assert.match(store.getSnapshot().rejected[0].rejected!.join(), /no such row/);
 });
+
+test("every POST carries a JSON content type and no origin header of its own", async () => {
+  const server = createServer();
+  const { store, project } = await started(server);
+  idOf(await store.create("items", task(project, "one")));
+  await store.sync();
+  const sent = posts(server);
+  assert.equal(sent.length > 0, true);
+  assert.deepEqual([...new Set(sent.map((request) => request.contentType))], ["application/json"]);
+  assert.deepEqual([...new Set(server.seen.map((request) => request.origin))], [null]);
+});
+
+test("the fake server refuses what the worker refuses: no JSON type, cross-origin", async () => {
+  const server = createServer();
+  const call = server.as("a");
+  const body = JSON.stringify({ mutations: [] });
+  assert.equal((await call("/api/sync", { method: "POST", body })).status, 415);
+  assert.equal((await call("/api/sync", { method: "POST", body, headers: { "content-type": "text/plain" } })).status, 415);
+  assert.equal((await call("/api/sync", { method: "POST", body, headers: { "content-type": "application/json", origin: "https://evil.example.test" } })).status, 403);
+  assert.equal((await call("/api/sync", { method: "POST", body, headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" } })).status, 403);
+  assert.equal((await call("/api/sync", { method: "POST", body, headers: { "content-type": "application/json" } })).status, 200);
+});
+
+test("two tabs on one database keep each other's outbox entries", async () => {
+  const server = createServer();
+  server.control.down = true;
+  const persistence = memoryPersistence();
+  const one = client(server, "a", persistence);
+  const two = client(server, "a", persistence);
+  await one.store.open();
+  await two.store.open();
+  const project = idOf(await one.store.create("items", { kind: "project", title: "Plan", status: "active" }));
+  idOf(await one.store.create("items", task(project, "from tab one")));
+  idOf(await two.store.create("items", task(project, "from tab two")));
+  assert.equal((await persistence.load()).outbox.length, 3);
+
+  server.control.down = false;
+  await one.store.sync();
+  const left = (await persistence.load()).outbox;
+  assert.deepEqual(left.map((entry) => entry.patch.title), ["from tab two"]);
+  await two.store.sync();
+  assert.equal((await persistence.load()).outbox.length, 0);
+  assert.deepEqual(titles(two.store.getSnapshot().rows.items), ["Plan", "from tab one", "from tab two"]);
+});
+
+test("a pull whose persist fails neither advances the cursor nor rejects", async () => {
+  const server = createServer();
+  const a = await started(server, "a");
+  const b = client(server, "b");
+  const real = b.persistence;
+  let failing = false;
+  const flaky = { load: () => real.load(), write: async (write: Parameters<typeof real.write>[0]) => {
+    if (failing && write.meta) throw new Error("quota");
+    return real.write(write);
+  } };
+  const store = createStore({ persistence: flaky, api: createApi(server.as("b")) });
+  await store.open();
+
+  idOf(await a.store.create("items", task(a.project, "first")));
+  await a.store.sync();
+  failing = true;
+  await store.sync();
+  assert.equal((await real.load()).meta.rev, server.rev - 1);
+
+  failing = false;
+  idOf(await a.store.create("items", task(a.project, "second")));
+  await a.store.sync();
+  await store.sync();
+  const reopened = client(server, "b", real);
+  server.control.down = true;
+  await reopened.store.open();
+  assert.deepEqual(titles(reopened.store.getSnapshot().rows.items), ["Plan", "first", "second"]);
+});
+
+test("a trigger landing as a cycle ends is never lost, whatever the timing", async () => {
+  for (let ticks = 0; ticks < 12; ticks++) {
+    const server = createServer();
+    const { store, project } = await started(server);
+    server.control.down = true;
+    idOf(await store.create("items", task(project, `late ${ticks}`)));
+    for (let tick = 0; tick < ticks; tick++) await Promise.resolve();
+    server.control.down = false;
+    await store.sync();
+    assert.equal(store.getSnapshot().pending, 0, `after ${ticks} ticks`);
+  }
+});

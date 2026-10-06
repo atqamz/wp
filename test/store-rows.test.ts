@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { merge, overlay, toMaps } from "../src/store/outbox.ts";
+import { absorb, newer, overlay, toMaps } from "../src/store/outbox.ts";
 import type { Pending } from "../src/store/persistence.ts";
 import { item } from "./domain-rows.ts";
 
@@ -20,24 +20,27 @@ const mutation = (fields: Partial<Pending>): Pending => ({
 test("rows apply by rev: newer replaces, older and equal are ignored", () => {
   const row = item({ title: "v5", rev: 5 });
   const base = toMaps({ ...empty, items: [row] });
-  assert.equal(merge(base, changes({ ...row, title: "v3", rev: 3 })).items, undefined);
-  assert.equal(merge(base, changes({ ...row, title: "same", rev: 5 })).items, undefined);
+  assert.equal(newer(base, changes({ ...row, title: "v3", rev: 3 })).items, undefined);
+  assert.equal(newer(base, changes({ ...row, title: "same", rev: 5 })).items, undefined);
+  const fresh = newer(base, changes({ ...row, title: "v6", rev: 6 }));
+  assert.equal(fresh.items?.length, 1);
   assert.equal(base.items.get(row.id)?.title, "v5");
-  const touched = merge(base, changes({ ...row, title: "v6", rev: 6 }));
-  assert.equal(touched.items?.length, 1);
+  absorb(base, fresh);
   assert.equal(base.items.get(row.id)?.title, "v6");
 });
 
 test("a new row is always taken", () => {
   const base = toMaps(empty);
-  assert.equal(merge(base, changes(item({ rev: 1 }))).items?.length, 1);
+  const fresh = newer(base, changes(item({ rev: 1 })));
+  assert.equal(fresh.items?.length, 1);
+  absorb(base, fresh);
   assert.equal(base.items.size, 1);
 });
 
 test("tombstones are stored like any other row", () => {
   const row = item({ rev: 2, deleted_at: "2026-10-06T00:00:00Z" });
   const base = toMaps({ ...empty, items: [item({ ...row, rev: 1, deleted_at: null })] });
-  merge(base, changes(row));
+  absorb(base, newer(base, changes(row)));
   assert.equal(base.items.get(row.id)?.deleted_at, "2026-10-06T00:00:00Z");
 });
 

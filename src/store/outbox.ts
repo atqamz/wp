@@ -38,18 +38,21 @@ export const live = (maps: Maps): Rows =>
     tableNames.map((table) => [table, [...maps[table].values()].filter((row) => row.deleted_at === null)]),
   ) as unknown as Rows;
 
-export const merge = (base: Maps, changes: Changes): Partial<Rows> => {
-  const touched: Record<string, Dict[]> = {};
+export const newer = (base: Maps, changes: Changes): Partial<Rows> => {
+  const fresh: Record<string, Dict[]> = {};
   for (const table of tableNames) {
     for (const row of (changes[table] ?? []) as Dict[]) {
-      const key = row[tables[table].key] as string;
-      const known = base[table].get(key);
-      if (known && (row.rev as number) <= (known.rev as number)) continue;
-      base[table].set(key, row);
-      (touched[table] ??= []).push(row);
+      const known = base[table].get(row[tables[table].key] as string);
+      if (!known || (row.rev as number) > (known.rev as number)) (fresh[table] ??= []).push(row);
     }
   }
-  return touched as Partial<Rows>;
+  return fresh as Partial<Rows>;
+};
+
+export const absorb = (base: Maps, rows: Partial<Rows>) => {
+  for (const table of tableNames) {
+    for (const row of (rows[table] ?? []) as Dict[]) base[table].set(row[tables[table].key] as string, row);
+  }
 };
 
 const blankRow = (table: TableName, patch: Dict): Dict =>
