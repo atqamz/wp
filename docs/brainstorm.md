@@ -704,7 +704,7 @@ CREATE TABLE budget_entries (
   title TEXT NOT NULL,
   group_key TEXT,
   status TEXT CHECK (status IS NULL OR status IN ('due', 'paid')),
-  amount INTEGER NOT NULL CHECK (amount >= 0),
+  amount INTEGER CHECK (amount IS NULL OR amount >= 0),
   currency TEXT NOT NULL DEFAULT 'IDR' CHECK (length(currency) = 3),
   due_on TEXT CHECK (due_on IS NULL OR due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   done_on TEXT CHECK (done_on IS NULL OR done_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
@@ -720,7 +720,7 @@ CREATE TABLE budget_entries (
   CHECK (
     (entry_type = 'planned' AND budget_id IS NULL AND group_key IS NOT NULL AND status IS NULL AND due_on IS NULL AND done_on IS NULL)
     OR
-    (entry_type = 'payment' AND budget_id IS NOT NULL AND vendor_id IS NULL AND status IS NOT NULL AND (done_on IS NULL OR status = 'paid'))
+    (entry_type = 'payment' AND budget_id IS NOT NULL AND vendor_id IS NULL AND status IS NOT NULL AND amount IS NOT NULL AND (done_on IS NULL OR status = 'paid'))
   )
 );
 CREATE INDEX budget_entries_rev ON budget_entries (rev);
@@ -731,7 +731,7 @@ CREATE INDEX budget_entries_due ON budget_entries (entry_type, due_on);
 How to read it:
 
 - **`items`** is the table of `docs/features.md` §7.2 plus `currency` and `created_at` (money and time formats from §6.1). One row per task, vendor, guest, bridal gift, rundown line, song, saving, contribution, note, and so on; `kind` says which. A project (the wedding) is the row with `kind = 'project'`, and `project_id` of every other row points to it. `parent_id` links a contribution to its saving. `qty` is the number of people for a guest (`pax`). Everything a `kind` needs beyond the typed columns lives in `data` (JSON), for example `data.phone`, `data.pic`, `data.url`, `data.singer`, `data.start_time`.
-- **`budget_entries`** is the only separate table, because it is where money accuracy matters most. One table holds both row types: a `planned` row is a budget line (`group_key` = the event, `amount` = planned cost, optional `vendor_id` pointing at a vendor item), a `payment` row belongs to a planned row through `budget_id` (`status` `due` or `paid`, `due_on`, `done_on`, `who` = payer). The table-level `CHECK` makes the two shapes mutually exclusive and forbids a payment date on an unpaid payment; the self-reference and `vendor_id` are real foreign keys. Remaining amounts and totals are **calculated**, never stored. One table (not two) keeps a single `rev` pull and a single export shape.
+- **`budget_entries`** is the only separate table, because it is where money accuracy matters most. One table holds both row types: a `planned` row is a budget line (`group_key` = the event, `amount` = planned cost, optional `vendor_id` pointing at a vendor item), a `payment` row belongs to a planned row through `budget_id` (`status` `due` or `paid`, `due_on`, `done_on`, `who` = payer). The table-level `CHECK` makes the two shapes mutually exclusive and forbids a payment date on an unpaid payment; the self-reference and `vendor_id` are real foreign keys. `amount` may be empty only on a `planned` row (the estimate is not known yet, for example the seeded *akad* fee row before the location is chosen); a `payment` row requires it. Zero is a real value, not "unset": an *akad* at the KUA costs nothing. Remaining amounts and totals are **calculated**, never stored. One table (not two) keeps a single `rev` pull and a single export shape.
 - **What the database does not enforce:** which `kind` values exist, which statuses and columns belong to a `kind`, the shape of `data`, and that a payment's `currency` equals its planned row's. The `kind` registry in `shared/tables.ts` and the validation in `shared/validate.ts` enforce those, in the SPA and again in the Worker (`docs/infra.md` §5.5).
 - **D1 limit that shaped the SQL:** a `LIKE` or `GLOB` pattern may be at most 50 bytes ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/), 21 April 2026). A full instant pattern (`…T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z`) is longer and failed with "LIKE or GLOB pattern too complex" (**verified locally**), so the instant checks only test the date, the `T` and the `Z`.
 - **Foreign keys** are enforced by D1 by default, "identical to the behaviour you would observe when setting `PRAGMA foreign_keys = on`" ([D1 foreign keys](https://developers.cloudflare.com/d1/sql-api/foreign-keys/), 21 April 2026); the local D1 rejected a dangling `parent_id` and a payment pointing at a missing planned row (**verified locally**). So the Worker applies a batch in outbox order, parents first, and the client never sends a child before its parent. `PRAGMA defer_foreign_keys = on` exists for the opposite case and isn't needed.
