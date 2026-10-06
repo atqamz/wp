@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDays, daysBetween, daysUntil, todayIn } from "../src/domain/dates.ts";
+import { parseField } from "../src/domain/field.ts";
 import { headcount } from "../src/domain/guests.ts";
 import { parseRupiah } from "../src/domain/money.ts";
 import { bySort, sortBefore } from "../src/domain/order.ts";
@@ -100,4 +101,16 @@ test("headcount sums people per side, skips declined, counts a missing size as o
     ]),
     { a: { guests: 2, people: 5 }, b: { guests: 1, people: 2 }, none: { guests: 1, people: 3 } },
   );
+});
+
+test("form fields: empty clears, phones normalise, numbers are whole, unchecked clears a flag", () => {
+  assert.deepEqual(parseField("text", "  hall  "), { ok: true, value: "hall" });
+  assert.deepEqual(parseField("text", "   "), { ok: true, value: null });
+  assert.deepEqual(parseField("phone", "0812 3456 789"), { ok: true, value: "+628123456789" });
+  assert.deepEqual(parseField("phone", "12"), { ok: false });
+  assert.deepEqual(parseField("int", "Rp 2.500.000"), { ok: true, value: 2_500_000 });
+  assert.deepEqual(parseField("int", "two"), { ok: false });
+  assert.deepEqual(parseField("bool", true), { ok: true, value: true });
+  assert.deepEqual(parseField("bool", false), { ok: true, value: null });
+  assert.deepEqual(parseField("date", "2026-10-06"), { ok: true, value: "2026-10-06" });
 });
