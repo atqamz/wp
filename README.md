@@ -5,7 +5,7 @@ React + TypeScript SPA served by a Cloudflare Worker with D1.
 
 ## Run locally
 
-Node 24 (see `.node-version`).
+The newest Node release (`.node-version` is `latest`). Locally run `mise install node@latest` to follow it; CI resolves it from nodejs.org on every run.
 
 ```sh
 npm ci
