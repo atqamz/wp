@@ -4,9 +4,9 @@ Discussion document, not a final decision. Research as of 6 October 2026; every 
 
 > **Privacy.** This repo is public. This document only covers the *structure* of the spreadsheet (sheet names, columns, types, formulas, dropdowns). No real names, phone numbers, addresses, guest names, vendor names, amounts or dates. Examples use made-up placeholders like `Name A`, `+62 8xx-xxxx-xxxx`, `Rp X`.
 
-In short: one Cloudflare Worker that serves both static assets and `/api/*`, data in D1, login through Cloudflare Access with a Google identity provider, a React + TypeScript + Vite single-page app (English UI) with a data layer kept separate from the views. Data is stored locally in IndexedDB so it works offline, then synced to D1. Details and reasons below.
+In short: one Cloudflare Worker that serves both static assets and `/api/*`, data in D1, login through Cloudflare Access (Google and One-time PIN today, Google only next), a React + TypeScript + Vite single-page app (English UI) with a data layer kept separate from the views. Data is stored locally in IndexedDB so it works offline, then synced to D1. Details and reasons below.
 
-> **Status.** This document is the discussion record; `docs/infra.md` holds the stack decisions and wins where they differ. Sections that `docs/infra.md` superseded are marked **Superseded** where they start, and its §9.4 lists every section's status. Section 6 was rewritten when the frontend changed from "no build step" to React + TypeScript + Vite; the earlier framework matrix is gone.
+> **Status.** This document is the discussion record; `docs/infra.md` holds the stack decisions and wins where they differ. Sections that `docs/infra.md` superseded are marked **Superseded** where they start, and its §9.4 lists every section's status. Section 6 was rewritten when the frontend changed from "no build step" to React + TypeScript + Vite; the earlier framework matrix is gone. **Built and live (6 October 2026):** the Worker, the data layer, the generic list screen for tasks, vendors and guests, the budget and "this week" screens, settings, a sync screen and the export links are on `main` and deployed at `wp.atqamz.com` behind Access. Not built: the service worker, the other kinds of the generic list, the wedding-day rundown and the import. Statements below describe the code where it exists and are marked **plan** where it does not.
 
 ---
 
@@ -222,9 +222,11 @@ Seven of the eleven sheets have the same shape: rows with a few fields, a status
 
 Only three dedicated screens:
 
-1. Dashboard.
-2. Budget (payments nested under the item).
-3. Rundown wedding-day mode.
+1. Dashboard (built as the "This week" home screen: the countdown, overdue and due-soon tasks and payments, undated tasks).
+2. Budget (payments nested under the item; built).
+3. Rundown wedding-day mode (plan).
+
+The generic list screen is built for the kinds `task`, `vendor` and `guest`; the other kinds of §7.4 get a registry entry when their turn comes.
 
 Input types use native elements:
 
@@ -310,15 +312,17 @@ All of them are just client-side calculations or one link:
 
 A super-lazy alternative we deliberately **didn't** pick: a single table `items(kind, data JSON)`. Fewer migrations, but it loses SQL constraints and makes import/aggregation messier.
 
-### 3.3 API: one Worker, two endpoints
+### 3.3 API: one Worker, two data endpoints
 
-A manual router with a `switch` on `pathname`, no framework. The contract:
+A manual router with a `switch` on `pathname`, no framework. Every route needs a verified Access identity (401 otherwise); a wrong method is a 405. The contract:
 
 ```
 GET  /api/sync?since=<rev>   → { rev, me: "a"|"b", changes: { <table>: [rows...] } }
 POST /api/sync               ← { mutations: [{ id, table, op: "create"|"update"|"delete", row_id, patch }] }
                              → { rev, rows: { <table>: [rows after applied] } }
 GET  /api/login              → 302 to "/" (only used to trigger the Access login, see §5.5)
+GET  /api/health             → { ok: true }
+GET  /api/export?format=json → the dump of all three tables; ?format=csv&table=<items|budget_entries>&<kind|entry_type>=<value> → one CSV (§3.7)
 ```
 
 The three tables (`items`, `budget_entries`, `settings`), their columns and the `kind` registry are whitelisted in the Worker. Sync details are in §5.
@@ -329,11 +333,11 @@ The three tables (`items`, `budget_entries`, `settings`), their columns and the 
 Partner A's phone / Partner B's phone (PWA: React SPA + Service Worker + IndexedDB)
         │  HTTPS wp.atqamz.com
         ▼
-Cloudflare Access (hostname-based, Google IdP) ──reject unless it's one of those 2 emails
+Cloudflare Access (hostname-based; Google IdP and One-time PIN today) ──reject unless it's one of those 2 emails
         ▼
 Worker "wp"
   ├─ static assets (dist/client, built by Vite)  → free, doesn't use request quota
-  └─ /api/sync, /api/login                       → D1 "wp"
+  └─ /api/sync, /api/export, /api/login, /api/health → D1 "wp"
 ```
 
 ### 3.5 Free plan limits (checked 6 October 2026)
@@ -377,7 +381,7 @@ The shared validators (`shared/validate.ts`) see one row, or one stored row plus
 
 **Order of work for `POST /api/sync`.** Authenticate (Access JWT, 401 on failure), parse and size-check the body, validate every mutation, then apply everything in one `batch()`.
 
-- **Request limits.** At most `MAX_MUTATIONS` (20) mutations and a body of at most `MAX_BODY_BYTES` (1 MiB). The client stops adding mutations to a request once the body would pass about 512 KB (always at least one), so a valid mutation, at most about 100 KB, always fits. Malformed JSON, an unknown top-level field or a bigger request is a 4xx `Rejection` with no `index`; an unknown field inside a mutation carries that mutation's `index`.
+- **Request limits.** At most `MAX_MUTATIONS` (20) mutations and a body of at most `MAX_BODY_BYTES` (1 MiB). The client stops adding mutations to a request once the body would pass 512 KB (`BATCH_BYTES`; always at least one), and a valid mutation is small: the largest one the validator accepts (a task with every text field at its limit: title and group 500 characters each, note 10,000, `data.rules` 2,000) is 13,583 bytes of ASCII, or about 40 KB if every character takes three bytes in UTF-8. A full request of 20 such mutations stays under the 1 MiB cap, and one mutation always fits. `MAX_MUTATIONS` is 20 also because D1 allows 100 bound parameters per query: `test/sync.test.ts` builds the worst case of 20 mutations and checks that the read queries stay under it. Malformed JSON, an unknown top-level field or a bigger request is a 4xx `Rejection` with no `index`; an unknown field inside a mutation carries that mutation's `index`.
 - **Query budget.** D1 allows 50 queries per invocation. Read every validation target of the request (existence, kind, project, tombstone) with at most one `IN (...)` query per table, never one query per mutation, and send all writes in one `batch()`.
 - **Envelope.** `validateMutation` for each mutation. For `delete`, the patch is empty.
 - **Validate against state plus earlier mutations.** Mutations apply in array order, and a later one may refer to a row created by an earlier one in the same request (a payment right after its budget line). Validate with the stored rows plus an in-memory overlay of the earlier mutations, then write everything in one `batch()`. Parents come first; the client sends in outbox order.
@@ -387,7 +391,7 @@ The shared validators (`shared/validate.ts`) see one row, or one stored row plus
 - **Revisions.** Bump `sync_state.rev` only if the request writes at least one row; a request in which every mutation is a no-op leaves `rev` unchanged.
 - **Server-owned columns.** The Worker writes `rev`, `updated_by` (`a` or `b` from the verified identity; `import` is reserved for the import script), `updated_at` and `deleted_at` (server clock). The client cannot set `rev`, `updated_by` or `deleted_at`: a create carrying `deleted_at` is rejected and a patch may only clear it (undo). The contract does let the client send `updated_at` (required on create, allowed in a patch) because the local copy needs a timestamp before the round trip; the Worker ignores it and writes the server clock, and the next pull replaces the local value. `created_at` comes from the client on create and is immutable.
 - **Delete.** `delete` sets `deleted_at` and bumps `rev`; nothing is removed and nothing cascades. Children stay and the UI hides them with their parent. Undo is an update that clears `deleted_at`.
-- **Rejection.** Any failure rejects the whole request and writes nothing: a 4xx `Rejection` with `errors` and the `index` of the first failing mutation. The client parks that mutation (marks it rejected and tells the user) and sends the others; a 5xx or a network error means retry at the next trigger, never in a loop (§3.6).
+- **Rejection.** Any failure rejects the whole request and writes nothing: a 4xx `Rejection` with `errors` and the `index` of the first failing mutation. The client parks that mutation (marks it rejected, shows it on the sync screen with the server's reasons, and lets the user discard it) and sends the others; a rejection with no `index` (an oversized or malformed body) parks the whole batch. A 5xx, a timeout or a network error means retry at the next trigger, never in a loop (§3.6); a redirect, a 401 or a 403 means the session expired (§5.5).
 - **Response.** `rev` and the rows touched, read back from D1 after the batch.
 - **Cross-origin writes (CSRF).** The Access cookie is sent to the Worker, and sibling subdomains of the same registrable domain are same-site, so a state-changing request must prove it comes from the app: `POST /api/sync` requires `Content-Type: application/json` (415 otherwise), an `Origin` header, when present, must equal the request's own origin (403), and a `Sec-Fetch-Site` header, when present, must be `same-origin` or `none` (403). The Worker never emits CORS headers, so no other origin can read a response either.
 - **Accepted limits.** Validation reads happen before the write batch, so two phones posting at the same instant can each pass checks the other invalidates (for example a payment created against a planned row that the other phone tombstones in the same moment); the foreign keys still hold, kind and tombstone checks may not, and the next pull converges the data. Changing a planned row's `project_id` or `currency`, or a vendor's `project_id`, does not re-validate rows that already point at it (references are checked on create and when the row's own reference columns change). Both are accepted for two users; revisit if either shows up in real use.
@@ -398,7 +402,7 @@ The shared validators (`shared/validate.ts`) see one row, or one stored row plus
 
 ## 4. Auth for two people
 
-> **Superseded.** The recommendation below (email OTP, Worker-level Access) was replaced by Cloudflare Access with a Google identity provider, a hostname-based app and an inline policy; see `docs/infra.md` §6. The option table and the traps are kept as the record of the comparison; the traps are rechecked in `docs/infra.md` §6.5.
+> **Superseded.** The recommendation below (email OTP, Worker-level Access) was replaced by Cloudflare Access with a Google identity provider, a hostname-based app and an inline policy; see `docs/infra.md` §6. The option table and the traps are kept as the record of the comparison; the traps are rechecked in `docs/infra.md` §6.5. What runs today is Access with a hostname-based application, an inline two-email policy and two identity providers, **Google and One-time PIN** (a chooser); the first deploy pinned One-time PIN and Google was added after it. The next step is Google only with auto redirect, keeping One-time PIN as a fallback.
 
 | Option | Code to write | UX on the phone | Cost | Notes |
 |---|---|---|---|---|
@@ -451,11 +455,13 @@ The sheet has no RSVP column, so the MVP has **no public part at all**. If we wa
 
 ### 5.1 Service Worker strategy
 
+**Status: plan, not built.** `main` has no service worker, no `src/pwa.ts` and no build plugin (`docs/infra.md` §5.7), so the app shell does not yet open without signal. The design below is what gets built.
+
 - **App shell** (`/`, the hashed JS and CSS in `assets/`, the manifest, the icons) is *precached* under a cache name that changes on every build, then served cache-first. The list of files is generated at build time by a small Vite plugin ([infra §5.7](infra.md#57-pwa-and-service-worker)), because the file names carry content hashes.
 - **Navigation:** every navigation is answered with the cached `/` (the SPA entry), so the app still opens without signal.
 - **`/api/*`:** **network-only**, the service worker doesn't touch it and it never goes into the Cache API. Data lives in IndexedDB.
 - **Update:** the build writes a new cache name and file list into `sw.js`, so the file changes byte for byte and the browser installs the new worker, which waits. The page shows a "New version, reload" banner; tapping it posts `skipWaiting`, and `controllerchange` reloads the page. There is no `clients.claim()`, so on the very first visit the page is only controlled from the next load.
-- **No Workbox.** About 25 lines (`src/sw.js`; the build prepends `self.WP = { cache, files }`). The build output was verified in a scratch project; behaviour in a browser is **not yet verified** (checklist M9 in `docs/infra.md` §8.2):
+- **No Workbox.** About 25 lines (`src/sw.js`; the build prepends `self.WP = { cache, files }`). The build output of this design was verified in a scratch project; behaviour in a browser is **not yet verified** (checklist M9 in `docs/infra.md` §8.2):
 
 ```js
 const { cache, files } = self.WP;
@@ -503,16 +509,17 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void): vo
 ### 5.2 Reading and writing offline
 
 - **IndexedDB** ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)) is the source of data for the UI.
-  - One object store per D1 table (`items`, `budget_entries`, `settings`), plus an `outbox` store and a `meta` store (which holds the last `rev`).
-  - A hand-written promise wrapper of about 30 lines, typed by the table spec in `shared/` (decision in `docs/infra.md` §5.6). The `idb` wrapper (about 3.4 KB gzip, measured from `build/index.js` of version 8.0.3) is the drop-in; Dexie (about 31 KB gzip) is overkill for this need.
+  - One object store per D1 table (`items`, `budget_entries`, `settings`), plus an `outbox` store and a `meta` store (which holds the last pulled `rev` and `me`). The database is `wp`, version 1.
+  - A hand-written promise wrapper of about 50 lines (`src/store/db.ts`), typed by the table spec in `shared/` (decision in `docs/infra.md` §5.6). The `idb` wrapper (about 3.4 KB gzip, measured from `build/index.js` of version 8.0.3) is the drop-in; Dexie (about 31 KB gzip) is overkill for this need.
 - **Write:**
-  1. Update the local store (the UI changes immediately).
-  2. Add a mutation `{ id: crypto.randomUUID(), table, op, row_id, patch }` to `outbox`.
+  1. Validate with `shared/validate.ts` (an invalid write is refused and never queued; an update sends only the fields that changed, and a `data` patch only the changed keys, `null` removing one).
+  2. Add a mutation `{ id: crypto.randomUUID(), table, op, row_id, patch }` to `outbox` (stored with a `seq` order number and the time it was made) and save it to IndexedDB. The UI shows the pending mutations laid over the last server rows, so a write is visible at once and survives a reload. If saving fails, the write is rolled back and the sync badge says storage failed; it is never shown as up to date.
   3. Try to flush.
-- **When to flush:** after writing, when the app opens, on `visibilitychange` to visible, and on the `online` event.
+- **When to flush:** after writing (unless the session is known to have expired), when the app opens, on `visibilitychange` to visible, and on the `online` event. One cycle at a time; a trigger that lands during a cycle runs another cycle right after.
 - **Don't rely on Background Sync.** `SyncManager` isn't supported in Safari or Firefox (data from [browser-compat-data](https://github.com/mdn/browser-compat-data), see also [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)). The outbox only gets sent while the app is open, and that's enough.
-- **Limit the batch size.** Flush at most about 20 mutations per request because the free plan limits D1 to 50 queries per invocation ([limits](https://developers.cloudflare.com/d1/platform/limits/)). Whether one `batch()` counts as 1 or N queries is **unverified**, so play it safe.
-- **Read:** `GET /api/sync?since=<rev>`, then merge into IndexedDB and store the new `rev`.
+- **Limit the batch size.** Flush at most 20 mutations per request (`MAX_MUTATIONS`) and at most 512 KB of body (§3.7), because the free plan limits D1 to 50 queries per invocation ([limits](https://developers.cloudflare.com/d1/platform/limits/)). Whether one `batch()` counts as 1 or N queries is **unverified**, so play it safe. A longer outbox goes out in several requests, in order.
+- **Read:** `GET /api/sync?since=<rev>`, then merge into IndexedDB and store the new `rev`. A sync cycle is: push the outbox until it is empty or stuck, then pull once. **The cursor follows pulls only:** the `rev` in the answer to a `POST` is never stored as the cursor, because the other phone's changes between the old cursor and that `rev` would be skipped; the rows of a push answer are merged only if newer than the local copy (by their own `rev`), and the following pull moves the cursor. The cursor never moves back.
+- **First run is gated on one successful pull.** The app shows a loading screen until the store has loaded and one sync attempt has finished. With no project yet, a phone that has never heard from the server shows a "connect" screen (retry, or log in again) instead of offering to create the project, so a fresh phone cannot start a second project while offline or logged out; only after one successful pull with an empty database does it show the first-run screen that creates the project.
 - **IDs are created on the client** (`crypto.randomUUID()`, supported in Safari 15.4+ according to [browser-compat-data](https://github.com/mdn/browser-compat-data)), so rows created offline don't collide.
 
 ### 5.3 Conflicts between two phones
@@ -521,10 +528,11 @@ For two people, this strategy is enough without CRDTs:
 
 - **`rev` from the server.** One global counter in `sync_state`. Every write request bumps that counter inside one `batch()` (a transaction), and all rows written get that `rev`. Pull uses `WHERE rev > ?`. This cursor doesn't depend on the phone's clock.
 - **Last-write-wins per field.** The client only sends the fields that changed (`patch`). So if Partner A changes the price and Partner B changes the status on the same row, both survive. If it's the same field, whichever reaches the server last wins.
-- **See who changed it.** The `updated_by` (`a` or `b`, shown as the partner's label from `settings`) and `updated_at` columns are shown. If a pull overwrites a field that was just edited locally, show a toast "changed by Partner B just now".
+- **See who changed it.** The `updated_by` (`a` or `b`, shown as the partner's label from `settings`) and `updated_at` columns come with every row. **Plan, not built:** if a pull overwrites a field that was just edited locally, show a toast "changed by Partner B just now"; today nothing in the UI shows who changed a row.
 - **Delete = tombstone** (`deleted_at`). If one person deletes and the other edits, the delete wins. Undo is just clearing `deleted_at`.
-- **List order** (rundown, tasks) uses `sort REAL` (fractional index: insert between two numbers). Moving one row only writes one row, so there's no renumber conflict.
+- **List order** uses `sort REAL`. Built: a row added through quick-add gets `sort` = one below the lowest in its list, so new rows go to the top, and a list is shown by the order of the kind's statuses (for a task, `todo` before `done`) and then by `sort`, `created_at` and `id`, so equal values never reorder between phones. **Plan:** moving a row between two others (a fractional index: insert between two numbers) is not built; it would write only that one row, so there's no renumber conflict.
 - **Leftover case:** if an ack is lost and the mutation is resent late, someone else's edit on the same field can get overwritten. This risk is accepted. The safety nets are `updated_by` and 7-day D1 Time Travel.
+- **A parked mutation does not block the others.** A mutation the Worker rejects is kept in the outbox, marked rejected, and not sent again; later mutations go out without it (they may fail in turn if they depend on it, and are parked in turn). The user sees it on the sync screen and discards it.
 
 Example write in the Worker (applied in one `env.DB.batch([...])`): a changed typed column is set directly, and a changed key inside `data` is merged with `json_patch`, so two phones editing different keys of one row both survive (columns and keys come from the `kind` registry, never from the request):
 
@@ -561,15 +569,10 @@ UPDATE items
 ### 5.5 Access + offline
 
 - **Offline:** the app shell from the cache and the data from IndexedDB keep working even if the Access session has expired. Writes go into the outbox queue.
-- **Online but the session expired:** API requests get redirected to the login. Detect it like this:
+- **Online but the session expired:** API requests get redirected to the login. Built in `src/store/api.ts`: every call is made with `redirect: "manual"`; a redirect (`opaqueredirect`), a 401, a 403, or a 2xx answer that is not JSON counts as "expired" (the sync badge turns to "log in"), while a 5xx, a timeout of 15 seconds or a network error counts as "offline". The outbox is kept in both cases and sent after the next successful login.
 
-  ```js
-  const res = await fetch(`/api/sync?since=${rev}`, { redirect: 'manual' });
-  if (res.type === 'opaqueredirect' || res.status === 401) showLoginBanner();
-  ```
-
-- **The "Log in again" button navigates to `/api/login`.** Navigating to `/` doesn't work, because `/` is served by the SW from the cache and never reaches Access. The `/api/*` path is skipped by the SW, so Access intercepts, the user logs in, and then the Worker redirects to `/`.
-- **Unverified:** whether Access answers a non-navigation fetch with 302 or 401. The code above handles both. **Test on a real phone.**
+- **The "Log in again" button navigates to `/api/login`** (`location.assign`). Once the service worker exists, navigating to `/` will not work, because `/` is served by the SW from the cache and never reaches Access. The `/api/*` path is skipped by the SW, so Access intercepts, the user logs in, and then the Worker redirects to `/`.
+- **Unverified:** whether Access answers a non-navigation fetch with 302 or 401. The client handles both. **Test on a real phone.** One consequence of the mapping: the Worker's own 403 for a cross-origin write (§3.7) also shows as "expired".
 
 ### 5.6 Web Push for reminders: realistic?
 
@@ -609,31 +612,30 @@ The operator chose React + TypeScript + Vite, replacing the earlier no-build-ste
 ```
 index.html              <link rel="manifest" crossorigin="use-credentials">
 public/                 manifest.webmanifest, icons (copied as is)
-shared/                 tables.ts (the three table specs and the `kind` registry: the SQL whitelist), validate.ts: used by the SPA and the Worker
+shared/                 tables.ts (the three table specs and the `kind` registry: the SQL whitelist), validate.ts, api.ts (the sync contract): used by the SPA and the Worker
 src/
-  main.tsx              boot, register the service worker, route switch
-  router.ts             hash router hook (#/budget, #/vendor/…)
-  pwa.ts                service worker registration and update prompt
-  sw.js                 service worker source (stamped at build time)
-  domain/               pure functions: budget total, remainder, countdown, savings progress, phone number normalisation
-  store/                db.ts (IndexedDB), sync.ts (outbox + pull), api.ts (fetch + login detection), store.ts (snapshot + subscribe)
-  hooks/                use-store.ts: the only bridge between the store and React
-  views/                one file per screen + generic-list.tsx. Replaced if React is ever replaced
-  ui/                   small components, text.ts (all UI strings), Rupiah and date formatting through Intl
-worker/                 index.ts, auth.ts, sync.ts: the API
+  main.tsx              boot, route switch (service worker registration: plan, not built)
+  router.ts             hash router hook (#/budget, #/vendors/…)
+  domain/               pure functions: budget totals, "this week", dates in the project's zone, guest headcount, phone and rupiah parsing, screen and badge state, ordering, settings
+  store/                persistence.ts (interface), db.ts (IndexedDB), memory.ts (tests), outbox.ts (batching, overlay), api.ts (fetch + login detection), store.ts (snapshot, writes, sync cycle), browser.ts (wiring and triggers)
+  hooks/                use-store.ts: the only bridge between the store and React; use-plan.ts, use-busy.ts
+  views/                one file per screen (home, budget, budget-line, settings, sync, connect, first-run) + generic-list.tsx and generic-item.tsx. Replaced if React is ever replaced
+  ui/                   small components, registry.ts (which fields each list shows), text.ts (all UI strings), Rupiah and date formatting through Intl (format.ts)
+  (sw.js, pwa.ts)       plan: service worker source and its registration; not on `main`
+worker/                 index.ts, auth.ts, sync.ts, export.ts: the API
 migrations/0001_init.sql
 wrangler.jsonc
 ```
 
 **Rules that keep the UI layer replaceable:**
 
-1. `views/` must not `fetch` or touch IndexedDB. A view only uses `store` through hooks (for example `useTable(table)` and functions such as `save(table, row)` and `remove(table, id)`) and `domain` functions.
+1. `views/` must not `fetch` or touch IndexedDB. A view only uses `store` through hooks (`useSnapshot()`, `useTable(table)`, and the `actions` of `src/hooks/use-store.ts`: `create`, `update`, `remove`, `setSetting`, `discard`, `sync`, `logIn`) and `domain` functions.
 2. `domain/` is pure (input → output, no DOM, no React), tested with `node --test` with no dependencies.
 3. The store keeps an immutable snapshot and a `subscribe` function. React reads it through [`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore); any other framework can subscribe the same way (Vue through `ref`, Svelte through stores).
 4. Routing uses the hash: zero server configuration, safe with the service worker, and framework routers generally have a hash mode. The Navigation API is only in Safari 26.2 and URLPattern in Safari 26 ([browser-compat-data](https://github.com/mdn/browser-compat-data)). Too new, skip for now.
 5. React escapes text by default. Never use `dangerouslySetInnerHTML` with user text.
-6. All UI strings are English and live in one file, `src/ui/text.ts`. There is no i18n library (no second language is planned). Numbers and dates are written through `Intl` (locale choice in `docs/features.md` §5.7).
-7. `npm run check` fails if `src/domain`, `src/store`, `shared` or `worker` imports React, so rules 1 to 3 can't drift silently.
+6. All UI strings are English and live in one file, `src/ui/text.ts`. There is no i18n library (no second language is planned). Numbers and dates are written through `Intl` (locale choice in `docs/features.md` §5.7; built in `src/ui/format.ts`).
+7. `npm run check` fails if `src/domain`, `src/store`, `shared` or `worker` imports React, or if `src/views`, `src/ui` or `src/hooks` call `fetch` or use IndexedDB, `XMLHttpRequest` or `sendBeacon`, so rules 1 to 3 can't drift silently.
 
 **Exit path:** if React is dropped, `store/`, `domain/`, `shared/`, the Worker and the D1 schema don't change. Only `views/`, `ui/`, `hooks/` and `main.tsx` are rewritten.
 
@@ -647,8 +649,8 @@ wrangler.jsonc
 | Validation | Hand-written, from the table spec | §5.1, §5.5 |
 | Sharing types with the Worker | A `shared/` folder, three `tsconfig` files | §5.5 |
 | Tests | `node --test` for pure code; no component tests | §5.1 |
-| PWA and service worker | Hand-written service worker + a small Vite plugin; not `vite-plugin-pwa` | §5.7 |
-| CI and deploy | `npm run check`, then migrations, `vite build`, `wrangler deploy` | §7.2 |
+| PWA and service worker | Hand-written service worker + a small Vite plugin; not `vite-plugin-pwa` (plan, not built) | §5.7 |
+| CI and deploy | `npm run check`, then migrations, `vite build`, `wrangler deploy`, a smoke test | §7.2 |
 
 ---
 
@@ -672,7 +674,7 @@ These follow the decisions in `docs/features.md` §6.1:
 
 ### 7.2 Schema
 
-This is `migrations/0001_init.sql`. It was applied to a local D1 (wrangler 4.147.0) in a scratch project and every constraint below rejected a deliberately bad row there (**verified locally**; behaviour on the Cloudflare edge is unverified):
+This is `migrations/0001_init.sql`, byte for byte. It is applied to the production database, `test/migration.test.ts` runs it in SQLite, and an earlier scratch run on a local D1 (wrangler 4.147.0) rejected a deliberately bad row for each constraint (**verified locally**; behaviour of the constraints on the Cloudflare edge is unverified):
 
 ```sql
 CREATE TABLE sync_state (
@@ -763,7 +765,7 @@ How to read it:
 
 ### 7.3 Settings keys
 
-`settings` is key/value. The keys known so far (more can be added without a migration):
+`settings` is key/value. The keys known so far (more can be added without a migration). `shared/tables.ts` validates the value of each key listed here (a date, a zone, a choice, a JSON list of dates, a decimal) and accepts any other lowercase key with a plain text value; the app reads and edits only the first four so far. A settings row is never deleted and a value must not be empty, so clearing a value is not possible: "not decided" needs an explicit value of its own (for example `hijri_offset_days` is `0`, not absent):
 
 | Key | Value | Used by |
 |---|---|---|
@@ -778,7 +780,7 @@ How to read it:
 
 ### 7.4 Sheet → table mapping
 
-All imported rows get a `project_id` pointing at one `project` item, created first. "Labels" below are the sheet's own words, quoted; the values written to D1 are English.
+All imported rows get a `project_id` pointing at one `project` item, created first. "Labels" below are the sheet's own words, quoted; the values written to D1 are English. **The registry on `main` knows the kinds `project`, `task`, `vendor` and `guest` only:** the kinds `bridal_gift`, `rundown`, `song`, `saving` and `contribution` used below must be added to `shared/tables.ts` (with their statuses and `data` keys) before the import, because the SQL import bypasses the Worker, but the validators in the SPA and the Worker reject an unknown `kind` on every later edit and no screen lists it. The `who` of a guest is limited to `a` or `b` there.
 
 | Sheet | Becomes | Mapping notes |
 |---|---|---|
@@ -819,25 +821,27 @@ Personal data **must not** go into the repo.
 
 ## 8. Domain and deployment
 
-### Already checked (6 October 2026, public DNS queries via DoH `cloudflare-dns.com`, read-only)
+### State on 6 October 2026
+
+Checked before the first deploy (public DNS queries via DoH `cloudflare-dns.com`, read-only), then updated after it:
 
 - NS of `atqamz.com` = `chloe.ns.cloudflare.com`, `ray.ns.cloudflare.com`. That means the zone uses Cloudflare nameservers (full setup).
 - The apex `atqamz.com` resolves to a Cloudflare IP, so it's already proxied.
-- `wp.atqamz.com` doesn't exist yet (NXDOMAIN), so it's free to use.
-- There's no MX record yet. This only matters if we later use Email Routing (the magic link option or the email digest).
-- The `atqamz/wp` repo is public and still empty (checked via `gh repo view`).
+- `wp.atqamz.com` was free (NXDOMAIN) before the first deploy. It is now the Worker's Custom Domain and serves the full app; every path answers 302 to the Cloudflare Access login.
+- There was no MX record when checked. This only matters if we later use Email Routing (the magic link option or the email digest).
+- The `atqamz/wp` repo is public. It is no longer empty: `main` holds the app, the migration, the Worker and the CI workflow, and the `docs` branch is an orphan branch holding only these documents. The repository's default branch is `main`.
 
-### Unverified and must be right
+### Was unverified, now answered or still open
 
-- The `atqamz.com` zone is in the **same Cloudflare account** as the Worker, and its status is active. Custom Domain requires "An active Cloudflare zone" ([docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)).
-- The hostname `wp` has no CNAME record yet. A Custom Domain can't be created on a hostname that already has a CNAME.
-- Whether there are other Workers in the account that share the 100,000/day and 5 cron quota.
+- **Answered:** the `atqamz.com` zone is in the same Cloudflare account as the Worker, and its status is active (a Custom Domain requires "An active Cloudflare zone", [docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)); the account has one member and no other organisation shares it.
+- **Answered:** the hostname `wp` had no CNAME, and the first deploy created the Custom Domain.
+- **Open:** whether there are other Workers in the account that share the 100,000/day and 5 cron quota (the account has one member, so any are the operator's own).
 
 ### How `wp.atqamz.com` is served
 
 Use a Worker **Custom Domain**. Cloudflare creates the DNS record and certificate itself, and all paths are routed to the Worker ([docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)). `wrangler.jsonc` sketch ([config reference](https://developers.cloudflare.com/workers/wrangler/configuration/)):
 
-The `wrangler.jsonc` (Worker entry, `assets` with SPA mode and `run_worker_first`, D1 binding, `secrets.required`, the dev-only `env.dev` block) is in `docs/infra.md` §5.2. The earlier sketch here (`main: src/worker.js`, `assets.directory: ./public`) is superseded: with the Vite plugin the assets directory is generated, and the Worker is `worker/index.ts`.
+The `wrangler.jsonc` (Worker entry, `assets` with SPA mode and `run_worker_first`, D1 binding, `secrets.required`, the dev-only `env.dev` block, whose `database_id` is a placeholder while the production id is at the top level only) is in `docs/infra.md` §5.2. The earlier sketch here (`main: src/worker.js`, `assets.directory: ./public`) is superseded: with the Vite plugin the assets directory is generated, and the Worker is `worker/index.ts`.
 
 Notes:
 
@@ -846,13 +850,13 @@ Notes:
 
 ### Deploy flow
 
-> **Superseded.** The earlier advice here was Workers Builds. `docs/infra.md` §7 reversed it: GitHub Actions calling `npx` for `vite` and `wrangler` directly, with an account-owned token, because Workers Builds only accepts user-owned tokens and a second CI system would be needed for the checks. The deploy sequence is migrations, `vite build`, `wrangler deploy` (§7.2 there).
+> **Superseded.** The earlier advice here was Workers Builds. `docs/infra.md` §7 reversed it: GitHub Actions calling `npx` for `vite` and `wrangler` directly, with an account-owned token, because Workers Builds only accepts user-owned tokens and a second CI system would be needed for the checks. The deploy sequence is migrations, `vite build`, `wrangler deploy`, then a smoke test, on every push to `main` and every dispatch of `main` (§7.2 there).
 
 Still valid from the earlier version:
 
 - **Preview builds:** "Preview URLs are public by default", and D1 is only isolated "when you bind the Preview to a separate resource" ([Previews](https://developers.cloudflare.com/workers/previews/)). That means that, without extra settings, a preview from a branch can read the real DB through a public URL. `docs/infra.md` §7.4 settles it: previews are off (`preview_urls: false`).
-- **Initial `.gitignore`** (public repo): `.wrangler/`, `dist/`, `node_modules/`, `.dev.vars*`, `.env*`, `*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`.
-- **Local dev:** `npm run dev` (the Vite dev server running the Worker locally, with a local D1 seeded with **fake data** only).
+- **`.gitignore`** (public repo): `main` has `.wrangler/`, `dist/`, `node_modules/`, `.dev.vars*` (but not `.dev.vars.example`) and `.env*`. Still to add before any import or export touches the repo: `*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`.
+- **Local dev:** `npm run dev` (the Vite dev server running the Worker locally, with a local D1; the migration is applied with `wrangler d1 migrations apply wp --local --env dev`). There is no seed: the first-run screen creates the project, and any seed added later must hold **fake data** only.
 
 ---
 
@@ -861,34 +865,30 @@ Still valid from the earlier version:
 1. **Time left until the wedding day.** If it's only a matter of weeks, the MVP has to be cut down again to three things: budget + payments, offline rundown, and vendors with call/WhatsApp buttons. The rest stays in the spreadsheet.
 2. **Personal data leaking through the public repo.** The paths could be an import file, a seed, test fixtures, screenshots in a PR, or an open preview URL. Mitigation: `.gitignore` from the first commit, fake data for dev, previews turned off or protected, and `workers_dev: false`.
 3. **Access + PWA friction.**
-   - Redirect when the session expires.
-   - The manifest needs `crossorigin="use-credentials"`.
+   - Redirect when the session expires (the client treats a redirect, 401 and 403 as "log in again"; 302 versus 401 is still unverified).
+   - The manifest needs `crossorigin="use-credentials"` (built and checked by `npm run check`).
    - A separate cookie jar in the iOS PWA.
-   - `ctx.access` isn't available together with static assets.
+   - `ctx.access` isn't available together with static assets (the Worker verifies the JWT itself).
 
-   Test on two real phones on day one. If it's annoying, move to Plan B (device-key cookie).
+   Test on two real phones (M9, still to do). If it's annoying, move to Plan B (device-key cookie).
 4. **Data overwritten by conflicts.** Mitigation: per-field patches, `updated_by` shown, tombstones, and 7-day D1 Time Travel. Add a periodic CSV export.
 5. **iOS quirks.**
    - The app must be installed to the Home Screen so storage is safe and push is possible.
    - No Background Sync, so the outbox is only sent while the app is open.
 6. **Account quota shared** with other Workers, or a polling bug. Mitigation: don't poll, and check the usage dashboard after a week.
-7. **Zero Trust onboarding asks for payment details** (not charged on Free). Needs your approval.
-8. **Data quality from the template:**
+7. **Data quality from the template:**
    - sample data mixed with real data;
    - phone numbers stored as numbers;
    - frozen `FILTER` formula;
    - the "Subtotal Kategori" row that miscalculates.
 
    The import has to validate, not copy raw.
-9. **A drawn-out framework debate.** Closed: the operator chose React + TypeScript + Vite (`docs/infra.md` §5). The remaining risk is that the choice is revised later; the layer rules in §6.1 keep that cheap.
-10. **After the event.** Who maintains it, and do we want to archive the data (export) and then shut down the Worker?
+8. **After the event.** Who maintains it, and do we want to archive the data (export) and then shut down the Worker?
 
 **Open questions for you two:**
 
 - How long until the wedding day?
 - Which data in the spreadsheet is real?
-- Does Partner B use Android or iPhone? This decides the priority of install and push.
-- Okay to fill in payment details for Zero Trust Free? If not, use the device-key.
 - Do we need a public RSVP? Or just use another service for the digital invitation?
 - Do both of you have full access to all the data? (Assumption: yes.)
 - Do you want to keep Skenario Budget as a reference?
@@ -899,7 +899,7 @@ Still valid from the earlier version:
 
 **Concrete next step (one evening):**
 
-1. **Decide first:** auth (Access with the Google IdP, or the device-key Plan B) and the time left until the wedding day. The framework is decided: React + TypeScript + Vite (`docs/infra.md`).
+1. **Decide first:** the time left until the wedding day. Auth is decided and live (Access with the Google IdP and One-time PIN; the device-key Plan B was not needed) and so is the framework: React + TypeScript + Vite (`docs/infra.md`).
 2. **End-to-end spike on `wp.atqamz.com`** with just the budget (`budget_entries`: planned lines and their payments):
    - Worker + Vite-built static assets + D1 + hostname-based Access;
    - IndexedDB outbox, `GET/POST /api/sync`, SW app shell;
@@ -911,3 +911,5 @@ Still valid from the earlier version:
    - session expires → log in again button.
 4. **If it passes:** add the generic list screen for the other 7 sheets, then the wedding-day rundown, then run the one-time import (§7). The spreadsheet is officially retired.
 5. **After the MVP works:** if React is ever to be replaced, the migration is only `views/`, `ui/`, `hooks/` and `main.tsx` (§6.1).
+
+**Status, 6 October 2026:** step 2 is largely built and deployed, beyond the budget alone: the Worker, the Vite-built assets, D1, hostname-based Access, the IndexedDB outbox with `GET/POST /api/sync`, and React views for "This week", the budget with payments, tasks, vendors, guests, settings and sync. The service worker (app shell) and step 3 (two real phones) are not done; steps 4 and 5 are open.
