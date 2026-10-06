@@ -371,6 +371,24 @@ For two people, nothing breaks **unless there's a bug**. Risks in order:
 4. **KV if used for sessions/counters.** 1,000 writes/day runs out fast. Don't use KV.
 5. **10 ms CPU.** Don't parse the ODS in the Worker; do the import offline (§7). JWT verification uses native WebCrypto, so it's safe.
 
+### 3.7 Checks the Worker owns
+
+The shared validators (`shared/validate.ts`) see one row, or one stored row plus one patch. Everything that needs another row, the stored state or the request as a whole belongs to the Worker. These checks are part of the contract; the SPA relies on them.
+
+**Order of work for `POST /api/sync`.** Authenticate (Access JWT, 401 on failure), parse and size-check the body, validate every mutation, then apply everything in one `batch()`.
+
+- **Request limits.** At most `MAX_MUTATIONS` (20) mutations and a body of at most 512 KB. Malformed JSON, an unknown field or a bigger batch is a 4xx `Rejection` with no `index`.
+- **Envelope.** `validateMutation` for each mutation. For `delete`, the patch is empty.
+- **Validate against state plus earlier mutations.** Mutations apply in array order, and a later one may refer to a row created by an earlier one in the same request (a payment right after its budget line). Validate with the stored rows plus an in-memory overlay of the earlier mutations, then write everything in one `batch()`. Parents come first; the client sends in outbox order.
+- **Update and delete.** The target must exist and not be a tombstone, except an update whose only change is `deleted_at: null` (undo). The stored row's `kind` or `entry_type` is the variant. Updates go through `validateChange` (patch, merge, then validate the merged row). A `project` row is archived with `status`, never deleted.
+- **Create.** `patch.id` (or `patch.key`) equals `row_id` (checked by `validateMutation`). A create whose id already exists is ignored and counts as success: replays after a lost acknowledgement are safe, and the client converges on the next pull. Updates are patches, so replays are idempotent. The mutation `id` is bookkeeping for the client's outbox; the Worker does not store it.
+- **References.** `project_id` points at a live `items` row of kind `project`. `vendor_id` (on `planned` rows) points at a live `items` row of kind `vendor`. `budget_id` (on `payment` rows) points at a live `budget_entries` row with `entry_type = 'planned'`. `parent_id` points at a live `items` row of the kind the child kind expects (no core kind uses it yet). No row refers to itself. A row, its `budget_id` target and its `vendor_id` target belong to the same project. A payment's `currency` equals its planned row's `currency`. The database enforces only that the target exists; it cannot check kind, project or tombstone, so the Worker must.
+- **Server-owned columns.** The Worker writes `rev`, `updated_by` (`a` or `b` from the verified identity; `import` is reserved for the import script), `updated_at` and `deleted_at` (server clock). The client cannot set them; a client-supplied `updated_at` is ignored. `created_at` comes from the client on create and is immutable.
+- **Delete.** `delete` sets `deleted_at` and bumps `rev`; nothing is removed and nothing cascades. Children stay and the UI hides them with their parent. Undo is an update that clears `deleted_at`.
+- **Rejection.** Any failure rejects the whole request and writes nothing: a 4xx `Rejection` with `errors` and the `index` of the first failing mutation. The client parks that mutation (marks it rejected and tells the user) and sends the others; a 5xx or a network error means retry at the next trigger, never in a loop (§3.6).
+- **Response.** `rev` and the rows touched, read back from D1 after the batch.
+- **Pull.** `GET /api/sync?since=<rev>` returns rows with `rev > since`, tombstones included, for all three tables, and `me` derived from the verified identity.
+
 ---
 
 ## 4. Auth for two people
