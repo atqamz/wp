@@ -1,6 +1,6 @@
 # Bootstrap runbook: the manual steps before the first deploy
 
-Written 6 October 2026. This is the operator's checklist for steps M1 to M8 of [infra §8.2](infra.md#82-bootstrap-checklist). You can follow it without reading the rest of the docs; the design reasons live in [infra.md](infra.md), and each step links to the section that decided it. Nothing here was run against Cloudflare, Google or GitHub: every claim comes from the linked official pages, which I fetched on 6 October 2026, or from the source of wrangler 4.147.0 downloaded from npm (named where used).
+Written 6 October 2026 and updated the same day, after the steps were run. This is the checklist for steps M1 to M8 of [infra §8.2](infra.md#82-bootstrap-checklist), kept as a record and for recovery. You can follow it without reading the rest of the docs; the design reasons live in [infra.md](infra.md), and each step links to the section that decided it. Each step has an **Outcome** paragraph with what actually happened, from the supervisor's report. The instructions themselves come from the linked official pages, which I fetched on 6 October 2026, or from the source of wrangler 4.147.0 downloaded from npm (named where used); the wrangler claims were checked against the real first deploy only where an Outcome paragraph says so.
 
 > **Privacy.** This repo is public. Every account name, email, ID, team name, token and secret in this file is a placeholder. Real values go in your password manager, never in the repo, a commit message, an issue, a PR, a CI log or a screenshot. The domains `atqamz.com` and `wp.atqamz.com` are not personal and stay as they are.
 >
@@ -10,22 +10,23 @@ Written 6 October 2026. This is the operator's checklist for steps M1 to M8 of [
 
 | Step | What | Who | Time (estimate) | Blocks | Done |
 |---|---|---|---|---|---|
-| [M1](#m1-find-the-cloudflare-account) | Find the account that holds `atqamz.com`, and who else is in it | Supervisor, via `npx cf` | 20 min | Everything: it decides the account for M2 to M8 and [infra §2.6](infra.md#26-boundary-recommendation) | [x] |
-| [M2](#m2-zero-trust-free-onboarding) | Zero Trust Free onboarding (team name, plan, payment details) | Supervisor, via `npx cf` | 10 min | M3 (team name is in the redirect URI), M6, M7 | [x] |
-| [M3](#m3-google-oauth-client) | Google Cloud project, consent screen, Web OAuth client, `google` identity provider | Operator (owner of the Google Cloud project) | 30 min | M6 (the Access app pins this identity provider) | [ ] |
-| [M4](#m4-cloudflare-api-tokens) | Create the tokens `wp-ci` and `wp-access-setup` | Supervisor, via `npx cf` | 20 min | M5, M6, M7, M8 | [ ] |
-| [M5](#m5-create-the-d1-database) | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` | Supervisor, via `npx cf` | 10 min | The CI migration step (A2) | [ ] |
-| [M6](#m6-create-the-access-app-and-note-the-aud) | Create the Access app and policy, note the AUD, revoke `wp-access-setup` | Supervisor, via `npx cf` | 20 min | M7 (needs the AUD) | [ ] |
-| [M7](#m7-set-the-three-worker-secrets) | Set the three Worker secrets | Supervisor, via `npx cf` | 10 min | The first deploy (`secrets.required`) | [ ] |
-| [M8](#m8-set-the-github-actions-secrets) | Set the two GitHub Actions secrets | Supervisor, via `npx cf` | 5 min | The first deploy from CI | [ ] |
+| [M1](#m1-find-the-cloudflare-account) | Find the account that holds `atqamz.com`, and who else is in it | Supervisor, via `npx cf` | 20 min | Everything: it decided the account for M2 to M8 and [infra §2.6](infra.md#26-boundary-recommendation) | [x] |
+| [M2](#m2-zero-trust-free-onboarding) | Zero Trust Free onboarding (team name, plan, payment details) | Supervisor, via `npx cf` | 10 min | M3 (team name is in the redirect URI), M6, M7 | [x] (the organisation already existed) |
+| [M3](#m3-google-oauth-client) | Google Cloud project, consent screen, Web OAuth client, `google` identity provider | Operator (owner of the Google Cloud project), then supervisor | 30 min | The Google option of the Access application | [x] (done after the first deploy; a Google login is not yet confirmed by the operator) |
+| [M4](#m4-cloudflare-api-tokens) | Create the deploy token `wp-ci` (and optionally `wp-access-setup`) | Supervisor, via `npx cf` | 20 min | M5, M7, M8 | [x] (`wp-ci` only) |
+| [M5](#m5-create-the-d1-database) | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` | Supervisor, via `npx cf` | 10 min | The CI migration step (A2) | [x] |
+| [M6](#m6-create-the-access-app-and-note-the-aud) | Create the Access app and policy, note the AUD | Supervisor, via `npx cf` | 20 min | M7 (needs the AUD) | [x] |
+| [M7](#m7-set-the-three-worker-secrets) | Set the three Worker secrets | Supervisor, via `npx cf` | 10 min | The first deploy (`secrets.required`) | [x] (by the first deploy, run by hand) |
+| [M8](#m8-set-the-github-actions-secrets) | Set the two GitHub Actions secrets | Supervisor, via `npx cf` | 5 min | The first deploy from CI | [x] |
+| [Adding the Google sign-in](#adding-the-google-sign-in) | The console steps for the Google client, how Google reached the Access application, and the last step (Google only) | Operator, then supervisor | | Retiring One-time PIN as the everyday login | [x] except the last step |
 
-**Status, 6 October 2026.** The operator delegated all Cloudflare work to the supervisor, who runs it with `npx cf` (the Cloudflare CLI, already logged in as the operator through OAuth). M1 is done: `atqamz.com` is active on the Free plan in an account with one member, so no other organisation shares it ([infra §2.6](infra.md#26-boundary-recommendation) scenario A). M2 is done: the account already has a Zero Trust organisation; its only identity provider is One-time PIN, and there are no Access applications yet. M3 (the Google OAuth client) stays with the operator and no longer blocks the first deploy: the first deploy can pin One-time PIN and switch to Google later by changing only the Access application's identity provider, because the Worker verifies the same Access JWT either way (expected; check it in M9).
+**Status, 6 October 2026.** The operator delegated all Cloudflare work to the supervisor, who ran it with `npx cf` (the Cloudflare CLI, logged in as the operator through OAuth). M1 to M8 are done; what happened is under each step. `wp.atqamz.com` serves the full app, deployed by CI, and every path answers 302 to the Cloudflare Access login. Access allows two identity providers, Google and One-time PIN (a chooser), for exactly two allowed emails. What remains is M9, the on-phone test ([infra §8.2](infra.md#82-bootstrap-checklist)), and the last step of [Adding the Google sign-in](#adding-the-google-sign-in).
 
-Out of scope here: M0 (scaffold the app) is code work; M9 (test on two phones) needs a deployed app; M10 is done (see [infra §7.5](infra.md#75-adding-wp-to-atqamzgithub-later)).
+Out of scope here: M0 (scaffold the app) is code work and is done; M9 (test on two phones) needs a person with two phones; M10 is done (see [infra §7.5](infra.md#75-adding-wp-to-atqamzgithub-later)).
 
-**Order.** M1, then M2. After M2, M3 and M4 are independent. M5 needs the `wp-ci` token from M4. M6 needs M2, M3 and the `wp-access-setup` token from M4. M7 needs the AUD from M6 and the `wp-ci` token. M8 needs the `wp-ci` token.
+**Order.** M1, then M2. After M2, M3 and M4 are independent. M5 needs the `wp-ci` token from M4. M6 needs M2 (and M3 for the Google option) and a way to call the Access API. M7 needs the AUD from M6 and the `wp-ci` token. M8 needs the `wp-ci` token.
 
-**The first push to `main` that contains `.github/workflows/ci.yml` runs the deploy job** ([infra §7.2](infra.md#72-workflow)). Finish M5, M7 and M8 before that push or merge. Otherwise the job fails at the migration step, at `secrets.required`, or at the missing GitHub secrets. A failed deploy changes nothing in production, but it is noise.
+**What happened with the first deploy.** The first push to `main` that contains `.github/workflows/ci.yml` runs the deploy job ([infra §7.2](infra.md#72-workflow)), so M5 and M8 were finished first. The first deploy of the Worker was done by hand with `wrangler deploy --secrets-file` (M7), not by CI: wrangler refuses a first deploy of a Worker that does not exist yet when `secrets.required` is set and no secrets file is given, and CI has no secrets file. Later deploys keep the secrets. The first CI deploy then ran green.
 
 ## Conventions
 
@@ -138,7 +139,9 @@ A Cloudflare Organization is "a top-level container ... for managing multiple ac
 
 **Verify.** Two methods (A and C, or A and D) name the same `<account-id>`, and you can say who the members are.
 
-**Record.** In `wp / cloudflare account`: `<account-name>`, `<account-id>`, `<zone-id>`, scenario A or B, the number of members, whether a Zero Trust organisation already exists and its team name. Update the answer to [infra §9.2](infra.md#92-open-questions-for-you) item 1 in your own notes.
+**Record.** In `wp / cloudflare account`: `<account-name>`, `<account-id>`, `<zone-id>`, scenario A or B, the number of members, whether a Zero Trust organisation already exists and its team name. The answer is recorded in [infra §9.2](infra.md#92-open-questions-for-you) (answered).
+
+**Outcome (done).** `atqamz.com` is active on the Free plan in an account with one member, so no other organisation shares it: scenario A. The supervisor checked this through the API with the logged-in CLI (the equivalent of methods A and C). No ids are recorded here.
 
 **If it fails.**
 - No account lists `atqamz.com`: you are probably logged in with the wrong login. Try the other logins you own.
@@ -165,16 +168,20 @@ A Cloudflare Organization is "a top-level container ... for managing multiple ac
 
 **Record.** `wp / zero trust`: `<team-name>`, `<team-name>.cloudflareaccess.com`, the plan, the date. Do not store the card number.
 
+**Outcome (done).** The account already had a Zero Trust organisation, so no onboarding and no payment details were needed. Its only identity provider was One-time PIN and there were no Access applications. The team name is not written in this repo.
+
 **If it fails.**
 - Team name taken: choose another. It is unique per organisation.
-- Payment details declined: you cannot finish onboarding. This is the case [infra §9.2](infra.md#92-open-questions-for-you) item 2 asks about: without payment details, Plan B (device-key, [brainstorm §4](brainstorm.md)) replaces Access and [infra §6](infra.md#6-auth) changes. Do not continue with M3 to M7 until the operator decides.
+- Payment details declined: you cannot finish onboarding. Without payment details Plan B (device-key, [brainstorm §4](brainstorm.md)) would replace Access and [infra §6](infra.md#6-auth) would change. Do not continue with M3 to M7 until the operator decides. This did not happen: see the outcome.
 - You onboarded the wrong account: how to remove a Zero Trust organisation is **not covered** in the docs I read. Ask Cloudflare support, and do not create objects in the organisation.
 
 ---
 
 ## M3. Google OAuth client
 
-**Why.** Access needs a Google OAuth client to use Google as identity provider. The client ID and secret are the credentials Cloudflare uses to talk to Google ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/), 30 April 2026). I found no official page that creates a Web OAuth client through an API, so this step stays manual ([infra §6.2](infra.md#62-setup-steps) step 2; the secondary source there is unverified).
+**Why.** Access needs a Google OAuth client to use Google as identity provider. The client ID and secret are the credentials Cloudflare uses to talk to Google ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/), 30 April 2026). No gcloud command and no API creates a Web OAuth client for signing in Gmail accounts, so this step is manual in the console; the sources are in [Adding the Google sign-in](#adding-the-google-sign-in) ([infra §6.2](infra.md#62-setup-steps) step 2).
+
+**Outcome (done, after the first deploy).** The operator made the Web client in the Google Cloud console following the steps below. The supervisor created the Google identity provider in Zero Trust from that client and added it to the Access application next to One-time PIN; the client file was consumed and deleted, and no value from it is recorded here or anywhere in the repo. The application now allows two identity providers, Google and One-time PIN, with `auto_redirect_to_identity` off, so users see a chooser; its single policy includes exactly the two allowed emails and nothing else (no email domain, no "everyone"). The first deploy had pinned One-time PIN only, because Google did not exist yet. **A Google login has not been confirmed yet** by the operator; M9 covers it on both phones. After that confirmation the supervisor makes Google the only provider with auto redirect ([Adding the Google sign-in](#adding-the-google-sign-in)).
 
 **Prerequisites.** `<team-name>` from M2. A Google account that will own the project, `<owner-google-email>`. `<partner-a-email>` and `<partner-b-email>` must be real Google accounts, or they cannot sign in. You do not need a Google Workspace account ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)).
 
@@ -187,7 +194,7 @@ A Cloudflare Organization is "a top-level container ... for managing multiple ac
 6. [ ] Open **Clients** > **Create client** ([Manage OAuth clients](https://support.google.com/cloud/answer/15549257)). Application type **Web application**, name `wp-cloudflare-access`.
 7. [ ] Under **Authorized JavaScript origins**, add `https://<team-name>.cloudflareaccess.com`. Under **Authorized redirect URIs**, add exactly `https://<team-name>.cloudflareaccess.com/cdn-cgi/access/callback` ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)). Redirect URIs must use HTTPS ([Manage OAuth clients](https://support.google.com/cloud/answer/15549257)). **Create**.
 8. [ ] Copy the **Client ID** and the **Client secret** into your password manager now. Google says "client secrets for OAuth 2.0 clients are only visible and downloadable from the Google Cloud Console at the time of their creation", afterwards only the last four characters show, and you must rotate to get a new one ([Manage OAuth clients](https://support.google.com/cloud/answer/15549257)). The Cloudflare guide says you can select the client and see the secret; follow Google, who own the console.
-9. [ ] In Cloudflare, create the identity provider now so you can test it: **Zero Trust** > **Integrations** > **Identity providers** > **Add new identity provider** > **Google**. Enter the Client ID in **App ID** and the secret in **Client Secret**. PKCE is optional ("PKCE will be performed on all login attempts" if enabled); leave it off unless you want it, it is not part of the infra decisions. **Save** ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)). Name the provider `wp-google` if the form asks for a name. M6 reads this provider's ID through the API, so it does not create it again.
+9. [ ] In Cloudflare, create the identity provider so you can test it (the supervisor did this with the CLI from the client file; the dashboard path is): **Zero Trust** > **Integrations** > **Identity providers** > **Add new identity provider** > **Google**. Enter the Client ID in **App ID** and the secret in **Client Secret**. PKCE is optional ("PKCE will be performed on all login attempts" if enabled); leave it off unless you want it, it is not part of the infra decisions. **Save** ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)). Name the provider `wp-google` if the form asks for a name. M6 reads this provider's ID through the API, so it does not create it again. Hand the client ID and secret to whoever creates the provider out of band, never through the repo, an issue or a chat log.
 
 **Testing or In production.**
 
@@ -196,12 +203,12 @@ A Cloudflare Organization is "a top-level container ... for managing multiple ac
 | Who can sign in at Google | Only the listed test users, at most 100 | "any user with a Google Account" ([Google: app audience](https://support.google.com/cloud/answer/15549945)) |
 | Who can reach wp | Also limited by the Access policy (two emails) | Only the Access policy (two emails) limits it; Google lets anyone log in ([infra §6.1](infra.md#61-google-idp-vs-one-time-pin)) |
 | Authorization lifetime | "Authorizations by a test user will expire seven days from the time of consent", except when the app requests only `userinfo.email`, `userinfo.profile` and `openid` (or their OpenID Connect equivalents), which "will not expire after 7 days" ([Google: app audience](https://support.google.com/cloud/answer/15549945)); the same exception is in [OAuth 2.0 for Google APIs](https://developers.google.com/identity/protocols/oauth2) | No 7-day limit |
-| What wp requests | Cloudflare's Google page does not list the scopes it requests: **unverified**. If it asks only for basic scopes, the 7-day rule should not apply to wp, which would make [infra §6.2](infra.md#62-setup-steps) step 4 and §9.1 risk 5 too pessimistic | same |
+| What wp requests | Cloudflare's Google page does not list the scopes it requests: **unverified**. If it asks only for basic scopes, the 7-day rule should not apply to wp, which would make [infra §6.2](infra.md#62-setup-steps) step 4 and §9.1 risk 4 too pessimistic | same |
 | Verification | Not needed | "If your app utilizes only non-sensitive scopes, it is not mandatory for your app to complete the app verification process" ([Google: verification](https://support.google.com/cloud/answer/13463073)). The "unverified app" screen is defined for apps that "request authorization of scopes considered sensitive or restricted" ([Google: app audience](https://support.google.com/cloud/answer/15549945)), so I do not expect it for wp: **unverified in practice** |
 | Test-user list | You must add every person who signs in | Not used |
 | Switching | **Audience** > **Publish app** moves to In production ([Google: app audience](https://support.google.com/cloud/answer/15549945)) | Whether you can go back to Testing: not stated in the page I read |
 
-What this means for the operator: Testing is the safe start and is reversible by publishing. The Access session itself is a Cloudflare cookie of up to 720h ([infra §6.2](infra.md#62-setup-steps) step 6), so you meet Google only when that session ends. [infra §9.2](infra.md#92-open-questions-for-you) item 3 stays open: this runbook does not choose.
+What this means for the operator: Testing is the safe start and is reversible by publishing. The Access session itself is a Cloudflare cookie of up to 720h ([infra §6.2](infra.md#62-setup-steps) step 6), so you meet Google only when that session ends. [infra §9.2](infra.md#92-open-questions-for-you) item 1 stays open: this runbook does not choose, and the operator's choice is not recorded.
 
 **Verify.**
 1. [ ] **Zero Trust** > **Integrations** > **Identity providers**, **Test** next to Google ([Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)). Sign in with `<partner-a-email>` (or `<owner-google-email>`), a test user. A successful run returns you to Cloudflare without an error page.
@@ -219,7 +226,9 @@ What this means for the operator: Testing is the safe start and is reversible by
 
 ## M4. Cloudflare API tokens
 
-**Why.** CI needs one token to run migrations and deploy; the one-time Access setup needs a second, short-lived one with different powers. Two tokens means a leaked GitHub secret cannot change the Access policy ([infra §7.3](infra.md#73-tokens-and-secrets)).
+**Why.** CI needs one token to run migrations and deploy. The one-time Access setup could use a second, short-lived one with different powers, so that a leaked GitHub secret cannot change the Access policy ([infra §7.3](infra.md#73-tokens-and-secrets)).
+
+**Outcome (done for `wp-ci`).** One account-scoped token named `wp-ci` was created with Workers Scripts Write and D1 Write on the account and Zone Read on the one zone; it is stored as the GitHub secret `CLOUDFLARE_API_TOKEN` (M8). `wp-access-setup` was not created: the supervisor did the Access and identity-provider work through the Cloudflare CLI, already logged in as the operator. The recipe for it stays below in case the CLI route is not available.
 
 **Prerequisites.** M1: `<account-id>`. M2 for `wp-access-setup` (the Access API needs the organisation). To create account API tokens you need API Token Provisioning capabilities or Super Administrator status ([Account API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/), 28 September 2026).
 
@@ -234,18 +243,19 @@ What this means for the operator: Testing is the safe start and is reversible by
 | Account | **Workers Scripts: Edit** | Upload the Worker, set secrets, attach the Custom Domain | Upload: "Workers Scripts Write" on the [update script](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/) and [secrets](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/update/) endpoints. Custom Domain: "Workers Scripts Write" on [`PUT /accounts/{account_id}/workers/domains`](https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/update/) |
 | Account | **D1: Edit** | `wrangler d1 create` and `wrangler d1 migrations apply wp --remote` | `D1 Write` on [create database](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/create/); [query](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/) accepts `D1 Read` or `D1 Write`, and migrations write |
 
-Resources: **Account Resources** > **Include** > the single account `<account-name>`; never "All accounts" ([GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), 18 September 2026: "restrict the generated API token to only the account on which you will be deploying"). **Zone Resources** only appear once you add a zone permission; with the two permissions above there is no zone scope.
+Resources: **Account Resources** > **Include** > the single account `<account-name>`; never "All accounts" ([GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), 18 September 2026: "restrict the generated API token to only the account on which you will be deploying"). **Zone Resources** appear once you add a zone permission; the only one is the Zone Read of the next paragraph.
 
 What I left out of Cloudflare's own "Edit Cloudflare Workers" template ([API token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/)): Workers KV Storage Write, Workers R2 Storage Write, Workers Tail Read, Account Settings Read, User Details Read, User Memberships Read, and the zone permission Workers Routes Write. wp uses no KV or R2, runs `wrangler` without `tail`, and sets `CLOUDFLARE_ACCOUNT_ID` so wrangler does not need to list accounts (the memberships lookup is skipped when the account ID is given: wrangler source, **unverified in docs**).
 
-**The Custom Domain gap (unverified).** The only permission any official page names for attaching a Custom Domain through the API is Workers Scripts Write. No page I read says whether Cloudflare also checks DNS or certificate permissions on the zone when it creates the DNS record and the Advanced Certificate for you ([Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)). Start without a zone permission. If the first deploy fails on the Custom Domain with a permission error, add one permission at a time and stop when it passes:
-1. **Zone** > **Workers Routes: Edit** (the template's zone permission),
-2. **Zone** > **DNS: Edit**,
-3. **Zone** > **SSL and Certificates: Edit**,
+**The Custom Domain question is answered: no DNS or routes permission is needed.** The only permission any official page names for attaching a Custom Domain through the API is Workers Scripts Write ([Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)), and no page says whether Cloudflare also checks zone permissions when it creates the DNS record and the certificate. The first CI deploy attached `wp.atqamz.com` and ran green with exactly the permissions of the table plus **Zone** > **Zone Read** on the one `atqamz.com` zone (below), so neither Workers Routes Edit, DNS Edit nor SSL and Certificates Edit is part of `wp-ci`. Whether Zone Read is itself needed, or only harmless, was not tested.
 
-each scoped under **Zone Resources** > **Include** > **Specific zone** > `atqamz.com`. Write the permission that was needed into this file and into [infra §7.3](infra.md#73-tokens-and-secrets).
+| Scope | Permission | Why | Source |
+|---|---|---|---|
+| Zone | **Zone: Read** | Part of the token as created; lets wrangler look up the zone of the custom domain (inferred, not tested) | [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) |
 
-`wp-access-setup` (temporary; only on your machine; not in GitHub):
+Zone resources: **Include** > **Specific zone** > `atqamz.com`.
+
+`wp-access-setup` (optional, **not created**; temporary; only on your machine; not in GitHub):
 
 | Scope | Permission | Why | Source |
 |---|---|---|---|
@@ -258,10 +268,10 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 
 **Steps.**
 1. [ ] Open **Manage account** > **Account API tokens** ([Account API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)).
-2. [ ] **Create Token**, choose a custom token (not a template), name it `wp-ci`. Add the two permissions above. Set **Account Resources** to your account. Add no IP filter unless you know your CI addresses (GitHub-hosted runners change). Leave the expiry empty or set one you will remember; a recurring reminder is your call.
-3. [ ] **Continue to summary**. Check that the summary lists exactly two permissions and one account. **Create Token**.
+2. [ ] **Create Token**, choose a custom token (not a template), name it `wp-ci`. Add the two account permissions above and the Zone Read permission of the Custom Domain paragraph. Set **Account Resources** to your account and **Zone Resources** to the one zone. Add no IP filter unless you know your CI addresses (GitHub-hosted runners change). Leave the expiry empty or set one you will remember; a recurring reminder is your call.
+3. [ ] **Continue to summary**. Check that the summary lists exactly three permissions, one account and one zone. **Create Token**.
 4. [ ] Copy the token value into `wp / token wp-ci` now. It is shown once ([Create API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)).
-5. [ ] Repeat steps 2 to 4 for `wp-access-setup` with its two permissions and the two-day expiry.
+5. [ ] Optional, not done: repeat steps 2 to 4 for `wp-access-setup` with its two permissions and the two-day expiry.
 
 **Verify.**
 1. [ ] Each token is active. For account tokens the endpoint is `GET /accounts/{account_id}/tokens/verify`, returning `status` of `active`, `disabled` or `expired` ([API](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/verify/)):
@@ -272,8 +282,8 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
    ```
 
    Expect `"active"`. (The page of the Create token docs shows `/user/tokens/verify`: that endpoint is for user tokens.)
-2. [ ] Negative check on `wp-ci`: `curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=atqamz.com"` should **not** list the zone, since the token has no zone permission. The exact error body is **unverified**; any permission error is the expected answer.
-3. [ ] The real test of `wp-ci` is the first `wrangler deploy` in CI. If an API call reports a missing permission, the error names it: add that permission only, and record it.
+2. [ ] Negative check on `wp-ci`: a call that needs a power the token lacks, for example listing DNS records of the zone (`GET /zones/<zone-id>/dns_records`), must fail with a permission error, since the token has Zone Read only. The exact error body is **unverified**; any permission error is the expected answer.
+3. [ ] The real test of `wp-ci` is a `wrangler deploy` in CI, which ran green. If an API call reports a missing permission, the error names it: add that permission only, and record it.
 
 **Record.** `wp / token wp-ci` and `wp / token wp-access-setup`: the value, the token name, the permissions list, the account scope, the expiry, the creation date.
 
@@ -301,16 +311,18 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
    ```
 
    `d1 create <NAME>` "provides the binding and UUID that you will put in your config file" ([D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/), 21 April 2026). Wrangler reads the token from `CLOUDFLARE_API_TOKEN` ([General commands](https://developers.cloudflare.com/workers/wrangler/commands/general/)). Optional flag: `--location <hint>` (`weur`, `eeur`, `apac`, `oc`, `wnam`, `enam`) for the primary location; the infra docs make no choice, so the default stays unless you decide otherwise, and whether the location can be changed later is **unverified** ([D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)).
-2. [ ] If wrangler asks **Would you like Wrangler to add it on your behalf?**, answer **no**. Left to itself it writes one `d1_databases` entry and rewrites the file through its own patcher, while wp needs the ID in two places, at the top level and in `env.dev` (wrangler source, `createdResourceConfig`; the `--update-config` flag skips the question, [D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)).
-3. [ ] Copy the printed UUID `<d1-database-id>` into both `database_id` fields of `wrangler.jsonc`: `d1_databases[0]` at the top and the same entry under `env.dev` ([infra §5.2](infra.md#52-frontend-build-a-vite-react-spa-on-the-worker), which shows `"<uuid from wrangler d1 create>"` and `"<same uuid>"`).
+2. [ ] If wrangler asks **Would you like Wrangler to add it on your behalf?**, answer **no**. Left to itself it writes one `d1_databases` entry and rewrites the file through its own patcher, while wp wants the entry kept as it is and only the top-level `database_id` changed (wrangler source, `createdResourceConfig`; the `--update-config` flag skips the question, [D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)).
+3. [ ] Copy the printed UUID `<d1-database-id>` into the `database_id` of the top-level `d1_databases[0]` of `wrangler.jsonc` **only**. The `env.dev` entry keeps its all-zero placeholder, because the local D1 does not need the real id and the dev build must never point at production ([infra §5.2](infra.md#52-frontend-build-a-vite-react-spa-on-the-worker)).
 4. [ ] `unset CLOUDFLARE_API_TOKEN`.
 
 **Verify.**
 1. [ ] `npx wrangler d1 list` (with the token set again) shows `wp` and the same UUID ([D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)).
-2. [ ] `grep -c '<d1-database-id>' wrangler.jsonc` prints `2`.
+2. [ ] `grep -c '<d1-database-id>' wrangler.jsonc` prints `1`, and the `env.dev` entry still reads `00000000-0000-0000-0000-000000000000`.
 3. [ ] Optional, writes nothing: `npx wrangler d1 migrations list wp --remote` runs against the new database. The apply step is for CI (A2); apply asks for confirmation and takes a backup after it runs, and a failed migration is rolled back ([D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)).
 
 **Record.** `wp / cloudflare account`: `<d1-database-id>`, creation date, location hint if any. Commit the config change through a PR, as usual.
+
+**Outcome (done).** The database `wp` exists with migration 0001 applied; its id is the top-level `database_id` in `wrangler.jsonc` on `main` (a UUID, not a credential). `env.dev` keeps the placeholder. Migration 0001 is `migrations/0001_init.sql`, identical to [brainstorm §7.2](brainstorm.md#72-schema).
 
 **If it fails.**
 - An authentication error: the token is missing `D1: Edit`, is for another account, or `CLOUDFLARE_ACCOUNT_ID` is wrong. Run the M4 verify.
@@ -321,11 +333,13 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 
 ## M6. Create the Access app and note the AUD
 
-**Why.** The Access app puts Google login and the two-email allow policy in front of `wp.atqamz.com`. The Worker verifies the `Cf-Access-Jwt-Assertion` token against the app's `aud` claim ([infra §6.4](infra.md#64-jwt-verification-in-the-worker)), so you need the AUD tag for M7.
+**Outcome (done).** The supervisor created the Access application through the Cloudflare CLI: self-hosted, hostname-based for `wp.atqamz.com`, a 30-day session, SameSite `lax` cookie, one inline allow policy that includes exactly the two allowed emails. It was first created with One-time PIN, the only identity provider that existed then; Google was added later ([Adding the Google sign-in](#adding-the-google-sign-in)), and the application now allows both with `auto_redirect_to_identity` off. The AUD was recorded for M7 and is not written here. No `wp-access-setup` token and no script were used.
 
-**Prerequisites.** M2 (organisation), M3 (the `google` identity provider exists and tested), `wp-access-setup` from M4, `<team-name>`, `<account-id>`. The hostname `wp.atqamz.com` need not exist yet: the dashboard flow says domains "must belong to an active zone in your Cloudflare account", not that a record must exist ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/), 4 September 2026). Whether the API accepts the app before the first deploy is **unverified**: if it refuses, finish this step after the first deploy and rerun M7 for `ACCESS_AUD`.
+**Why.** The Access app puts a login (Google, with One-time PIN beside it for now) and the two-email allow policy in front of `wp.atqamz.com`. The Worker verifies the `Cf-Access-Jwt-Assertion` token against the app's `aud` claim ([infra §6.4](infra.md#64-jwt-verification-in-the-worker)), so you need the AUD tag for M7.
 
-`scripts/access.sh` ([infra §8.1](infra.md#81-layout)) is meant to do the steps below. It does not exist yet, so this runbook gives the same calls by hand. When the script lands, replace this section with its usage.
+**Prerequisites.** M2 (organisation), an identity provider to allow (One-time PIN from M2, and the Google one from M3 if it exists), a way to call the Access API (the logged-in Cloudflare CLI, or `wp-access-setup` from M4), `<team-name>`, `<account-id>`. The hostname `wp.atqamz.com` need not exist yet: the dashboard flow says domains "must belong to an active zone in your Cloudflare account", not that a record must exist ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/), 4 September 2026). Whether the API accepts the app before the first deploy is **unverified**: if it refuses, finish this step after the first deploy and rerun M7 for `ACCESS_AUD`.
+
+`scripts/access.sh` was planned and not written; this runbook gives the calls by hand, and they were run through the CLI. The body below is the intended final shape (Google only, auto redirect); the application as it is today allows two identity providers and has auto redirect off.
 
 **Steps (API).**
 1. [ ] Set up the shell (read secrets silently; the emails come from your password manager):
@@ -392,9 +406,11 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 
 ## M7. Set the three Worker secrets
 
+**Outcome (done).** The Worker `wp` exists with the three secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `ALLOWED_EMAILS`, set by the first deploy as described under "As done" below. Values are not recorded here.
+
 **Why.** The Worker reads `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `ALLOWED_EMAILS` ([infra §6.4](infra.md#64-jwt-verification-in-the-worker)). `wrangler.jsonc` lists them in `secrets.required`, so `wrangler deploy` "will fail with a clear error if any required secrets are not configured on the Worker" ([Secrets](https://developers.cloudflare.com/workers/configuration/secrets/), 3 July 2026). They must therefore exist **before the first deploy**. They stay across deploys, and the deploy workflow does not touch them ([infra §6.3](infra.md#63-where-the-two-emails-are-stored)).
 
-**Prerequisites.** `wp-ci` from M4 (**Workers Scripts: Edit** covers the secrets endpoint). `<team-name>` (M2), `<aud>` (M6), the two emails.
+**Prerequisites.** An account token with Workers Scripts Write (it covers the secrets endpoint and the first deploy), plus the zone permissions that attaching the custom domain needs; use a short-lived token for the first deploy and delete it afterwards (`wp-ci` is the long-lived CI token and is enough for later deploys). `<team-name>` (M2), `<aud>` (M6), the two emails.
 
 **Values.**
 
@@ -419,7 +435,7 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 2. [ ] The Worker does not exist yet. Wrangler 4.147.0 then asks: "There doesn't seem to be a Worker called "wp". Do you want to create a new Worker with that name and add secrets to it?" and creates an empty Worker if you answer yes (wrangler source, `createDraftWorker`; the docs I read do not describe this, so it is **unverified in docs**). Answer **yes**. Every `secret put` "creates a new version of the Worker and deploys it immediately" ([Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)): harmless for an empty Worker, and nothing is routed to it yet because the Custom Domain comes with the first deploy.
 3. [ ] `unset CLOUDFLARE_API_TOKEN`.
 
-**Alternative.** Put the three values in a file and run `npx wrangler deploy --secrets-file <file>` for the first deploy. The file takes JSON or `.env` format ([Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)). It is not simpler: it needs a built project, and the file holds the emails. If you use it, keep the file outside the repo, mode `600`, and delete it afterwards. `.env*` is already in the `.gitignore` list ([infra §6.3](infra.md#63-where-the-two-emails-are-stored)).
+**As done: the first deploy by hand with a secrets file.** The secrets were not set with `secret put`. Wrangler refuses a first deploy of a Worker that does not exist yet when `secrets.required` is set and no secrets are supplied, and CI has no secrets file, so the first deploy was run by hand: `npx wrangler deploy --secrets-file <file>`, with a one-hour account token in the environment (Workers Scripts Write and D1 Write on the account, Zone Read, DNS Write and Workers Routes Write on the one zone; created for this deploy and deleted right after it, so `wp-ci` was not used), after `npm run build`. The file takes JSON or `.env` format ([Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)); it was kept outside the repo, mode `600`, and deleted afterwards, and `.env*` is in `.gitignore`. Deploys from CI after that keep the secrets. The `secret put` route above remains the way to change one secret later; `secret put` on a Worker that does not exist yet is **unverified** in practice here, because it was not used.
 
 **Verify.** `npx wrangler secret list --name wp` (token set) lists the three names, not the values ([Wrangler commands: secret list](https://developers.cloudflare.com/workers/wrangler/commands/workers/)). The real check is the first deploy: `secrets.required` fails it if one is missing, and the error lists which ([Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)).
 
@@ -434,6 +450,8 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 ---
 
 ## M8. Set the GitHub Actions secrets
+
+**Outcome (done).** The GitHub secrets `CLOUDFLARE_API_TOKEN` (the account-scoped `wp-ci`) and `CLOUDFLARE_ACCOUNT_ID` exist on the repository. The first CI deploy ran green with them. The workflow gives them to the migration and deploy steps only ([infra §7.2](infra.md#72-workflow)).
 
 **Why.** The deploy job reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from GitHub secrets ([infra §7.2](infra.md#72-workflow)). Cloudflare's docs say to store the token and the account ID as secrets ([GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)). The Worker secrets of M7 are **not** copied to GitHub.
 
@@ -458,6 +476,32 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 - A typo in a value: rerun `gh secret set` with the same name; it overwrites.
 - You rotated `wp-ci`: set `CLOUDFLARE_API_TOKEN` again.
 - Public repo and forks: GitHub does not pass secrets to workflows triggered by pull requests from forks ([infra §7.1](infra.md#71-github-actions-vs-workers-builds)); the PR workflow does not use any anyway.
+
+---
+
+## Adding the Google sign-in
+
+**Status: done, except the last step.** The Google identity provider exists in Zero Trust, created by the supervisor from a Web client the operator made in the Google Cloud console; the client file was consumed and deleted, and no value from it is in this repo. The Access application allows two identity providers, Google and One-time PIN, with `auto_redirect_to_identity` off, so users see a chooser; its single policy includes exactly the two allowed emails and nothing else (no email domain, no "everyone"). **Next, after the operator confirms that a Google login works** (M9): the supervisor makes Google the only identity provider of the application with auto redirect, and keeps One-time PIN as a fallback that is restored with one Cloudflare CLI command (re-adding it to the application's allowed identity providers). The Worker verifies the same Access JWT whichever provider signed the user in, so no code or secret changes at any of these steps (expected; confirm in M9).
+
+The rest of this section is kept as a record and for recovery (a deleted or expired client, a lost secret, rebuilding in another account).
+
+**Why a person does the Google part.** No gcloud command and no API creates the OAuth client that signs in ordinary Gmail accounts:
+
+- The IAP OAuth Admin API, the only documented programmatic way to create a client, was deprecated on 22 January 2025; Google discontinued support for it on 19 January 2026 and announced its permanent shutdown for 19 March 2026. Google's pages say new clients are created in the Google Cloud console ([Migrate from the IAP OAuth Admin API](https://docs.cloud.google.com/iap/docs/deprecations/migrate-oauth-client)). Those pages describe the IAP OAuth Admin API only; that no other API exists for Google Auth Platform clients is my finding from not having found one, so it is **unverified** as a universal statement.
+- `gcloud iam oauth-clients` (the `projects.locations.oauthClients` API) creates clients for **Workforce Identity Federation**. Google: "These steps and the `projects.locations.oauthClients` API are only for Workforce Identity Federation. To create and manage standard OAuth 2.0 client IDs ... go to the Google Cloud console" ([Manage OAuth application](https://docs.cloud.google.com/iam/docs/workforce-manage-oauth-app)). Those clients belong to a workforce identity pool, so they cannot be used as the "Sign in with Google" client for Gmail accounts (my reading of that page).
+- Managing standard clients, including their secrets, is described for the console ([Manage OAuth clients](https://support.google.com/cloud/answer/15549257)).
+
+**What the operator does** (Google Cloud console; the same steps as [M3](#m3-google-oauth-client), shortened):
+
+1. [ ] In a Google Cloud project, open **Google Auth Platform** and fill in **Branding**: app name and user support email ([Google: consent screen fields](https://support.google.com/cloud/answer/15549049)).
+2. [ ] **Audience**: choose **External**. While the publishing status is Testing, add the two allowed Google accounts under **Test users** ([Google: app audience](https://support.google.com/cloud/answer/15549945)). Do not add scopes.
+3. [ ] **Clients** > **Create client** > **Web application**. Authorized JavaScript origin `https://<team-name>.cloudflareaccess.com`; authorized redirect URI `https://<team-name>.cloudflareaccess.com/cdn-cgi/access/callback` ([Cloudflare: Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)).
+4. [ ] Copy the **Client ID** and **Client secret** once (Google shows the secret only at creation, [Manage OAuth clients](https://support.google.com/cloud/answer/15549257)) and hand them to the supervisor out of band: a password manager or a local file that is deleted after use, never the repo, an issue, a PR or a chat.
+5. [ ] In Zero Trust, **Settings** > **Authentication** > add a new login method, **Google**, with that ID and secret ([Cloudflare: Google IdP](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/), which calls the same place **Integrations** > **Identity providers**; the menu names differ between dashboard versions: unverified for today's dashboard). In this setup the supervisor does this step with the Cloudflare CLI.
+
+**What the supervisor does:** create the Google identity provider from the client values, add it to the Access application's allowed identity providers (done, together with One-time PIN), and, once the operator has logged in with Google, replace the allowed list with Google alone and turn auto redirect on. Inline policies are untouched by these changes.
+
+**Verify.** On a phone and a laptop, open `https://wp.atqamz.com`: the chooser lists Google and One-time PIN; Google signs in the allowed account and returns to the app, and a third Google account is refused by the policy. This is part of M9 and has not been done yet.
 
 ---
 
@@ -503,6 +547,9 @@ Every page below was fetched on 6 October 2026. Dates are the "last updated" sho
 | Google: manage OAuth clients | https://support.google.com/cloud/answer/15549257 | none shown |
 | Google: verification requirements | https://support.google.com/cloud/answer/13463073 | none shown |
 | Google: refresh token expiry | https://developers.google.com/identity/protocols/oauth2 | none shown |
+| Google: IAP OAuth Admin API deprecation | https://docs.cloud.google.com/iap/docs/deprecations/migrate-oauth-client | none shown |
+| Google: IAM OAuth clients are for Workforce Identity Federation | https://docs.cloud.google.com/iam/docs/workforce-manage-oauth-app | none shown |
+| GitHub: `GITHUB_TOKEN` does not start workflow runs, except `workflow_dispatch` and `repository_dispatch` | https://docs.github.com/en/actions/concepts/security/github_token | none shown |
 | GitHub CLI: `gh secret set` | https://cli.github.com/manual/gh_secret_set | none shown |
 | Wrangler 4.147.0 source (`wrangler-dist/cli.js` from `npm pack wrangler`) | https://www.npmjs.com/package/wrangler | 4.147.0 |
 
