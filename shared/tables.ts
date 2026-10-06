@@ -4,6 +4,8 @@ export type Type =
   | "id"
   | "key"
   | "text"
+  | "longtext"
+  | "note"
   | "int"
   | "real"
   | "bool"
@@ -13,6 +15,9 @@ export type Type =
   | "phone"
   | "url"
   | "json"
+  | "zone"
+  | "decimal"
+  | "dates"
   | readonly string[];
 
 export type Column = {
@@ -21,6 +26,7 @@ export type Column = {
   notNull: boolean;
   default?: string | number;
   server?: true;
+  immutable?: true;
 };
 
 export type Variant = {
@@ -38,18 +44,20 @@ export type Table = {
   common: readonly string[];
   by?: string;
   variants?: Readonly<Record<string, Variant>>;
+  values?: Readonly<Record<string, Type>>;
 };
 
 const optional = <const T extends Type>(sql: Sql, type: T) => ({ sql, type, notNull: false as const });
 const required = <const T extends Type>(sql: Sql, type: T) => ({ sql, type, notNull: true as const });
 const withDefault = <const C extends Column>(column: C, value: string | number) => ({ ...column, default: value });
 const server = <const C extends Column>(column: C) => ({ ...column, server: true as const });
+const immutable = <const C extends Column>(column: C) => ({ ...column, immutable: true as const });
 
 const who = ["a", "b", "both"] as const;
 
 const syncColumns = {
   rev: server(required("INTEGER", "int")),
-  created_at: required("TEXT", "instant"),
+  created_at: immutable(required("TEXT", "instant")),
   updated_at: required("TEXT", "instant"),
   updated_by: server(optional("TEXT", ["a", "b", "import"] as const)),
   deleted_at: optional("TEXT", "instant"),
@@ -62,10 +70,20 @@ export const tables = {
     key: "key",
     columns: {
       key: required("TEXT", "key"),
-      value: required("TEXT", "text"),
+      value: required("TEXT", "longtext"),
       ...syncColumns,
     },
     common: ["key", "value", ...syncNames],
+    values: {
+      ceremony_date: "date",
+      timezone: "zone",
+      partner_a_label: "text",
+      partner_b_label: "text",
+      hijri_calendar: ["islamic", "islamic-umalqura", "islamic-civil", "islamic-tbla", "islamic-rgsa"],
+      hijri_offset_days: ["-2", "-1", "0", "1", "2"],
+      holidays: "dates",
+      portion_multiplier: "decimal",
+    },
   },
   items: {
     key: "id",
@@ -83,7 +101,7 @@ export const tables = {
       currency: withDefault(required("TEXT", "currency"), "IDR"),
       qty: optional("INTEGER", "int"),
       who: optional("TEXT", who),
-      note: optional("TEXT", "text"),
+      note: optional("TEXT", "note"),
       data: optional("TEXT", "json"),
       sort: withDefault(required("REAL", "real"), 0),
       ...syncColumns,
@@ -101,13 +119,13 @@ export const tables = {
         columns: ["project_id", "status", "due_on", "done_on", "who", "group_key", "amount", "qty", "note"],
         required: ["project_id", "status"],
         status: ["todo", "done"],
-        data: { start_on: "date", decision: "bool", rules: "text" },
+        data: { start_on: "date", decision: "bool", rules: "longtext" },
       },
       vendor: {
         columns: ["project_id", "status", "group_key", "amount"],
         required: ["project_id", "status"],
         status: ["option", "confirmed", "cancelled"],
-        data: { phone: "phone", pic: "text", contract_url: "url", facts: "text" },
+        data: { phone: "phone", pic: "text", contract_url: "url", facts: "longtext" },
       },
       guest: {
         columns: ["project_id", "status", "who", "group_key", "qty"],
@@ -139,7 +157,7 @@ export const tables = {
       due_on: optional("TEXT", "date"),
       done_on: optional("TEXT", "date"),
       who: optional("TEXT", who),
-      note: optional("TEXT", "text"),
+      note: optional("TEXT", "note"),
       data: optional("TEXT", "json"),
       sort: withDefault(required("REAL", "real"), 0),
       ...syncColumns,
@@ -185,7 +203,11 @@ export type Row<T extends TableName> = {
   [C in keyof Columns<T>]: Columns<T>[C] extends { notNull: true } ? Value<Columns<T>[C]> : Value<Columns<T>[C]> | null;
 };
 
-export type Patch<T extends TableName> = Partial<Omit<Row<T>, "rev" | "updated_by" | (typeof tables)[T]["key"]>>;
+type Discriminator<T extends TableName> = (typeof tables)[T] extends { by: infer B extends string } ? B : never;
+
+export type Patch<T extends TableName> = Partial<
+  Omit<Row<T>, "rev" | "updated_by" | "created_at" | (typeof tables)[T]["key"] | Discriminator<T>>
+>;
 
 export type ItemRow = Row<"items">;
 export type BudgetEntryRow = Row<"budget_entries">;

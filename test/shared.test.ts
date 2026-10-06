@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tables, tableNames } from "../shared/tables.ts";
-import type { Row, TableName } from "../shared/tables.ts";
-import { rowKey } from "../shared/api.ts";
-import { validateCreate, validatePatch } from "../shared/validate.ts";
+import type { Patch, Row, TableName } from "../shared/tables.ts";
+import { MAX_MUTATIONS, applyPatch, rowKey, toInstant } from "../shared/api.ts";
+import { validateCreate, validateMutation, validatePatch, validateRow } from "../shared/validate.ts";
 
 const migration = readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
 
@@ -96,7 +96,7 @@ const items = { project, task, vendor, guest };
 const sqlRow = (row: Obj) => ({
   rev: 1,
   ...row,
-  ...(row.data === undefined ? {} : { data: JSON.stringify(row.data) }),
+  ...(typeof row.data === "object" && row.data !== null ? { data: JSON.stringify(row.data) } : {}),
 });
 
 const insert = (db: DatabaseSync, table: string, row: Obj) => {
@@ -187,6 +187,27 @@ test("derived row types accept a full row", () => {
   assert.equal(rowKey(table, row), "k");
 });
 
+test("patch types omit identity, discriminator, created_at and server columns", () => {
+  const ok: Patch<"items"> = { status: "done", data: { phone: null }, updated_at: instant };
+  const okEntry: Patch<"budget_entries"> = { amount: null };
+  const okSetting: Patch<"settings"> = { value: "v" };
+  // @ts-expect-error
+  const kind: Patch<"items"> = { kind: "task" };
+  // @ts-expect-error
+  const entryType: Patch<"budget_entries"> = { entry_type: "planned" };
+  // @ts-expect-error
+  const id: Patch<"items"> = { id: "x" };
+  // @ts-expect-error
+  const key: Patch<"settings"> = { key: "x" };
+  // @ts-expect-error
+  const created: Patch<"items"> = { created_at: instant };
+  // @ts-expect-error
+  const rev: Patch<"items"> = { rev: 1 };
+  // @ts-expect-error
+  const updatedBy: Patch<"items"> = { updated_by: "a" };
+  assert.ok([ok, okEntry, okSetting, kind, entryType, id, key, created, rev, updatedBy].every((p) => typeof p === "object"));
+});
+
 test("accepts a valid row of every kind and entry type", () => {
   for (const [kind, row] of Object.entries(items)) assert.deepEqual(validateCreate("items", row), [], kind);
   assert.deepEqual(validateCreate("budget_entries", planned), []);
@@ -266,7 +287,7 @@ test("ids are lowercase UUIDs", () => {
 });
 
 test("instants are RFC 3339 UTC with Z", () => {
-  for (const ok of ["2026-10-06T05:00:00Z", "2026-10-06T05:00:00.123Z", "2024-02-29T23:59:59Z"])
+  for (const ok of ["2026-10-06T05:00:00Z", "2024-02-29T23:59:59Z", "2026-12-31T23:59:59Z"])
     assert.deepEqual(validateCreate("items", { ...task, created_at: ok }), [], ok);
   for (const bad of [
     "2026-10-06",
@@ -279,6 +300,9 @@ test("instants are RFC 3339 UTC with Z", () => {
     "2026-10-06T05:60:00Z",
     "2026-10-06T05:00:60Z",
     "2026-10-06T05:00Z",
+    "2026-10-06T05:00:00.5Z",
+    "2026-10-06T05:00:00.000Z",
+    "2026-10-06T05:00:00.123456789Z",
     5,
     null,
   ])
@@ -310,9 +334,22 @@ test("money is a whole non-negative integer with a currency code", () => {
 });
 
 test("phone numbers in data are E.164", () => {
-  for (const ok of ["+628123456789", "+14155550100", "+442071838750"])
+  for (const ok of ["+628123456789", "+14155550100", "+442071838750", "+1234567", "+123456789012345"])
     assert.deepEqual(validateCreate("items", { ...vendor, data: { phone: ok } }), [], ok);
-  for (const bad of ["08123456789", "628123456789", "+0123456789", "+62 812 3456 789", "+62-812-3456", "+6281234567890123", "+", "", 628123456789])
+  for (const bad of [
+    "+62",
+    "+12",
+    "+123456",
+    "+1234567890123456",
+    "08123456789",
+    "628123456789",
+    "+0123456789",
+    "+62 812 3456 789",
+    "+62-812-3456",
+    "+",
+    "",
+    628123456789,
+  ])
     rejects("items", { ...vendor, data: { phone: bad } }, /data.phone/);
   rejects("items", { ...guest, data: { phone: "0812" } }, /data.phone/);
 });
@@ -333,6 +370,7 @@ test("status is checked per kind and per entry type", () => {
     guest: ["todo", "sent", "confirmed", "declined"],
   } as const;
   for (const [kind, statuses] of Object.entries(good)) {
+    assert.deepEqual(tables.items.variants[kind as keyof typeof good].status, statuses, `${kind} status set`);
     for (const status of statuses)
       assert.deepEqual(validateCreate("items", { ...items[kind as keyof typeof items], status }), [], `${kind} ${status}`);
     const foreign = Object.values(good).flat().find((s) => !(statuses as readonly string[]).includes(s))!;
@@ -363,6 +401,16 @@ test("a payment date needs a paid payment", () => {
   rejects("budget_entries", { ...payment, status: "due", done_on: "2026-11-02" }, /done_on: only allowed when status is paid/);
   assert.deepEqual(validateCreate("budget_entries", { ...payment, status: "paid", done_on: "2026-11-02" }), []);
   assert.deepEqual(validateCreate("budget_entries", { ...payment, status: "paid" }), []);
+});
+
+test("data key sets are exact", () => {
+  const keys = (v: { data: object }) => Object.keys(v.data).sort();
+  assert.deepEqual(keys(tables.items.variants.project), []);
+  assert.deepEqual(keys(tables.items.variants.task), ["decision", "rules", "start_on"]);
+  assert.deepEqual(keys(tables.items.variants.vendor), ["contract_url", "facts", "phone", "pic"]);
+  assert.deepEqual(keys(tables.items.variants.guest), ["channel", "import_batch", "phone", "rsvp_qty"]);
+  assert.deepEqual(keys(tables.budget_entries.variants.planned), []);
+  assert.deepEqual(keys(tables.budget_entries.variants.payment), ["proof_url"]);
 });
 
 test("data holds only the keys the kind allows", () => {
@@ -404,12 +452,308 @@ test("sort is a finite number", () => {
   for (const bad of ["1", NaN, Infinity, null]) rejects("items", { ...task, sort: bad }, /sort/);
 });
 
+
+const maxed = (n: number, c = "a") => c.repeat(n);
+
+test("text rejects control, format and surrogate characters", () => {
+  for (const bad of ["\0", "\x07", "a\0b", "​", "‍", "‮", "﻿", "\ud800", "a\ud800b", "a\nb", "a\tb", "a\rb", "\x7f", "\x85"])
+    for (const column of ["title", "group_key"])
+      rejects("items", { ...task, [column]: `x${bad}` }, new RegExp(`${column}: must be a single-line string`));
+  rejects("items", { ...task, title: "ok‮" }, /title/);
+  rejects("budget_entries", { ...planned, title: "a\0b" }, /title/);
+  rejects("settings", { ...setting, value: "a\nb" }, /value/);
+  rejects("items", { ...vendor, data: { pic: "a\0b" } }, /data.pic/);
+  rejects("items", { ...vendor, data: { facts: "a\nb" } }, /data.facts/);
+  assert.deepEqual(validateCreate("items", { ...task, title: "Café 結婚 🎉" }), []);
+});
+
+test("only a note may span lines", () => {
+  assert.deepEqual(validateCreate("items", { ...task, note: "line one\nline two\n\tindented" }), []);
+  for (const bad of ["a\rb", "a\0b", "a​b", "a\ud800b", "a\x1bb"])
+    rejects("items", { ...task, note: bad }, /note: must be a string/);
+});
+
+test("text needs a visible character", () => {
+  for (const blank of ["", " ", " ", "　", "⠀", "ㅤ", "ᅟ", "​", " ", "   "]) {
+    rejects("items", { ...task, title: blank }, /title/);
+    rejects("items", { ...task, note: blank }, /note/);
+  }
+  assert.deepEqual(validateCreate("items", { ...task, title: " a " }), []);
+  assert.deepEqual(validateCreate("items", { ...task, title: "." }), []);
+});
+
+test("text length caps hold at the boundary", () => {
+  const cases: [string, (v: string) => [string, Obj], number][] = [
+    ["items", (v) => ["items", { ...task, title: v }], 500],
+    ["items", (v) => ["items", { ...task, group_key: v }], 500],
+    ["items", (v) => ["items", { ...task, note: v }], 10000],
+    ["budget_entries", (v) => ["budget_entries", { ...planned, title: v }], 500],
+    ["budget_entries", (v) => ["budget_entries", { ...planned, group_key: v }], 500],
+    ["settings", (v) => ["settings", { ...setting, key: "label_free", value: v }], 2000],
+    ["items", (v) => ["items", { ...vendor, data: { pic: v } }], 500],
+    ["items", (v) => ["items", { ...vendor, data: { facts: v } }], 2000],
+    ["items", (v) => ["items", { ...task, data: { rules: v } }], 2000],
+    ["items", (v) => ["items", { ...guest, data: { import_batch: v } }], 500],
+  ];
+  for (const [label, build, max] of cases) {
+    const [okTable, ok] = build(maxed(max));
+    assert.deepEqual(validateCreate(okTable, ok), [], `${label} ${max}`);
+    const [badTable, bad] = build(maxed(max + 1));
+    assert.ok(validateCreate(badTable, bad).length > 0, `${label} ${max + 1}`);
+  }
+});
+
+test("serialized data is capped at 20000 characters", () => {
+  const size = (n: number) => ({ extra: maxed(n - JSON.stringify({ extra: "" }).length) });
+  assert.equal(JSON.stringify(size(20000)).length, 20000);
+  const tooLarge = /data: must serialize to at most 20000 characters/;
+  assert.ok(!validateCreate("items", { ...vendor, data: size(20000) }).some((e) => tooLarge.test(e)));
+  rejects("items", { ...vendor, data: size(20001) }, tooLarge);
+  rejects("items", { ...vendor, data: { pic: 1n } }, /data/);
+});
+
+test("urls are canonical http or https with a host", () => {
+  const url = (v: unknown) => ({ ...vendor, data: { contract_url: v } });
+  for (const ok of ["https://example.test", "http://example.test/a?b=c#d", "HTTPS://EXAMPLE.TEST/x", "https://example.test:8443/p", "https://a.example.test/ü"])
+    assert.deepEqual(validateCreate("items", url(ok)), [], ok);
+  for (const bad of [
+    " https://example.test",
+    "https://example.test ",
+    "https://exa\nmple.test",
+    "https://exa\tmple.test",
+    "https://example.test/\0",
+    "https://example.test/ ",
+    "https://example.test/a b",
+    "https://example.test/​",
+    "https://example.test/‮",
+    "https://example.test/ ",
+    "https:example.test",
+    "https:/example.test",
+    "https:///example.test",
+    "https://",
+    "https://?x",
+    "https://#x",
+    "//example.test",
+    "example.test",
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "file:///etc/passwd",
+    "blob:https://example.test/x",
+    "mailto:a@example.test",
+    "ftp://example.test",
+    "",
+    5,
+  ])
+    rejects("items", url(bad), /data.contract_url: must be an http or https URL/);
+  const base = "https://example.test/";
+  assert.deepEqual(validateCreate("items", url(base + maxed(2048 - base.length))), []);
+  rejects("items", url(base + maxed(2049 - base.length)), /data.contract_url/);
+  rejects("budget_entries", { ...payment, data: { proof_url: base + maxed(2049 - base.length) } }, /data.proof_url/);
+  rejects("budget_entries", { ...payment, data: { proof_url: "https://example.test/a\nb" } }, /data.proof_url/);
+});
+
+test("instants have one canonical form, and toInstant produces it", () => {
+  assert.equal(toInstant(new Date(Date.UTC(2026, 9, 6, 5, 0, 0, 0))), "2026-10-06T05:00:00Z");
+  assert.equal(toInstant(new Date(Date.UTC(2026, 9, 6, 5, 0, 0, 999))), "2026-10-06T05:00:00Z");
+  assert.equal(toInstant(new Date("2026-10-06T12:00:00.5+07:00")), "2026-10-06T05:00:00Z");
+  for (const d of [new Date(0), new Date(), new Date(Date.UTC(2099, 11, 31, 23, 59, 59, 999)), new Date(Date.UTC(1999, 0, 1))])
+    assert.deepEqual(validateCreate("items", { ...task, created_at: toInstant(d) }), [], toInstant(d));
+  const earlier = "2026-10-06T05:00:00Z";
+  const later = toInstant(new Date(Date.parse(earlier) + 500));
+  assert.ok(later >= earlier);
+});
+
+test("settings values follow the known keys and unknown keys stay free", () => {
+  const set = (key: string, value: unknown) => ({ ...setting, key, value });
+  const good: [string, string][] = [
+    ["ceremony_date", "2027-06-01"],
+    ["timezone", "Asia/Jakarta"],
+    ["timezone", "UTC"],
+    ["timezone", "America/Argentina/Buenos_Aires"],
+    ["partner_a_label", "Partner A"],
+    ["partner_b_label", "Partner B"],
+    ["hijri_calendar", "islamic-umalqura"],
+    ["hijri_calendar", "islamic-rgsa"],
+    ["hijri_offset_days", "-2"],
+    ["hijri_offset_days", "0"],
+    ["hijri_offset_days", "2"],
+    ["holidays", "[]"],
+    ["holidays", '["2027-01-01","2027-03-31"]'],
+    ["portion_multiplier", "1.15"],
+    ["portion_multiplier", "2"],
+    ["akad_venue", "anything goes"],
+    ["some_future_key", "not a date"],
+  ];
+  for (const [key, value] of good) assert.deepEqual(validateCreate("settings", set(key, value)), [], `${key} ${value}`);
+  const bad: [string, unknown][] = [
+    ["ceremony_date", "not a date"],
+    ["ceremony_date", "2027-02-30"],
+    ["ceremony_date", "2027-06-01T00:00:00Z"],
+    ["timezone", "Mars/Olympus"],
+    ["timezone", "+07:00"],
+    ["timezone", "Asia/ Jakarta"],
+    ["timezone", "WIB"],
+    ["hijri_calendar", "gregory"],
+    ["hijri_offset_days", "3"],
+    ["hijri_offset_days", "-3"],
+    ["hijri_offset_days", "1.5"],
+    ["hijri_offset_days", "+1"],
+    ["holidays", "2027-01-01"],
+    ["holidays", '["2027-13-01"]'],
+    ["holidays", "[1]"],
+    ["holidays", "{}"],
+    ["portion_multiplier", "0"],
+    ["portion_multiplier", "-1"],
+    ["portion_multiplier", "1e3"],
+    ["portion_multiplier", "abc"],
+    ["portion_multiplier", "1234567"],
+  ];
+  for (const [key, value] of bad) rejects("settings", set(key, value), new RegExp(`value: must be .* for key ${key}`));
+  assert.deepEqual(validatePatch("settings", "ceremony_date", { value: "2027-07-01" }), []);
+  patchRejects("settings", "ceremony_date", { value: "nope" }, /value: must be a date/);
+  assert.deepEqual(validatePatch("settings", "some_future_key", { value: "free" }), []);
+  assert.deepEqual(validateRow("settings", { ...set("ceremony_date", "2027-06-01"), rev: 1, updated_by: null }), []);
+  rejects("settings", set("ceremony_date", "x"), /value/);
+  assert.ok(validateRow("settings", { ...set("ceremony_date", "x"), rev: 1 }).some((e) => /value/.test(e)));
+});
+
+test("created_at cannot be patched", () => {
+  patchRejects("items", "task", { created_at: "2026-01-01T00:00:00Z" }, /created_at: cannot be changed/);
+  patchRejects("budget_entries", "payment", { created_at: "2026-01-01T00:00:00Z" }, /created_at: cannot be changed/);
+  patchRejects("settings", "ceremony_date", { created_at: "2026-01-01T00:00:00Z" }, /created_at: cannot be changed/);
+  assert.deepEqual(validatePatch("items", "task", { updated_at: "2026-01-01T00:00:00Z" }), []);
+});
+
+const stored = (row: Obj): Obj => ({ ...row, rev: 3, updated_by: "a" });
+
+test("validateRow accepts stored rows and checks server columns", () => {
+  for (const row of [project, task, vendor, guest]) assert.deepEqual(validateRow("items", stored(row)), []);
+  for (const row of [planned, payment]) assert.deepEqual(validateRow("budget_entries", stored(row)), []);
+  assert.deepEqual(validateRow("settings", stored(setting)), []);
+  for (const updated_by of ["a", "b", "import", null]) assert.deepEqual(validateRow("items", { ...stored(task), updated_by }), []);
+  rejects("items", { ...stored(task) }, /set by the server/);
+  const bad = (row: Obj) => validateRow("items", row);
+  assert.ok(bad({ ...stored(task), updated_by: "someone@example.test" }).some((e) => /updated_by/.test(e)));
+  assert.ok(bad({ ...stored(task), updated_by: "c" }).some((e) => /updated_by/.test(e)));
+  for (const rev of [-1, 1.5, "3", null]) assert.ok(bad({ ...stored(task), rev }).some((e) => /rev/.test(e)), String(rev));
+  const { rev: _rev, ...noRev } = stored(task);
+  assert.ok(bad(noRev).some((e) => /rev: required/.test(e)));
+  assert.ok(bad({ ...stored(task), data: JSON.stringify(task.data) }).some((e) => /data: must be an object/.test(e)));
+  assert.ok(bad({ ...stored(task), amount: -1 }).length > 0);
+  assert.ok(bad({ ...stored(task), kind: "rundown" }).length > 0);
+  assert.ok(validateRow("users", {}).length > 0);
+  assert.ok(validateRow("budget_entries", { ...stored(payment), status: "due", done_on: "2026-11-02" }).some((e) => /done_on/.test(e)));
+});
+
+test("applyPatch merges shallowly and data key by key", () => {
+  const row = { id: "x", title: "t", amount: 5, who: "a", data: { phone, pic: "p", facts: "f" } };
+  assert.deepEqual(applyPatch(row, { title: "u", amount: null }), { id: "x", title: "u", amount: null, who: "a", data: row.data });
+  assert.deepEqual(applyPatch(row, { data: { pic: "q", phone: null, rules: "r" } }).data, { pic: "q", facts: "f", rules: "r" });
+  assert.deepEqual(applyPatch(row, { data: { phone: null, pic: null, facts: null } }).data, {});
+  assert.deepEqual(applyPatch({ ...row, data: null }, { data: { pic: "q" } }).data, { pic: "q" });
+  assert.deepEqual(applyPatch({ id: "x" }, { data: { pic: "q" } }), { id: "x", data: { pic: "q" } });
+  assert.deepEqual(applyPatch(row, {}), row);
+  assert.deepEqual(applyPatch(row, { data: null }), row);
+  assert.deepEqual(row, { id: "x", title: "t", amount: 5, who: "a", data: { phone, pic: "p", facts: "f" } });
+  const hostile = applyPatch(row, JSON.parse('{"data":{"__proto__":{"polluted":true}}}'));
+  assert.equal(({} as Obj).polluted, undefined);
+  assert.equal(Object.getPrototypeOf(hostile.data), Object.prototype);
+});
+
+const patches: [string, string, string, Obj, Obj][] = [
+  ["items", "project", "project", project, { status: "archived", title: "Renamed" }],
+  ["items", "task", "task", task, { status: "done", done_on: "2026-10-07", amount: null, data: { decision: false, rules: null } }],
+  ["items", "vendor", "vendor", vendor, { status: "confirmed", amount: 100, data: { pic: null, phone: "+628111222333" } }],
+  ["items", "guest", "guest", guest, { who: "b", qty: 1, data: { channel: "print", rsvp_qty: 2 } }],
+  ["budget_entries", "planned", "planned", planned, { amount: null, vendor_id: vendor.id }],
+  ["budget_entries", "planned", "planned", planned, { amount: 0, group_key: "ceremony" }],
+  ["budget_entries", "payment", "payment", payment, { status: "paid", done_on: "2026-11-02", data: { proof_url: null } }],
+  ["budget_entries", "payment", "payment", { ...payment, status: "paid", done_on: "2026-11-02" }, { done_on: null }],
+  ["settings", "", "ceremony_date", setting, { value: "2027-07-01" }],
+];
+
+const dbFor = (row: Obj) => {
+  const db = migrated();
+  if (row.id === project.id) return db;
+  insert(db, "items", project);
+  if (row.id !== vendor.id) insert(db, "items", vendor);
+  if (row.id !== planned.id) insert(db, "budget_entries", planned);
+  return db;
+};
+
+test("a merged patch validates and inserts into SQLite for every kind and entry type", () => {
+  for (const [table, , variant, base, patch] of patches) {
+    const row = stored(base);
+    const variantName = table === "settings" ? (row.key as string) : variant;
+    assert.deepEqual(validatePatch(table, variantName, patch), [], `${variant} patch`);
+    const merged = applyPatch(row, patch);
+    assert.deepEqual(validateRow(table, merged), [], `${variant} merged`);
+    if (table === "settings") insert(migrated(), table, merged);
+    else insert(dbFor(merged), table, merged);
+  }
+});
+
+test("a patch that is fine alone breaks the merged row", () => {
+  const paid = stored({ ...payment, status: "paid", done_on: "2026-11-02" });
+  assert.deepEqual(validatePatch("budget_entries", "payment", { status: "due" }), []);
+  const merged = applyPatch(paid, { status: "due" });
+  assert.ok(validateRow("budget_entries", merged).some((e) => /done_on: only allowed when status is paid/.test(e)));
+  assert.throws(() => insert(dbFor(merged), "budget_entries", merged), /CHECK constraint failed/);
+  const due = stored(payment);
+  assert.deepEqual(validatePatch("budget_entries", "payment", { done_on: "2026-11-02" }), []);
+  const mergedDue = applyPatch(due, { done_on: "2026-11-02" });
+  assert.ok(validateRow("budget_entries", mergedDue).length > 0);
+  assert.throws(() => insert(dbFor(mergedDue), "budget_entries", mergedDue), /CHECK constraint failed/);
+  const cleared = applyPatch(stored(planned), { amount: null });
+  assert.deepEqual(validateRow("budget_entries", cleared), []);
+  const noAmount = applyPatch(due, { amount: null });
+  assert.ok(validateRow("budget_entries", noAmount).length > 0);
+  assert.throws(() => insert(dbFor(noAmount), "budget_entries", noAmount), /CHECK constraint failed/);
+});
+
+test("validateMutation checks the envelope and a create row", () => {
+  const create = (row: Obj, table = "items") => ({ id: uuid(500), table, op: "create", row_id: row[table === "settings" ? "key" : "id"], patch: row });
+  assert.deepEqual(validateMutation(create(task)), []);
+  assert.deepEqual(validateMutation(create(payment, "budget_entries")), []);
+  assert.deepEqual(validateMutation(create(setting, "settings")), []);
+  assert.deepEqual(validateMutation({ id: uuid(501), table: "items", op: "update", row_id: task.id, patch: { status: "done" } }), []);
+  assert.deepEqual(validateMutation({ id: uuid(502), table: "items", op: "delete", row_id: task.id, patch: {} }), []);
+  assert.deepEqual(validateMutation({ id: uuid(503), table: "settings", op: "update", row_id: "ceremony_date", patch: { value: "2027-07-01" } }), []);
+  const bad = (m: unknown, pattern: RegExp) => {
+    const errors = validateMutation(m);
+    assert.ok(errors.some((e) => pattern.test(e)), `expected ${pattern} in ${JSON.stringify(errors)}`);
+  };
+  const ok = { id: uuid(504), table: "items", op: "update", row_id: task.id, patch: {} };
+  for (const id of ["abc", "", 5, null, undefined]) bad({ ...ok, id }, /^id: must be a lowercase UUID/);
+  bad({ ...ok, table: "users" }, /^table: unknown table/);
+  bad({ ...ok, table: "sync_state" }, /^table: unknown table/);
+  bad({ ...ok, table: undefined }, /^table: unknown table/);
+  for (const op of ["upsert", "CREATE", "", 1, undefined]) bad({ ...ok, op }, /^op: must be one of create, update, delete/);
+  for (const row_id of ["abc", "", 5, undefined, "ceremony_date"]) bad({ ...ok, row_id }, /^row_id: must be a lowercase UUID/);
+  for (const row_id of ["Ceremony", "", 5, uuid(1)]) bad({ ...ok, table: "settings", row_id }, /^row_id: must be a lowercase key/);
+  for (const patch of [null, [], "x", 5, undefined]) bad({ ...ok, patch }, /^patch: must be an object/);
+  bad({ ...ok, extra: 1 }, /^extra: unknown field/);
+  bad({ ...create(task), row_id: uuid(999) }, /^patch.id: must equal row_id/);
+  bad({ ...create(setting, "settings"), row_id: "other_key" }, /^patch.key: must equal row_id/);
+  bad({ ...create({ ...task, amount: -1 }) }, /^patch.amount: /);
+  bad({ ...create({ ...task, rev: 1 }) }, /^patch.rev: set by the server/);
+  bad({ ...create({ ...task, data: { phone } }) }, /^patch.data.phone: unknown key/);
+  bad({ ...ok, op: "create", patch: { title: "x" } }, /^patch.id: must equal row_id/);
+  for (const junk of [undefined, null, 1, "x", [], true]) assert.ok(validateMutation(junk).length > 0);
+});
+
+test("the batch cap and rejection shape are fixed", () => {
+  assert.equal(MAX_MUTATIONS, 20);
+});
+
 test("never throws on bad input and returns errors", () => {
   const junk = [undefined, null, 0, 1, "x", "", true, [], {}, () => 1, Symbol("s"), 10n, JSON.parse('{"__proto__":{"x":1}}')];
   for (const table of junk)
     for (const row of junk) {
       assert.ok(Array.isArray(validateCreate(table, row)));
       assert.ok(Array.isArray(validatePatch(table, row, row)));
+      assert.ok(validateRow(table, row).length > 0);
+      assert.ok(validateMutation(row).length > 0);
     }
   for (const table of ["items", "budget_entries", "settings"])
     for (const row of junk) {
@@ -463,7 +807,7 @@ test("patch cannot clear required fields or change identity", () => {
   patchRejects("items", "task", { title: null }, /title: must not be null/);
   patchRejects("items", "task", { status: null }, /status: required for kind task/);
   patchRejects("items", "task", { project_id: null }, /project_id: required for kind task/);
-  patchRejects("items", "task", { created_at: null }, /created_at: must not be null/);
+  patchRejects("items", "task", { created_at: null }, /created_at: cannot be changed/);
   patchRejects("items", "task", { currency: null }, /currency: must not be null/);
   patchRejects("items", "task", { id: uuid(9) }, /id: cannot be changed/);
   patchRejects("items", "task", { kind: "vendor" }, /kind: cannot be changed/);
@@ -516,6 +860,11 @@ const sqlAlsoRejects: [string, string, Obj][] = [
   ["negative amount", "items", { ...task, amount: -1 }],
   ["negative qty", "items", { ...task, qty: -1 }],
   ["bad currency", "items", { ...task, currency: "RP" }],
+  ["currency of four letters", "items", { ...task, currency: "IDRR" }],
+  ["data that is not JSON", "items", { ...task, data: "{" }],
+  ["settings created_at without time", "settings", { ...setting, created_at: "2026-10-06" }],
+  ["settings updated_at without Z", "settings", { ...setting, updated_at: "2026-10-06T05:00:00" }],
+  ["settings deleted_at without time", "settings", { ...setting, deleted_at: "2026-10-06" }],
   ["updated_by from the client", "items", { ...task, updated_by: "someone@example.test" }],
   ["setting updated_by from the client", "settings", { ...setting, updated_by: "someone@example.test" }],
   ["planned without group_key", "budget_entries", { ...planned, id: uuid(20), group_key: null }],

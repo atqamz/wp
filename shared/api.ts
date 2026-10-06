@@ -30,5 +30,29 @@ export type SyncResult = {
   rows: Changes;
 };
 
+export type Rejection = {
+  status: number;
+  errors: string[];
+  index: number;
+};
+
+export const MAX_MUTATIONS = 20;
+
 export const rowKey = <T extends TableName>(table: T, row: Row<T>): string =>
   (row as Record<string, string>)[tables[table].key];
+
+export const toInstant = (date: Date): string => date.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+export const applyPatch = <T extends Record<string, unknown>>(row: T, patch: Record<string, unknown>): T => {
+  const { data, ...fields } = patch;
+  const merged: Record<string, unknown> = Object.fromEntries([...Object.entries(row), ...Object.entries(fields)]);
+  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+    const keys = new Map(Object.entries(typeof row.data === "object" && row.data !== null ? row.data : {}));
+    for (const [key, value] of Object.entries(data)) {
+      if (value === null) keys.delete(key);
+      else keys.set(key, value);
+    }
+    merged.data = Object.fromEntries(keys);
+  }
+  return merged as T;
+};
