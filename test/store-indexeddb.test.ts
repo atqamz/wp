@@ -83,14 +83,14 @@ test("a reset does nothing when another tab has reset since the caller read its 
   await withFake({ generation: "written by the other tab", epoch: "same epoch" }, async ({ calls }) => {
     assert.equal(await indexedDbPersistence("fake").reset("g1", next), null);
     assert.equal(await indexedDbPersistence("fake").reset(null, next), null);
-    assert.deepEqual(calls, []);
+    assert.equal(calls.length, 0);
   });
 });
 
 test("a database that never reset has no generation, which matches only a caller that saw none", async () => {
   await withFake({ epoch: "same epoch" }, async ({ calls }) => {
     assert.equal(await indexedDbPersistence("fake").reset("g1", next), null);
-    assert.deepEqual(calls, []);
+    assert.equal(calls.length, 0);
     assert.notEqual(await indexedDbPersistence("fake").reset(null, next), null);
     assert.equal(calls.filter((call) => call.op === "clear").length, 5);
   });
