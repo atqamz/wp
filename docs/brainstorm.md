@@ -317,15 +317,15 @@ A super-lazy alternative we deliberately **didn't** pick: a single table `items(
 A manual router with a `switch` on `pathname`, no framework. Every route needs a verified Access identity (401 otherwise); a wrong method is a 405. The contract:
 
 ```
-GET  /api/sync?since=<rev>   → { rev, me: "a"|"b", changes: { <table>: [rows...] } }
+GET  /api/sync?since=<rev>   → { rev, epoch, me: "a"|"b", changes: { <table>: [rows...] } }
 POST /api/sync               ← { mutations: [{ id, table, op: "create"|"update"|"delete", row_id, patch }] }
-                             → { rev, rows: { <table>: [rows after applied] } }
+                             → { rev, epoch, rows: { <table>: [rows after applied] } }
 GET  /api/login              → 302 to "/" (only used to trigger the Access login, see §5.5)
 GET  /api/health             → { ok: true }
 GET  /api/export?format=json → the dump of all three tables; ?format=csv&table=<items|budget_entries>&<kind|entry_type>=<value> → one CSV (§3.7)
 ```
 
-The three tables (`items`, `budget_entries`, `settings`), their columns and the `kind` registry are whitelisted in the Worker. Sync details are in §5.
+`epoch` is a random 32-character hex id created with the database (§7.2); every success response of both sync routes carries it, and the SPA uses it to detect a database that is not the one it synced with (§5.2). The three tables (`items`, `budget_entries`, `settings`), their columns and the `kind` registry are whitelisted in the Worker. Sync details are in §5.
 
 ### 3.4 Overview
 
@@ -382,21 +382,21 @@ The shared validators (`shared/validate.ts`) see one row, or one stored row plus
 **Order of work for `POST /api/sync`.** Authenticate (Access JWT, 401 on failure), parse and size-check the body, validate every mutation, then apply everything in one `batch()`.
 
 - **Request limits.** At most `MAX_MUTATIONS` (20) mutations and a body of at most `MAX_BODY_BYTES` (1 MiB). The client stops adding mutations to a request once the body would pass 512 KB (`BATCH_BYTES`; always at least one), and a valid mutation is small: the largest one the validator accepts (a task with every text field at its limit: title and group 500 characters each, note 10,000, `data.rules` 2,000) is 13,583 bytes of ASCII, or about 40 KB if every character takes three bytes in UTF-8. A full request of 20 such mutations stays under the 1 MiB cap, and one mutation always fits. `MAX_MUTATIONS` is 20 also because D1 allows 100 bound parameters per query: `test/sync.test.ts` builds the worst case of 20 mutations and checks that the read queries stay under it. Malformed JSON, an unknown top-level field or a bigger request is a 4xx `Rejection` with no `index`; an unknown field inside a mutation carries that mutation's `index`.
-- **Query budget.** D1 allows 50 queries per invocation. Read every validation target of the request (existence, kind, project, tombstone) with at most one `IN (...)` query per table, never one query per mutation, and send all writes in one `batch()`.
+- **Query budget.** D1 allows 50 queries per invocation. Read every validation target of the request (existence, kind, tombstone) with at most one `IN (...)` query per table, never one query per mutation, and send all writes in one `batch()`.
 - **Envelope.** `validateMutation` for each mutation. For `delete`, the patch is empty.
 - **Validate against state plus earlier mutations.** Mutations apply in array order, and a later one may refer to a row created by an earlier one in the same request (a payment right after its budget line). Validate with the stored rows plus an in-memory overlay of the earlier mutations, then write everything in one `batch()`. Parents come first; the client sends in outbox order.
-- **Update and delete.** The target must exist; a missing row is a rejection. An update or a delete aimed at a tombstone is a successful no-op, so a replayed `[update X, delete X]` or a replayed lone delete does not fail and "delete wins" (§5.3) holds. The one exception is undo, an update whose only change is `deleted_at: null` (not counting `updated_at`, which the client may also send), which clears the tombstone. The stored row's `kind` or `entry_type` is the variant, and `data` is parsed from its JSON text before `validateChange` runs. Updates go through `validateChange` (patch, merge, then validate the merged row). A `project` row is archived with `status`, never deleted.
+- **Update and delete.** The target must exist; a missing row is a rejection. An update or a delete aimed at a tombstone is a successful no-op, so a replayed `[update X, delete X]` or a replayed lone delete does not fail and "delete wins" (§5.3) holds. The one exception is undo, an update whose only change is `deleted_at: null` (not counting `updated_at`, which the client may also send), which clears the tombstone. The stored row's `kind` or `entry_type` is the variant, and `data` is parsed from its JSON text before `validateChange` runs. Updates go through `validateChange` (patch, merge, then validate the merged row).
 - **Create.** `patch.id` (or `patch.key`) equals `row_id` (checked by `validateMutation`). A create whose id already exists is ignored and counts as success: replays after a lost acknowledgement are safe, and the client converges on the next pull. The exception is `settings`, where the key is the id and the value is single: a create on an existing key is an update of `value` (last write wins), otherwise the second phone's choice would vanish silently. Settings are never deleted: `validateMutation` rejects `delete` on `settings`, and a value that is "not decided" is stored as a value, so a settings row never becomes a tombstone and no revive case exists. Updates are patches, so replays are idempotent. The mutation `id` is bookkeeping for the client's outbox; the Worker does not store it.
-- **References.** `project_id` points at a live `items` row of kind `project`. `vendor_id` (on `planned` rows) points at a live `items` row of kind `vendor`. `budget_id` (on `payment` rows) points at a live `budget_entries` row with `entry_type = 'planned'`. `parent_id` points at a live `items` row of the kind the child kind expects (no core kind uses it yet). No row refers to itself. A row, its `budget_id` target and its `vendor_id` target belong to the same project. A payment's `currency` equals its planned row's `currency`. References are checked on create and whenever a patch changes a reference column (`project_id`, `vendor_id`, `budget_id`, `parent_id`); a new reference must point at a live row, and an unrelated update of a row whose target was tombstoned later is not rejected. The database enforces only that the target exists; it cannot check kind, project or tombstone, so the Worker must. No core kind uses `parent_id` yet: whoever adds the first kind that does must add a cycle check.
+- **References.** `vendor_id` (on `planned` rows) points at a live `items` row of kind `vendor`. `budget_id` (on `payment` rows) points at a live `budget_entries` row with `entry_type = 'planned'`. `parent_id` points at a live `items` row of the kind the child kind expects (no core kind uses it yet). No row refers to itself. A payment's `currency` equals its planned row's `currency`. References are checked on create and whenever a patch changes a reference column (`vendor_id`, `budget_id`, `parent_id`); a new reference must point at a live row, and an unrelated update of a row whose target was tombstoned later is not rejected. The database enforces only that the target exists; it cannot check kind or tombstone, so the Worker must. No core kind uses `parent_id` yet: whoever adds the first kind that does must add a cycle check.
 - **Revisions.** Bump `sync_state.rev` only if the request writes at least one row; a request in which every mutation is a no-op leaves `rev` unchanged.
 - **Server-owned columns.** The Worker writes `rev`, `updated_by` (`a` or `b` from the verified identity; `import` is reserved for the import script), `updated_at` and `deleted_at` (server clock). The client cannot set `rev`, `updated_by` or `deleted_at`: a create carrying `deleted_at` is rejected and a patch may only clear it (undo). The contract does let the client send `updated_at` (required on create, allowed in a patch) because the local copy needs a timestamp before the round trip; the Worker ignores it and writes the server clock, and the next pull replaces the local value. `created_at` comes from the client on create and is immutable.
 - **Delete.** `delete` sets `deleted_at` and bumps `rev`; nothing is removed and nothing cascades. Children stay and the UI hides them with their parent. Undo is an update that clears `deleted_at`.
 - **Rejection.** Any failure rejects the whole request and writes nothing: a 4xx `Rejection` with `errors` and the `index` of the first failing mutation. The client parks that mutation (marks it rejected, shows it on the sync screen with the server's reasons, and lets the user discard it) and sends the others; a rejection with no `index` (an oversized or malformed body) parks the whole batch. A 5xx, a timeout or a network error means retry at the next trigger, never in a loop (§3.6); a redirect, a 401 or a 403 means the session expired (§5.5).
-- **Response.** `rev` and the rows touched, read back from D1 after the batch.
+- **Response.** `rev`, `epoch` and the rows touched, read back from D1 after the batch. `epoch` is read in the same `batch()` as `rev` (`SELECT rev, epoch FROM sync_state`), is present on every success response of both routes, and is not writable by any request: no mutation can name `sync_state`, and no statement of the Worker updates `epoch`.
 - **Cross-origin writes (CSRF).** The Access cookie is sent to the Worker, and sibling subdomains of the same registrable domain are same-site, so a state-changing request must prove it comes from the app: `POST /api/sync` requires `Content-Type: application/json` (415 otherwise), an `Origin` header, when present, must equal the request's own origin (403), and a `Sec-Fetch-Site` header, when present, must be `same-origin` or `none` (403). The Worker never emits CORS headers, so no other origin can read a response either.
-- **Accepted limits.** Validation reads happen before the write batch, so two phones posting at the same instant can each pass checks the other invalidates (for example a payment created against a planned row that the other phone tombstones in the same moment); the foreign keys still hold, kind and tombstone checks may not, and the next pull converges the data. Changing a planned row's `project_id` or `currency`, or a vendor's `project_id`, does not re-validate rows that already point at it (references are checked on create and when the row's own reference columns change). Both are accepted for two users; revisit if either shows up in real use.
+- **Accepted limits.** Validation reads happen before the write batch, so two phones posting at the same instant can each pass checks the other invalidates (for example a payment created against a planned row that the other phone tombstones in the same moment); the foreign keys still hold, kind and tombstone checks may not, and the next pull converges the data. Changing a planned row's `currency` does not re-validate the payments that already point at it (references are checked on create and when the row's own reference columns change). Both are accepted for two users; revisit if either shows up in real use.
 - **Response shapes.** Authentication, routing and server errors use `{ "error": "<code>" }`; sync rejections use the `Rejection` shape. Export differs from the design in two places: no `$schema` document is emitted yet, and the CSV export is one file per `kind` or `entry_type`, live rows only; tombstones appear only in the JSON dump.
-- **Pull.** `GET /api/sync?since=<rev>` returns rows with `rev > since`, tombstones included, for all three tables, and `me` derived from the verified identity. `since` is a non-negative integer (default 0); anything else is a 400.
+- **Pull.** `GET /api/sync?since=<rev>` returns `rev`, `epoch`, rows with `rev > since`, tombstones included, for all three tables, and `me` derived from the verified identity. `since` is a non-negative integer (default 0); anything else is a 400.
 
 ---
 
@@ -509,7 +509,7 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void): vo
 ### 5.2 Reading and writing offline
 
 - **IndexedDB** ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)) is the source of data for the UI.
-  - One object store per D1 table (`items`, `budget_entries`, `settings`), plus an `outbox` store and a `meta` store (which holds the last pulled `rev` and `me`). The database is `wp`, version 1.
+  - One object store per D1 table (`items`, `budget_entries`, `settings`), plus an `outbox` store and a `meta` store (which holds the last pulled `rev`, `me`, the server's `epoch` and the phone's own `generation`, below). The database is `wp`, version 1.
   - A hand-written promise wrapper of about 50 lines (`src/store/db.ts`), typed by the table spec in `shared/` (decision in `docs/infra.md` §5.6). The `idb` wrapper (about 3.4 KB gzip, measured from `build/index.js` of version 8.0.3) is the drop-in; Dexie (about 31 KB gzip) is overkill for this need.
 - **Write:**
   1. Validate with `shared/validate.ts` (an invalid write is refused and never queued; an update sends only the fields that changed, and a `data` patch only the changed keys, `null` removing one).
@@ -518,9 +518,16 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void): vo
 - **When to flush:** after writing (unless the session is known to have expired), when the app opens, on `visibilitychange` to visible, and on the `online` event. One cycle at a time; a trigger that lands during a cycle runs another cycle right after.
 - **Don't rely on Background Sync.** `SyncManager` isn't supported in Safari or Firefox (data from [browser-compat-data](https://github.com/mdn/browser-compat-data), see also [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)). The outbox only gets sent while the app is open, and that's enough.
 - **Limit the batch size.** Flush at most 20 mutations per request (`MAX_MUTATIONS`) and at most 512 KB of body (§3.7), because the free plan limits D1 to 50 queries per invocation ([limits](https://developers.cloudflare.com/d1/platform/limits/)). Whether one `batch()` counts as 1 or N queries is **unverified**, so play it safe. A longer outbox goes out in several requests, in order.
-- **Read:** `GET /api/sync?since=<rev>`, then merge into IndexedDB and store the new `rev`. A sync cycle is: push the outbox until it is empty or stuck, then pull once. **The cursor follows pulls only:** the `rev` in the answer to a `POST` is never stored as the cursor, because the other phone's changes between the old cursor and that `rev` would be skipped; the rows of a push answer are merged only if newer than the local copy (by their own `rev`), and the following pull moves the cursor. The cursor never moves back.
-- **First run is gated on one successful pull.** The app shows a loading screen until the store has loaded and one sync attempt has finished. With no project yet, a phone that has never heard from the server shows a "connect" screen (retry, or log in again) instead of offering to create the project, so a fresh phone cannot start a second project while offline or logged out; only after one successful pull with an empty database does it show the first-run screen that creates the project.
+- **Read:** `GET /api/sync?since=<rev>`, then merge into IndexedDB and store the new `rev`. A sync cycle is: push the outbox until it is empty or stuck, then pull once. **The cursor follows pulls only:** the `rev` in the answer to a `POST` is never stored as the cursor, because the other phone's changes between the old cursor and that `rev` would be skipped; the rows of a push answer are merged only if newer than the local copy (by their own `rev`), and the following pull moves the cursor. The cursor never moves back, except through the reset below.
+- **First run is gated on one successful pull.** The app shows a loading screen until the store has loaded and one sync attempt has finished. A phone that has never heard from the server shows a "connect" screen (retry, or log in again) and creates nothing; after one successful pull it opens to the app, which is simply empty when the server holds nothing. The gate only keeps creation off until one pull has completed, so a fresh phone cannot create rows against a server it has not seen while offline or logged out.
 - **IDs are created on the client** (`crypto.randomUUID()`, supported in Safari 15.4+ according to [browser-compat-data](https://github.com/mdn/browser-compat-data)), so rows created offline don't collide.
+- **A database that is not the one this phone synced with.** The `rev` cursor only makes sense against the history it came from. A wiped database, a restore or a stale browser makes `rev` and the local rows meaningless, and an outbox written against the old history must not be sent to the new one. Two values tell the phone:
+  - **`epoch`:** a random 32-character hex id in `sync_state`, created with the database (§7.2) and returned by every pull and push response (§3.3). The phone keeps the last one it saw in `meta`.
+  - **`generation`:** a random token (`crypto.randomUUID()`) that the phone writes to `meta` each time it resets. It exists only for the compare-and-set below.
+- **Three triggers.** After every pull or push response the store compares the response with its own state and resets when any of these holds: (1) the stored `epoch` is missing and the phone holds server data (`rev > 0` or any stored row), which is every phone from before epochs existed; (2) the stored `epoch` differs from the served one; (3) the served `rev` is lower than the cursor, with the same `epoch`, which is a rollback or a stale browser. A phone that has never synced and holds nothing (no `epoch`, `rev` 0, no rows) just stores the `epoch` and carries on, with no reset and no notice; its outbox is kept.
+- **The reset** (`persistence.reset(generation, next)`) is one IndexedDB `readwrite` transaction over the three row stores, `outbox` and `meta`. It reads `generation` from `meta` and goes on only if it equals the value this tab last saw (a phone that never reset has none, and matches only a caller that saw none). If so it clears all five stores, writes the new `epoch`, `rev` 0 and `me`, and writes a new `generation`. If it does not (another tab of the same phone reset first), it clears nothing and the store reloads the other tab's state from IndexedDB. Then the pull starts again from `since=0`; the retry is bounded (two attempts, then the link shows offline), so a server that changes `epoch` on every call cannot loop it.
+- **Pull before push.** The outbox of a phone that has not verified the `epoch` in this session (no successful pull since the page loaded) is not sent first: the cycle pulls, and the reset, if any, drops the outbox before anything is posted. After a successful pull the session is verified and later cycles push first as before. A push response is checked as well: if its `epoch` or `rev` shows a foreign history, the phone resets, and the batch that has just been applied counts as landed, not lost.
+- **The notice.** After a reset that discarded something (the phone held server data, or the outbox had changes that were not sent), the app shows one dismissible notice: "The data on the server was reset, so this phone was reset to match.", plus the number of changes made on this phone that could not be kept. It is state in the store, not saved, so a reload clears it. A silent adoption of the first `epoch` shows nothing.
 
 ### 5.3 Conflicts between two phones
 
@@ -532,6 +539,14 @@ For two people, this strategy is enough without CRDTs:
 - **Delete = tombstone** (`deleted_at`). If one person deletes and the other edits, the delete wins. Undo is just clearing `deleted_at`.
 - **List order** uses `sort REAL`. Built: a row added through quick-add gets `sort` = one below the lowest in its list, so new rows go to the top, and a list is shown by the order of the kind's statuses (for a task, `todo` before `done`) and then by `sort`, `created_at` and `id`, so equal values never reorder between phones. **Plan:** moving a row between two others (a fractional index: insert between two numbers) is not built; it would write only that one row, so there's no renumber conflict.
 - **Leftover case:** if an ack is lost and the mutation is resent late, someone else's edit on the same field can get overwritten. This risk is accepted. The safety nets are `updated_by` and 7-day D1 Time Travel.
+- **After a database restore, rotate the epoch.** A restore (D1 Time Travel, `wrangler d1 execute --file`, an import of a dump) brings back an old `rev` and may keep the old `epoch`; phones with the same `epoch` and a cursor at or below the restored `rev` would then accept the restored history as a continuation of their own and keep rows that no longer exist on the server. Run once after every restore, with the database name, not the binding (`docs/infra.md` §5.2):
+
+  ```
+  npx wrangler d1 execute wp --remote --command "UPDATE sync_state SET epoch = lower(hex(randomblob(16)))"
+  ```
+
+  Every phone then resets on its next pull. The command form is the one already used for the import in §7.4; it is **unverified** against a real restore.
+- **Known limits of the reset.** (1) A tab still running older code (an installed copy that has not yet updated) next to a new tab of the same phone can wipe a pending write after a rollback with the same `epoch`. The mechanism is **unverified**; the old code has no `generation` to compare. (2) A database wipe while the app stays open applies one pending batch before the reset: the phone only learns of the new `epoch` from the push response, so that one batch lands in the new database (and the phone does not count it as lost), and the phone resets right after. Both are accepted for two users.
 - **A parked mutation does not block the others.** A mutation the Worker rejects is kept in the outbox, marked rejected, and not sent again; later mutations go out without it (they may fail in turn if they depend on it, and are parked in turn). The user sees it on the sync screen and discards it.
 
 Example write in the Worker (applied in one `env.DB.batch([...])`): a changed typed column is set directly, and a changed key inside `data` is merged with `json_patch`, so two phones editing different keys of one row both survive (columns and keys come from the `kind` registry, never from the request):
@@ -616,10 +631,10 @@ shared/                 tables.ts (the three table specs and the `kind` registry
 src/
   main.tsx              boot, route switch (service worker registration: plan, not built)
   router.ts             hash router hook (#/budget, #/vendors/…)
-  domain/               pure functions: budget totals, "this week", dates in the project's zone, guest headcount, phone and rupiah parsing, screen and badge state, ordering, settings
+  domain/               pure functions: budget totals, "this week", dates in the saved zone, guest headcount, phone and rupiah parsing, screen and badge state, ordering, settings
   store/                persistence.ts (interface), db.ts (IndexedDB), memory.ts (tests), outbox.ts (batching, overlay), api.ts (fetch + login detection), store.ts (snapshot, writes, sync cycle), browser.ts (wiring and triggers)
   hooks/                use-store.ts: the only bridge between the store and React; use-plan.ts, use-busy.ts
-  views/                one file per screen (home, budget, budget-line, settings, sync, connect, first-run) + generic-list.tsx and generic-item.tsx. Replaced if React is ever replaced
+  views/                one file per screen (home, budget, budget-line, settings, sync, connect) + generic-list.tsx and generic-item.tsx. Replaced if React is ever replaced
   ui/                   small components, registry.ts (which fields each list shows), text.ts (all UI strings), Rupiah and date formatting through Intl (format.ts)
   (sw.js, pwa.ts)       plan: service worker source and its registration; not on `main`
 worker/                 index.ts, auth.ts, sync.ts, export.ts: the API
@@ -668,7 +683,7 @@ These follow the decisions in `docs/features.md` §6.1:
 - **money:** `INTEGER` whole rupiah plus `currency TEXT` (default `IDR`) on every row that has an amount, never float. This departs from ISO 4217's minor unit 2 for IDR on purpose (`docs/features.md` §6.1 decision 3);
 - **phone:** E.164, `+628…`, kept in `data.phone`; the `+` is dropped only when building a `wa.me` link;
 - **identifiers are English** (tables, columns, enum values, `kind` values). Indonesian words stay only in italic prose with a gloss and as quoted spreadsheet labels in the import mapping. `a` and `b` name the two partners: that matches Partner A and Partner B in these docs and `who` in `docs/features.md`, and it doesn't record which partner is the groom; the private import script maps the sheet's groom's and bride's sides onto `a` and `b`;
-- **status values** are per `kind` and listed in the registry in `docs/features.md` §7.2: `todo`/`done` (tasks, rundown), `option`/`confirmed`/`cancelled` (vendors), `todo`/`sent`/`confirmed`/`declined` (guests), `todo`/`in_progress`/`done` (bridal gifts), `active`/`archived` (projects), `due`/`paid` (payments);
+- **status values** are per `kind` and listed in the registry in `docs/features.md` §7.2: `todo`/`done` (tasks, rundown), `option`/`confirmed`/`cancelled` (vendors), `todo`/`sent`/`confirmed`/`declined` (guests), `todo`/`in_progress`/`done` (bridal gifts), `due`/`paid` (payments);
 - **sync columns on every synced table:** `rev` (the server counter, §5.3), `created_at`, `updated_at`, `updated_by` (`a` or `b`, derived by the Worker from the verified Access email, or `import`; **never an email**, and a `CHECK` enforces it), `deleted_at` (tombstone). Rows are never hard-deleted, which is also what keeps the foreign keys safe;
 - **not created:** the append-only `events` table (its shape is decided in `docs/features.md` §6.1 decision 5; it is created when the first consumer appears), attachments (R2, backlog), full-text search (FTS5 virtual tables aren't supported by `wrangler d1 export`, `docs/features.md` §5.2: search runs on the client), and the secret for a calendar feed (not stored as plain text in D1).
 
@@ -679,9 +694,10 @@ This is `migrations/0001_init.sql`, byte for byte. It is applied to the producti
 ```sql
 CREATE TABLE sync_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  rev INTEGER NOT NULL
+  rev INTEGER NOT NULL,
+  epoch TEXT NOT NULL
 );
-INSERT INTO sync_state (id, rev) VALUES (1, 0);
+INSERT INTO sync_state (id, rev, epoch) VALUES (1, 0, lower(hex(randomblob(16))));
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
@@ -695,7 +711,6 @@ CREATE TABLE settings (
 
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   kind TEXT NOT NULL,
   parent_id TEXT REFERENCES items (id),
   title TEXT NOT NULL,
@@ -722,7 +737,6 @@ CREATE INDEX items_parent ON items (parent_id);
 
 CREATE TABLE budget_entries (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   entry_type TEXT NOT NULL CHECK (entry_type IN ('planned', 'payment')),
   budget_id TEXT REFERENCES budget_entries (id),
   vendor_id TEXT REFERENCES items (id),
@@ -755,7 +769,7 @@ CREATE INDEX budget_entries_due ON budget_entries (entry_type, due_on);
 
 How to read it:
 
-- **`items`** is the table of `docs/features.md` §7.2 plus `currency` and `created_at` (money and time formats from §6.1). One row per task, vendor, guest, bridal gift, rundown line, song, saving, contribution, note, and so on; `kind` says which. A project (the wedding) is the row with `kind = 'project'`, and `project_id` of every other row points to it. `parent_id` links a contribution to its saving. `qty` is the number of people for a guest (`pax`). Everything a `kind` needs beyond the typed columns lives in `data` (JSON), for example `data.phone`, `data.pic`, `data.url`, `data.singer`, `data.start_time`.
+- **`items`** is the table of `docs/features.md` §7.2 plus `currency` and `created_at` (money and time formats from §6.1). One row per task, vendor, guest, bridal gift, rundown line, song, saving, contribution, note, and so on; `kind` says which. `parent_id` links a contribution to its saving. `qty` is the number of people for a guest (`pax`). Everything a `kind` needs beyond the typed columns lives in `data` (JSON), for example `data.phone`, `data.pic`, `data.url`, `data.singer`, `data.start_time`.
 - **`budget_entries`** is the only separate table, because it is where money accuracy matters most. One table holds both row types: a `planned` row is a budget line (`group_key` = the event, `amount` = planned cost, optional `vendor_id` pointing at a vendor item), a `payment` row belongs to a planned row through `budget_id` (`status` `due` or `paid`, `due_on`, `done_on`, `who` = payer). The table-level `CHECK` makes the two shapes mutually exclusive and forbids a payment date on an unpaid payment; the self-reference and `vendor_id` are real foreign keys. `amount` may be empty only on a `planned` row (the estimate is not known yet, for example the seeded *akad* fee row before the location is chosen); a `payment` row requires it. Zero is a real value, not "unset": an *akad* at the KUA costs nothing. Remaining amounts and totals are **calculated**, never stored. One table (not two) keeps a single `rev` pull and a single export shape.
 - **What the database does not enforce:** which `kind` values exist, which statuses and columns belong to a `kind`, the shape of `data`, and that a payment's `currency` equals its planned row's. The `kind` registry in `shared/tables.ts` and the validation in `shared/validate.ts` enforce those, in the SPA and again in the Worker (`docs/infra.md` §5.5).
 - **D1 limit that shaped the SQL:** a `LIKE` or `GLOB` pattern may be at most 50 bytes ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/), 21 April 2026). A full instant pattern (`…T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z`) is longer and failed with "LIKE or GLOB pattern too complex" (**verified locally**), so the instant checks only test the date, the `T` and the `Z`.
@@ -771,7 +785,7 @@ How to read it:
 |---|---|---|
 | `ceremony_date` | `YYYY-MM-DD` | countdown and "H-day" offsets (`docs/features.md` W1) |
 | `timezone` | IANA zone, for example `Asia/Jakarta` | reading `data.start_time` and `data.end_time` |
-| `partner_a_label`, `partner_b_label` | display names | shown instead of `a` and `b`; typed in the app, never in the repo |
+| `partner_a_label`, `partner_b_label` | nicknames | shown instead of `a` and `b`; Settings asks "Your nickname" and "Their nickname"; seeded privately in production, never in the repo. The words "Partner A" and "Partner B" never appear in the UI: a missing nickname shows "You" or "Them" by who is signed in, and an unassigned row shows "Nobody yet" |
 | `hijri_calendar`, `hijri_offset_days` | calendar name, integer | the approximate Hijri date (`docs/features.md` §5.7) |
 | `holidays` | JSON array of dates | working-day count (W6) |
 | `portion_multiplier` | number | catering estimate (W16) |
@@ -780,11 +794,11 @@ How to read it:
 
 ### 7.4 Sheet → table mapping
 
-All imported rows get a `project_id` pointing at one `project` item, created first. "Labels" below are the sheet's own words, quoted; the values written to D1 are English. **The registry on `main` knows the kinds `project`, `task`, `vendor` and `guest` only:** the kinds `bridal_gift`, `rundown`, `song`, `saving` and `contribution` used below must be added to `shared/tables.ts` (with their statuses and `data` keys) before the import, because the SQL import bypasses the Worker, but the validators in the SPA and the Worker reject an unknown `kind` on every later edit and no screen lists it. The `who` of a guest is limited to `a` or `b` there.
+"Labels" below are the sheet's own words, quoted; the values written to D1 are English. **The registry on `main` knows the kinds `task`, `vendor` and `guest` only:** the kinds `bridal_gift`, `rundown`, `song`, `saving` and `contribution` used below must be added to `shared/tables.ts` (with their statuses and `data` keys) before the import, because the SQL import bypasses the Worker, but the validators in the SPA and the Worker reject an unknown `kind` on every later edit and no screen lists it. The `who` of a guest is limited to `a` or `b` there.
 
 | Sheet | Becomes | Mapping notes |
 |---|---|---|
-| DASHBOARD | `settings` | The wedding date → `ceremony_date`. The couple label is a name, so it is **not** imported; type `partner_a_label` and `partner_b_label` in the app |
+| DASHBOARD | `settings` | The wedding date → `ceremony_date`. The couple label is a name, so it is **not** imported; set `partner_a_label` and `partner_b_label` privately or in the app |
 | Timeline (header, Gantt grid) | – | `Tanggal Dimulai`, `Tampilkan Minggu` and the Gantt grid are not imported |
 | Timeline (tasks) | `items`, `kind = 'task'` | `Persiapan` → `title`; `End Date` → `due_on`; `Start Date` → `data.start_on`; the checkbox → `status` `done` or `todo`, with `done_on` empty (the sheet doesn't record when) |
 | Anggaran Pernikahan (3 tables) | `budget_entries` | Each filled `Kegiatan` row → a `planned` row: `title`, `amount` = `Tagihan (Awal)`, `group_key` = the event of its table (`ANGGARAN LAMARAN` → `engagement`, `ANGGARAN AKAD` → `ceremony`, `ANGGARAN RESEPSI` → `reception`). Each filled `DP/Lunas`, `Termin 1`, `Termin 2` → a `payment` row (`budget_id` → the planned row, `title` "Down payment or full payment", "Instalment 1", "Instalment 2", `status = 'paid'`, `done_on` and `due_on` empty). `Total Dibayar` and `Tagihan (Sisa)` are **not stored**, they're calculated; the broken `Subtotal Kategori` row is ignored |
@@ -804,7 +818,7 @@ Personal data **must not** go into the repo.
 1. **Sort out first** which data is real and which is template sample data.
 2. **Read the ODS directly** with a Python stdlib script (`zipfile` + `xml.etree`) from `content.xml`. Take the `office:value`, `office:date-value` and `office:boolean-value` attributes, not the display text, so dates and numbers don't get broken by local formatting. Cell coordinates per sheet are hardcoded according to §1.
    - Alternative: export all sheets to CSV with LibreOffice. The 12th token of the CSV filter, `-1`, exports each sheet to its own file ([LibreOffice help](https://help.libreoffice.org/latest/en-US/text/shared/guide/csv_params.html)). But CSV loses data types (dates, currency "Rp."), so it's less recommended.
-3. **The script produces `import.sql`** following the mapping above: one `project` item first, then `items`, then the `planned` rows of `budget_entries`, then their `payment` rows (parents before children, because of the foreign keys). Every row gets a fresh UUID, `rev = 1`, `created_at` and `updated_at` set to the import time in RFC 3339 UTC, and `updated_by = 'import'`; the script ends with `UPDATE sync_state SET rev = 1;`.
+3. **The script produces `import.sql`** following the mapping above: `items` first, then the `planned` rows of `budget_entries`, then their `payment` rows (parents before children, because of the foreign keys). Every row gets a fresh UUID, `rev = 1`, `created_at` and `updated_at` set to the import time in RFC 3339 UTC, and `updated_by = 'import'`; the script ends with `UPDATE sync_state SET rev = 1;`.
    - The script itself may live in the repo (only coordinates and structure, no data).
    - Its input and output are kept **outside the repo** (e.g. `~/wp-private/`) or in a `.gitignore`d folder.
 4. **Remove `BEGIN TRANSACTION`/`COMMIT`** if present ([D1 import](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
@@ -855,8 +869,8 @@ Notes:
 Still valid from the earlier version:
 
 - **Preview builds:** "Preview URLs are public by default", and D1 is only isolated "when you bind the Preview to a separate resource" ([Previews](https://developers.cloudflare.com/workers/previews/)). That means that, without extra settings, a preview from a branch can read the real DB through a public URL. `docs/infra.md` §7.4 settles it: previews are off (`preview_urls: false`).
-- **`.gitignore`** (public repo): `main` has `.wrangler/`, `dist/`, `node_modules/`, `.dev.vars*` (but not `.dev.vars.example`) and `.env*`. Still to add before any import or export touches the repo: `*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`.
-- **Local dev:** `npm run dev` (the Vite dev server running the Worker locally, with a local D1; the migration is applied with `wrangler d1 migrations apply wp --local --env dev`). There is no seed: the first-run screen creates the project, and any seed added later must hold **fake data** only.
+- **`.gitignore`** (public repo): `main` has `.wrangler/`, `dist/`, `node_modules/`, `.dev.vars*` (but not `.dev.vars.example`) and `.env*`. It also ignores `*.ods`, `*.xlsx`, `*.xls`, `*.csv`, `import*.sql`, `wp-private/` and `export-*.json`, so an import or export file cannot be committed by accident.
+- **Local dev:** `npm run dev` (the Vite dev server running the Worker locally, with a local D1; the migration is applied with `wrangler d1 migrations apply wp --local --env dev`). There is nothing to seed: the app opens empty, and any seed added later must hold **fake data** only.
 
 ---
 
