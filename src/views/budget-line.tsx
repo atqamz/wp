@@ -2,8 +2,10 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { parseField } from "../domain/field.ts";
 import { bySort } from "../domain/order.ts";
+import { useBusy } from "../hooks/use-busy.ts";
 import { useProject } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
+import { failureOf } from "../ui/failure.ts";
 import { ItemForm } from "../ui/item-form.tsx";
 import { PaymentLine } from "../ui/payment-line.tsx";
 import { text } from "../ui/text.ts";
@@ -14,30 +16,32 @@ export function BudgetLine({ id }: { id: string }) {
   const entries = useTable("budget_entries");
   const project = useProject();
   const [errors, setErrors] = useState<string[]>([]);
+  const { busy, once } = useBusy();
   const line = entries.find((entry) => entry.id === id && entry.entry_type === "planned");
   if (!line) return <Gone name="planned" id={id} back="#/budget" />;
   const payments = entries.filter((entry) => entry.entry_type === "payment" && entry.budget_id === id).sort(bySort);
 
-  const add = async (event: FormEvent<HTMLFormElement>) => {
+  const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const amount = parseField("int", String(data.get("amount") ?? ""));
     if (!amount.ok || amount.value === null || !project) return setErrors([text.invalid.int]);
-    form.reset();
-    setErrors([]);
-    const result = await actions.create("budget_entries", {
-      entry_type: "payment",
-      title: String(data.get("title") ?? "").trim() || line.title,
-      budget_id: line.id,
-      project_id: project.id,
-      status: "due",
-      amount: amount.value as number,
-      currency: line.currency,
-      due_on: String(data.get("due_on") ?? "") || null,
-      sort: payments.length,
+    return once(async () => {
+      const result = await actions.create("budget_entries", {
+        entry_type: "payment",
+        title: String(data.get("title") ?? "").trim() || line.title,
+        budget_id: line.id,
+        project_id: project.id,
+        status: "due",
+        amount: amount.value as number,
+        currency: line.currency,
+        due_on: String(data.get("due_on") ?? "") || null,
+        sort: payments.length,
+      });
+      if (result.ok) form.reset();
+      setErrors(failureOf(result));
     });
-    if (!result.ok) setErrors(result.errors);
   };
 
   return (
@@ -75,7 +79,9 @@ export function BudgetLine({ id }: { id: string }) {
             </p>
           )}
           <div className="form-actions">
-            <button type="submit">{text.add}</button>
+            <button type="submit" disabled={busy}>
+              {text.add}
+            </button>
           </div>
         </form>
       </section>

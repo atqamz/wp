@@ -8,11 +8,18 @@ export type Line = {
   payments: BudgetEntryRow[];
   planned: number | null;
   paid: number;
-  due: number;
   remaining: number | null;
+  over: number;
 };
 
-export type Totals = { planned: number; unestimated: number; paid: number; due: number; remaining: number };
+export type Totals = {
+  planned: number;
+  paid: number;
+  paidUnestimated: number;
+  remaining: number;
+  over: number;
+  unestimated: number;
+};
 
 export type Group = Totals & { key: string; lines: Line[] };
 
@@ -25,13 +32,19 @@ const rank = (key: string) => {
   return index === -1 ? EVENT_ORDER.length : index;
 };
 
-const totalsOf = (lines: readonly Line[]): Totals => ({
-  planned: lines.reduce((total, line) => total + (line.planned ?? 0), 0),
-  unestimated: lines.filter((line) => line.planned === null).length,
-  paid: lines.reduce((total, line) => total + line.paid, 0),
-  due: lines.reduce((total, line) => total + line.due, 0),
-  remaining: lines.reduce((total, line) => total + (line.remaining ?? 0), 0),
-});
+const add = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
+
+const totalsOf = (lines: readonly Line[]): Totals => {
+  const estimated = lines.filter((line) => line.planned !== null);
+  return {
+    planned: add(estimated.map((line) => line.planned!)),
+    paid: add(estimated.map((line) => line.paid)),
+    paidUnestimated: add(lines.filter((line) => line.planned === null).map((line) => line.paid)),
+    remaining: add(estimated.map((line) => line.remaining!)),
+    over: add(estimated.map((line) => line.over)),
+    unestimated: lines.length - estimated.length,
+  };
+};
 
 export const budgetOf = (entries: readonly BudgetEntryRow[]): Budget => {
   const lines = entries
@@ -45,8 +58,8 @@ export const budgetOf = (entries: readonly BudgetEntryRow[]): Budget => {
         payments: payments.sort(bySort),
         planned: row.amount,
         paid,
-        due: sum(payments.filter((payment) => payment.status === "due")),
-        remaining: row.amount === null ? null : row.amount - paid,
+        remaining: row.amount === null ? null : Math.max(0, row.amount - paid),
+        over: row.amount === null ? 0 : Math.max(0, paid - row.amount),
       };
     });
   const keys = [...new Set(lines.map((line) => line.row.group_key ?? ""))].sort((a, b) => rank(a) - rank(b) || compare(a, b));
