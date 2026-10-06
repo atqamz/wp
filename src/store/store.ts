@@ -5,7 +5,6 @@ import type { Patch, Row, TableName } from "../../shared/tables.ts";
 import { validateChange, validateMutation } from "../../shared/validate.ts";
 import type { Api } from "./api.ts";
 import { changedFields, live, merge, overlay, takeBatch, toMaps, wire } from "./outbox.ts";
-import type { Maps } from "./outbox.ts";
 import type { Pending, Persistence, Rows } from "./persistence.ts";
 
 export type Link = "online" | "offline" | "expired";

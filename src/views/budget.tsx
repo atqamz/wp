@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { budgetOf } from "../domain/budget.ts";
+import { EVENT_ORDER, budgetOf } from "../domain/budget.ts";
 import type { Totals } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
 import { sortBefore } from "../domain/order.ts";
@@ -10,7 +10,6 @@ import { formatMoney } from "../ui/format.ts";
 import { PaymentLine } from "../ui/payment-line.tsx";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
-import { EVENT_ORDER } from "../domain/budget.ts";
 
 function Summary({ totals, lines }: { totals: Totals; lines: number }) {
   const estimated = lines - totals.unestimated;

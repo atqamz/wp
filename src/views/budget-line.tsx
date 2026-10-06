@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { parseField } from "../domain/field.ts";
+import { bySort } from "../domain/order.ts";
 import { useProject } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { ItemForm } from "../ui/item-form.tsx";
@@ -8,7 +9,6 @@ import { PaymentLine } from "../ui/payment-line.tsx";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 import { Gone } from "./generic-item.tsx";
-import { bySort } from "../domain/order.ts";
 
 export function BudgetLine({ id }: { id: string }) {
   const entries = useTable("budget_entries");

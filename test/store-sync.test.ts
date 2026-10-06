@@ -8,7 +8,7 @@ import type { Pending } from "../src/store/persistence.ts";
 import { createStore } from "../src/store/store.ts";
 import { createServer } from "./store-server.ts";
 import type { Server } from "./store-server.ts";
-import { client, idOf, pullOnly, task, titles } from "./store-client.ts";
+import { client, idOf, task, titles } from "./store-client.ts";
 
 const started = async (server: Server, side: "a" | "b" = "a") => {
   const c = client(server, side);
@@ -212,7 +212,7 @@ test("a long outbox goes out in requests of at most MAX_MUTATIONS", async () => 
 test("oversized pending mutations are split by the size cap and sent in order", async () => {
   const bodies: string[] = [];
   const reply = (body: unknown) => Response.json(body);
-  const fetcher = async (url: string, init: RequestInit) => {
+  const fetcher = async (_url: string, init: RequestInit) => {
     if (init.method === "POST") {
       bodies.push(String(init.body));
       return reply({ rev: bodies.length, rows: { items: [], budget_entries: [], settings: [] } });
