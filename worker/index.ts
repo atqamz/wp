@@ -5,7 +5,9 @@ import { exportData } from "./export.ts";
 import { getSync, json, postSync } from "./sync.ts";
 import type { Db } from "./sync.ts";
 
-export type Bindings = AuthEnv & { DB: Db };
+export type Bindings = AuthEnv & { DB: Db; DESIGN: { get(key: string, type: "text"): Promise<string | null> } };
+
+const DESIGN_NAME = /^\/design\/([a-z0-9][a-z0-9-]{0,39})\/?$/;
 
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
@@ -21,13 +23,32 @@ const refuseUnsafe = (request: Request, origin: string) => {
   return sameOrigin && sameSite ? null : fail("forbidden", 403);
 };
 
+const DESIGN_HEADERS = {
+  "content-type": "text/html; charset=utf-8",
+  "cache-control": "private, no-store",
+  "x-robots-tag": "noindex, nofollow",
+  "x-content-type-options": "nosniff",
+};
+
+const designPage = async (request: Request, env: Bindings, pathname: string) => {
+  const name = DESIGN_NAME.exec(pathname)?.[1];
+  if (name === undefined) return fail("not_found", 404);
+  const { method } = request;
+  if (method !== "GET" && method !== "HEAD") return notAllowed("GET, HEAD");
+  const page = await env.DESIGN.get(name, "text");
+  if (page === null) return fail("not_found", 404);
+  return new Response(method === "HEAD" ? null : page, { headers: DESIGN_HEADERS });
+};
+
 export const createWorker = (authenticate = createAuthenticator()) => ({
   async fetch(request: Request, env: Bindings): Promise<Response> {
     try {
       const url = new URL(request.url);
-      if (!url.pathname.startsWith("/api/")) return fail("not_found", 404);
+      const design = url.pathname.startsWith("/design/");
+      if (!design && !url.pathname.startsWith("/api/")) return fail("not_found", 404);
       const who = await authenticate(request, env);
       if (who === null) return fail("unauthorized", 401);
+      if (design) return await designPage(request, env, url.pathname);
       const { method } = request;
       switch (url.pathname) {
         case "/api/health":

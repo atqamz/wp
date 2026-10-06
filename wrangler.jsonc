@@ -5,10 +5,11 @@
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "wp.atqamz.com", "custom_domain": true }],
-  "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/design/*"] },
   "d1_databases": [
     { "binding": "DB", "database_name": "wp", "database_id": "783df04a-8254-4586-b705-8d73d0d54ec6", "migrations_dir": "migrations" }
   ],
+  "kv_namespaces": [{ "binding": "DESIGN", "id": "ca244314e31b4b03b76cde03ae99ad8b" }],
   "secrets": { "required": ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "ALLOWED_EMAILS"] },
   "env": {
     "dev": {
@@ -16,6 +17,7 @@
       "d1_databases": [
         { "binding": "DB", "database_name": "wp", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
       ],
+      "kv_namespaces": [{ "binding": "DESIGN", "id": "00000000000000000000000000000000" }],
       "vars": { "AUTH_MODE": "dev", "DEV_WHO": "a" }
     }
   }
