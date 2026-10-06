@@ -51,7 +51,7 @@ export function Field({ control, error }: { control: Control; error?: string }) 
             </option>
           ))}
         </select>
-      ) : type === "note" || type === "longtext" ? (
+      ) : type === "note" ? (
         <textarea {...common} rows={3} defaultValue={shown} />
       ) : (
         <input {...common} {...attributes(type)} defaultValue={shown} list={suggestions ? `${id}-list` : undefined} />

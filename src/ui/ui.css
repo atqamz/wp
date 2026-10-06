@@ -14,7 +14,7 @@
   padding: 0 0.5rem;
   border-radius: 999px;
   background: var(--line);
-  color: var(--muted);
+  color: var(--fg);
   font-size: 0.8125rem;
   font-weight: 500;
 }
@@ -51,7 +51,7 @@ textarea,
 button,
 .button {
   min-height: 3rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control);
   border-radius: 0.625rem;
   background: var(--surface);
   color: var(--fg);
@@ -99,7 +99,7 @@ button,
 
 button.secondary,
 .button.secondary {
-  border-color: var(--line);
+  border-color: var(--control);
   background: transparent;
   color: var(--fg);
 }
@@ -205,7 +205,7 @@ button.danger {
   min-height: 2.75rem;
   margin-right: 0.5rem;
   padding: 0 0.75rem;
-  border-color: var(--line);
+  border-color: var(--control);
   background: transparent;
   color: var(--accent-ink);
   font-size: 0.875rem;

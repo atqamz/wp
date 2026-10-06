@@ -24,34 +24,36 @@ export function Settings() {
   const [failure, setFailure] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
-  const controls: Control[] = [
-    { name: "title", label: text.settings.project, type: "text", required: true, value: project?.title },
-    { name: settingKeys.ceremonyDate, label: text.settings.ceremonyDate, type: "date", value: settings.ceremonyDate },
+  const [initial] = useState<Record<string, string>>(() => ({
+    title: project?.title ?? "",
+    [settingKeys.ceremonyDate]: settings.ceremonyDate ?? "",
+    [settingKeys.timezone]: settings.timezone,
+    [settingKeys.partnerA]: settings.partnerA ?? "",
+    [settingKeys.partnerB]: settings.partnerB ?? "",
+  }));
+
+  const fields: Control[] = [
+    { name: "title", label: text.settings.project, type: "text", value: initial.title },
+    { name: settingKeys.ceremonyDate, label: text.settings.ceremonyDate, type: "date", value: initial[settingKeys.ceremonyDate] },
     {
       name: settingKeys.timezone,
       label: text.settings.timezone,
       type: "zone",
-      value: settings.timezone,
+      value: initial[settingKeys.timezone],
       suggestions: [DEFAULT_ZONE, "Asia/Makassar", "Asia/Jayapura"],
     },
-    { name: settingKeys.partnerA, label: text.settings.partnerA, type: "text", value: settings.partnerA },
-    { name: settingKeys.partnerB, label: text.settings.partnerB, type: "text", value: settings.partnerB },
+    { name: settingKeys.partnerA, label: text.settings.partnerA, type: "text", value: initial[settingKeys.partnerA] },
+    { name: settingKeys.partnerB, label: text.settings.partnerB, type: "text", value: initial[settingKeys.partnerB] },
   ];
+  const controls = fields.map((control) => ({ ...control, required: initial[control.name] !== "" }));
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const errors: string[] = [];
-    const current: Record<string, string | null | undefined> = {
-      title: project?.title,
-      [settingKeys.ceremonyDate]: settings.ceremonyDate,
-      [settingKeys.timezone]: settings.timezone,
-      [settingKeys.partnerA]: settings.partnerA,
-      [settingKeys.partnerB]: settings.partnerB,
-    };
     for (const control of controls) {
       const value = String(form.get(control.name) ?? "").trim();
-      if (value === "" || value === (current[control.name] ?? "")) continue;
+      if (value === "" || value === initial[control.name]) continue;
       const result =
         control.name === "title" && project
           ? await actions.update("items", project.id, { title: value })

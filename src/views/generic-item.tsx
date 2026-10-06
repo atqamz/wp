@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { ItemForm, backHref } from "../ui/item-form.tsx";
 import { views } from "../ui/registry.ts";
@@ -6,6 +7,7 @@ import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
 export function Gone({ name, id, back }: { name: ViewName; id: string; back: string }) {
+  useEffect(() => document.querySelector<HTMLElement>("h1")?.focus(), []);
   return (
     <>
       <Title>{text.gone}</Title>

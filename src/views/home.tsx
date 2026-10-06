@@ -10,11 +10,11 @@ import { QuickAdd } from "../ui/quick-add.tsx";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
-function Entries({ heading, entries }: { heading: string; entries: WeekEntry[] }) {
+function Entries({ id, heading, entries }: { id: string; heading: string; entries: WeekEntry[] }) {
   if (entries.length === 0) return null;
   return (
-    <section aria-labelledby={`week-${heading}`}>
-      <h2 id={`week-${heading}`}>
+    <section aria-labelledby={id}>
+      <h2 id={id}>
         {heading} <span className="count">{entries.length}</span>
       </h2>
       <ul className="lines">
@@ -51,8 +51,8 @@ export function Home() {
       )}
       <QuickAdd name="task" />
       {empty && <p className="empty">{text.week.empty}</p>}
-      <Entries heading={text.week.overdue} entries={week.overdue} />
-      <Entries heading={text.week.soon} entries={week.soon} />
+      <Entries id="week-overdue" heading={text.week.overdue} entries={week.overdue} />
+      <Entries id="week-soon" heading={text.week.soon} entries={week.soon} />
       {week.undated.length > 0 && (
         <section aria-labelledby="week-undated">
           <h2 id="week-undated">

@@ -1,6 +1,6 @@
 import type { ItemRow } from "../../shared/tables.ts";
 import { whatsappUrl } from "../domain/phone.ts";
-import { usePartner, useToday } from "../hooks/use-plan.ts";
+import { usePartner, useStamp, useToday } from "../hooks/use-plan.ts";
 import { actions } from "../hooks/use-store.ts";
 import { formatDay, formatMoney } from "./format.ts";
 import { optionLabel } from "./labels.ts";
@@ -12,11 +12,12 @@ export function ItemLine({ name, row }: { name: ViewName; row: ItemRow }) {
   const view: View = views[name];
   const { me, label } = usePartner();
   const today = useToday();
+  const stamp = useStamp();
   const done = view.done !== undefined && row.status === view.done;
   const phone = typeof row.data?.phone === "string" ? row.data.phone : null;
 
   const toggle = () =>
-    actions.update("items", row.id, done ? { status: firstStatus(name), done_on: null } : { status: view.done, done_on: today });
+    actions.update("items", row.id, done ? { status: firstStatus(name), done_on: null } : { status: view.done, done_on: stamp() });
 
   const piece = (field: string) => {
     const value = field.startsWith("data.") ? row.data?.[field.slice(5)] : row[field as keyof ItemRow];

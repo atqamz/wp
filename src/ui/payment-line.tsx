@@ -1,11 +1,12 @@
 import type { BudgetEntryRow } from "../../shared/tables.ts";
-import { usePartner, useToday } from "../hooks/use-plan.ts";
+import { usePartner, useStamp, useToday } from "../hooks/use-plan.ts";
 import { actions } from "../hooks/use-store.ts";
 import { formatDate, formatDay, formatMoney } from "./format.ts";
 import { text } from "./text.ts";
 
 export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
   const today = useToday();
+  const stamp = useStamp();
   const { label } = usePartner();
   const paid = payment.status === "paid";
   const late = !paid && payment.due_on !== null && payment.due_on < today;
@@ -32,7 +33,7 @@ export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
           type="button"
           className="action"
           onClick={() =>
-            actions.update("budget_entries", payment.id, paid ? { status: "due", done_on: null } : { status: "paid", done_on: today })
+            actions.update("budget_entries", payment.id, paid ? { status: "due", done_on: null } : { status: "paid", done_on: stamp() })
           }
         >
           {paid ? text.markUnpaid : text.markPaid}

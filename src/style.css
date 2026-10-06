@@ -5,6 +5,7 @@
   --fg: #1c211f;
   --muted: #5a645f;
   --line: #d9d7ce;
+  --control: #7a847f;
   --accent: #1f6f5c;
   --accent-fg: #ffffff;
   --accent-ink: #14503f;
@@ -26,6 +27,7 @@
     --fg: #ebeeec;
     --muted: #a3aca7;
     --line: #2e3632;
+    --control: #7e8883;
     --accent: #5cc2a8;
     --accent-fg: #0a1f19;
     --accent-ink: #bfeadd;

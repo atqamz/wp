@@ -26,6 +26,11 @@ export const useToday = () => {
   return todayIn(now, timezone);
 };
 
+export const useStamp = () => {
+  const { timezone } = useSettings();
+  return () => todayIn(new Date(), timezone);
+};
+
 export const usePartner = () => {
   const { partnerA, partnerB } = useSettings();
   const { me } = useSnapshot();

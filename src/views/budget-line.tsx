@@ -24,6 +24,8 @@ export function BudgetLine({ id }: { id: string }) {
     const data = new FormData(form);
     const amount = parseField("int", String(data.get("amount") ?? ""));
     if (!amount.ok || amount.value === null || !project) return setErrors([text.invalid.int]);
+    form.reset();
+    setErrors([]);
     const result = await actions.create("budget_entries", {
       entry_type: "payment",
       title: String(data.get("title") ?? "").trim() || line.title,
@@ -35,12 +37,7 @@ export function BudgetLine({ id }: { id: string }) {
       due_on: String(data.get("due_on") ?? "") || null,
       sort: payments.length,
     });
-    if (result.ok) {
-      form.reset();
-      setErrors([]);
-    } else {
-      setErrors(result.errors);
-    }
+    if (!result.ok) setErrors(result.errors);
   };
 
   return (

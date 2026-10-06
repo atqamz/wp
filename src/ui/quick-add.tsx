@@ -19,6 +19,8 @@ export function QuickAdd({ name }: { name: "task" | "vendor" | "guest" }) {
     const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
     if (title === "" || !project) return;
+    form.reset();
+    setErrors([]);
     const result = await actions.create("items", {
       kind: name,
       title,
@@ -27,12 +29,7 @@ export function QuickAdd({ name }: { name: "task" | "vendor" | "guest" }) {
       sort: sortBefore(items.filter((item) => item.kind === name)),
       ...(name === "guest" ? { who: String(data.get("who")) as "a" | "b" } : {}),
     });
-    if (result.ok) {
-      form.reset();
-      setErrors([]);
-    } else {
-      setErrors(result.errors);
-    }
+    if (!result.ok) setErrors(result.errors);
   };
 
   return (

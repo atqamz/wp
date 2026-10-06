@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import type { BudgetEntryRow, ItemRow } from "../../shared/tables.ts";
 import { EVENT_ORDER } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
-import { usePartner, useToday } from "../hooks/use-plan.ts";
+import { usePartner, useStamp } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { Field } from "./field.tsx";
 import type { Control } from "./field.tsx";
@@ -28,7 +28,7 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<string[]>([]);
   const { label } = usePartner();
-  const today = useToday();
+  const stamp = useStamp();
   const siblings = useTable(view.table);
 
   const controls = useMemo(() => {
@@ -80,7 +80,7 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
     setErrors(invalid);
     setFailure([]);
     if (Object.keys(invalid).length > 0) return;
-    if (view.done !== undefined && "status" in change) change.done_on = change.status === view.done ? today : null;
+    if (view.done !== undefined && "status" in change) change.done_on = change.status === view.done ? stamp() : null;
     if (Object.keys(data).length > 0) change.data = data;
     const result = await actions.update(view.table, row.id, change as never);
     if (result.ok) location.hash = backHref(name, row).slice(1);

@@ -50,6 +50,8 @@ export function Budget() {
     const amount = parseField("int", String(data.get("amount") ?? ""));
     if (title === "" || !project) return;
     if (!amount.ok) return setErrors([text.invalid.int]);
+    form.reset();
+    setErrors([]);
     const result = await actions.create("budget_entries", {
       entry_type: "planned",
       title,
@@ -58,12 +60,7 @@ export function Budget() {
       amount: amount.value as number | null,
       sort: sortBefore(entries.filter((entry) => entry.entry_type === "planned")),
     });
-    if (result.ok) {
-      form.reset();
-      setErrors([]);
-    } else {
-      setErrors(result.errors);
-    }
+    if (!result.ok) setErrors(result.errors);
   };
 
   return (
@@ -91,9 +88,9 @@ export function Budget() {
         )}
       </form>
       {lines === 0 && <p className="empty">{text.empty.budget}</p>}
-      {budget.groups.map((group) => (
-        <section key={group.key} aria-labelledby={`group-${group.key}`}>
-          <h2 id={`group-${group.key}`}>{text.event[group.key as keyof typeof text.event] ?? group.key}</h2>
+      {budget.groups.map((group, index) => (
+        <section key={group.key} aria-labelledby={`group-${index}`}>
+          <h2 id={`group-${index}`}>{text.event[group.key as keyof typeof text.event] ?? group.key}</h2>
           <Summary totals={group} lines={group.lines.length} />
           <ul className="lines">
             {group.lines.map((line) => (
