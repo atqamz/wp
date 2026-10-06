@@ -1,0 +1,19 @@
+{
+  "name": "wp",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-06",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "wp", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+  "env": {
+    "dev": {
+      "d1_databases": [
+        { "binding": "DB", "database_name": "wp", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+      ],
+      "vars": { "AUTH_MODE": "dev", "DEV_WHO": "a" }
+    }
+  }
+}
