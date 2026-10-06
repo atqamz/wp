@@ -34,8 +34,7 @@ const call = async (
   } catch {
     return { kind: "offline" };
   }
-  const redirected = res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400);
-  if (redirected || res.status === 401 || res.status === 403) return { kind: "expired" };
+  if ((res.status >= 300 && res.status < 400) || res.status === 401 || res.status === 403) return { kind: "expired" };
   if (res.status >= 500) return { kind: "offline" };
   if (!res.headers.get("content-type")?.includes("application/json")) return { kind: res.status < 300 ? "expired" : "offline" };
   try {

@@ -214,3 +214,23 @@ test("an index outside the request parks the whole request, an index inside park
     assert.deepEqual(titlesOf.sort(), [...parked].sort(), `index ${index}`);
   }
 });
+
+test("a 5xx never parks a mutation, even when its JSON body looks like a rejection", async () => {
+  const persistence = memoryPersistence();
+  const busy = stubbed(() => Response.json({ status: 503, errors: ["busy"], index: 0 }, { status: 503 }));
+  const store = createStore({ persistence, api: createApi(busy) });
+  await store.open();
+  idOf(await store.create("items", { kind: "project", title: "Plan", status: "active" }));
+  await store.sync();
+  assert.deepEqual([store.getSnapshot().link, store.getSnapshot().pending, store.getSnapshot().rejected.length], ["offline", 1, 0]);
+});
+
+test("the opaque redirect a browser returns for redirect: manual is an expired login", async () => {
+  const opaque = { type: "opaqueredirect", status: 0, headers: new Headers(), json: async () => ({}) } as unknown as Response;
+  const persistence = memoryPersistence();
+  const store = createStore({ persistence, api: createApi(async () => opaque) });
+  await store.open();
+  assert.equal(store.getSnapshot().link, "expired");
+  idOf(await store.create("items", { kind: "project", title: "Plan", status: "active" }));
+  assert.deepEqual([store.getSnapshot().link, store.getSnapshot().pending], ["expired", 1]);
+});
