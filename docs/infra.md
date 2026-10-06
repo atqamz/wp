@@ -29,7 +29,7 @@ Research and decisions as of 6 October 2026. This is a recommendation for you to
 | 17 | The two emails | Local password store (source), Worker secret, and the Access policy. Not in the repo, not in GitHub secrets, **not in D1** (the Worker turns the verified email into `a` or `b`) | Fewer copies, smaller chance of a leak |
 | 18 | CI/CD | GitHub Actions calls `npx` for `vite` and `wrangler` directly; not Workers Builds | One CI system for checks + migrations + build + deploy; Workers Builds only accepts user-owned tokens |
 | 19 | Environment | A single `production`, no preview. Staging later if there's a trigger | Preview URLs are public by default and share D1 unless separated |
-| 20 | Repo settings | A `wp` row in `repos.go` of `atqamz/github` later; CI secrets stay `gh secret set` | That repo's own rule: settings there, workflow and dependabot in each repo |
+| 20 | Repo settings | A `wp` row in `repos.go` of `atqamz/github` (**done**, §7.5); CI secrets stay `gh secret set` | That repo's own rule: settings there, workflow and dependabot in each repo |
 | 21 | Dependencies | 3 runtime (`react`, `react-dom`, `jose`) + 8 dev (`vite`, `@vitejs/plugin-react`, `@cloudflare/vite-plugin`, `wrangler`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`) | Each one is justified in §5.4 |
 
 ---
@@ -124,7 +124,7 @@ Evidence from public DNS (DoH `cloudflare-dns.com`, 6 October 2026): the `atqamz
 
 Cloudflare writes that the default assignment method will "favor consistent nameserver names across all zones within an account", but also "in case there are conflicts, you may get different nameserver names, even for domains that are within the same account" ([docs](https://developers.cloudflare.com/dns/zone-setups/reference/nameserver-assignment/), checked 6 October 2026). So three different pairs **point to** three accounts, but are **not proof**.
 
-**A 30-second manual check:** open the Cloudflare dashboard, look at the account list at the top left, and see which account `atqamz.com` is in. If that account also holds another org's zones or Workers, scenario B below applies.
+**A 30-second manual check:** open the Cloudflare dashboard, look at the account list at the top left, and see which account `atqamz.com` is in. If that account also holds another org's zones or Workers, scenario B below applies. The full procedure, with four independent checks, is [M1 in the bootstrap runbook](bootstrap.md#m1-find-the-cloudflare-account).
 
 ### 2.4 What can go wrong
 
@@ -491,7 +491,7 @@ A short answer to your question: **yes, Cloudflare can do it**. Access + a Googl
 | 1 | Decide the account, then Zero Trust onboarding (team name, Free plan) | M | Onboarding asks for payment details even on Free: "you will not be charged" ([docs](https://developers.cloudflare.com/cloudflare-one/setup/)). The team name is unique per organisation and becomes the `cloudflareaccess.com` subdomain |
 | 2 | Google Cloud: create a project, a consent screen of type **External**, an OAuth client of type Web | M | The Cloudflare docs use External so a regular Gmail account can log in ([docs](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)). I didn't find an official API to create a web client (only a secondary source: [review](https://apievangelist.com/2026/09/08/google-oauth-console-only-service-accounts-scriptable/index.md), unverified from Google's docs) |
 | 3 | Fill in the Authorized JavaScript origin `https://<team>.cloudflareaccess.com` and the redirect URI `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback` | M | Exactly as in the Cloudflare docs above |
-| 4 | Consent screen status **Testing**, add `<email-partner-a>` and `<email-partner-b>` as test users | M | Testing is limited to 100 test users and "authorizations by a test user will expire seven days from the time of consent" ([Google](https://support.google.com/cloud/answer/15549945)): you'll be asked to consent again every week. The alternative is "Publish app"; whether an "unverified" screen shows up for basic scopes is **unverified** |
+| 4 | Consent screen status **Testing**, add `<email-partner-a>` and `<email-partner-b>` as test users | M | Testing is limited to 100 test users and "authorizations by a test user will expire seven days from the time of consent" ([Google](https://support.google.com/cloud/answer/15549945)), **except** when the app requests only the `openid`, `email` and `profile` scopes. The Cloudflare Google page does not list the scopes it requests, so whether you will be asked to consent every week is **unverified**. The alternative is "Publish app"; Google says verification is not mandatory for non-sensitive scopes ([Google](https://support.google.com/cloud/answer/13463073)). Details in [bootstrap M3](bootstrap.md#m3-google-oauth-client) |
 | 5 | Create the `google` IdP in Zero Trust (`client_id`, `client_secret`, optional PKCE) | C | `scripts/access.sh`, or the dashboard. The fields are in the [API reference](https://developers.cloudflare.com/api/resources/zero_trust/subresources/identity_providers/methods/create/) |
 | 6 | Create a `self_hosted` Access app for `wp.atqamz.com`, `allowed_idps` = the IdP above, `auto_redirect_to_identity` = true, `session_duration` = `720h`, an inline `allow` policy with two `email` rules | C | `scripts/access.sh`. The app session can go up to "one month" ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)); 720h = 30 days. Instant auth is recommended when there's only one IdP ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)) |
 | 7 | Note the app's AUD tag | C | The script prints it (it's also in the dashboard: Applications → Additional settings) |
@@ -635,9 +635,9 @@ jobs:
 
 | Name | Place | Contents / scope | Notes |
 |---|---|---|---|
-| `CLOUDFLARE_API_TOKEN` | GitHub Actions secret | Account API token `wp-ci`: Account **Workers Scripts Edit** and **D1 Edit**, plus a zone permission for Custom Domain (start from the "Edit Cloudflare Workers" template in the [CI docs](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), then revoke what isn't needed), limited to one account and the `atqamz.com` zone | The exact permission for Custom Domain is **unverified**; add as little as possible when the first deploy fails. Permission group names are in the [permission list](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) |
+| `CLOUDFLARE_API_TOKEN` | GitHub Actions secret | Account API token `wp-ci`: Account **Workers Scripts Edit** and **D1 Edit**, limited to one account. A zone permission for Custom Domain is not named by any official page ([bootstrap M4](bootstrap.md#m4-cloudflare-api-tokens) has the order to add one if the first deploy needs it, scoped to the `atqamz.com` zone) | The need for a zone permission for Custom Domain is **unverified**; add as little as possible when the first deploy fails. Permission group names are in the [permission list](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub Actions secret | The account ID | The Cloudflare docs say to store it as a secret; whether the account ID is secret isn't stated in the docs I read, so it's safe to treat it as a secret |
-| Token `wp-access-setup` | **Not** in GitHub; local, temporary | Account: **Access: Apps and Policies Edit** and **Access: Identity Providers Edit** | Created for `scripts/access.sh`, revoked afterwards. Kept separate from the deploy token so a leaked GitHub secret doesn't give the power to change the Access policy |
+| Token `wp-access-setup` | **Not** in GitHub; local, temporary | Account: **Access: Apps and Policies Edit** and **Access: Organizations, Identity Providers, and Groups Edit** (the API reference for creating an identity provider names this combined group, not "Identity Providers Edit") | Created for `scripts/access.sh`, revoked afterwards. Kept separate from the deploy token so a leaked GitHub secret doesn't give the power to change the Access policy |
 | Worker secrets (3) | Cloudflare | See §6.2 step 8 | Survive across deploys |
 
 ### 7.4 Environments and preview
@@ -649,7 +649,9 @@ jobs:
 
 ### 7.5 Adding wp to `atqamz/github` later
 
-Per that repo's README and `AGENTS.md`, change the `repos` **table** in `repos.go`, not a new resource:
+**Status: done.** The `wp` row was merged into `atqamz/github` and applied; secret scanning and push protection are already enabled on the repo. What follows is kept as the record of how and why.
+
+Per that repo's README and `AGENTS.md`, the change was to the `repos` **table** in `repos.go`, not a new resource:
 
 ```go
 {
@@ -662,7 +664,7 @@ Per that repo's README and `AGENTS.md`, change the `repos` **table** in `repos.g
 - `wp` already exists on GitHub, so run **adopt**: `pulumi config set adopt true`, `pulumi preview`, `pulumi up`, then `pulumi config rm adopt` (README section "Adopting a repo that already exists"). Don't run it unattended.
 - Automatic baseline: no rebase merge, delete branch on merge, vulnerability alerts, default workflow permission `read`, dependabot security updates, and the `main guard` ruleset (blocks deletion and force-push).
 - `RequirePR: true` makes sense for wp: `main` deploys to production, so changes should go through a PR. **Required status checks are deliberately not managed** by that repo (the reason is in the README: direct-push deadlock), so the CI gate depends on your discipline, not GitHub. This is your decision.
-- Still manual per the README: secret scanning and push protection (the `gh api` snippet in the README, required for public repos), and interaction limits (they expire every six months).
+- Manual per the README: secret scanning and push protection (the `gh api` snippet in the README, required for public repos; **done**), and interaction limits (they expire every six months; still the operator's to renew).
 - **Don't** put CI secret values in Pulumi (they'd go into state): `gh secret set CLOUDFLARE_API_TOKEN --repo atqamz/wp` and `CLOUDFLARE_ACCOUNT_ID`.
 - `dependabot.yml` for `npm` and `github-actions` lives in the wp repo, not in `atqamz/github` (a rule in that repo's `AGENTS.md`).
 
@@ -731,21 +733,23 @@ Notes: `dist/` and `.wrangler/` are build and dev output and are gitignored, so 
 
 ### 8.2 Bootstrap checklist
 
-**Manual** (you, once):
+**Manual** (you, once). Each step M1 to M8 is written out click by click, with verification, what to record and what to do on failure, in [`docs/bootstrap.md`](bootstrap.md); this table only keeps the list and the order.
 
 | # | Step | Notes |
 |---|---|---|
 | M0 | Scaffold the app: start from Cloudflare's React template (`npm create cloudflare@latest -- wp --framework=react`, from the [React guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/)), then reshape it to the layout in §8.1 and the packages in §5.4. I did not run the scaffolder, so what extra packages and files it adds is **unverified**; delete anything not listed in §5.4 | §5.2, §5.4 |
-| M1 | Check the account: which account the `atqamz.com` zone is in, what is in that account (Workers, Zero Trust org, the Protect all Workers card) | §2.3, decision #1 |
-| M2 | Zero Trust onboarding (team name, Free, payment details) if the account has no org yet | Decision #16, §9.2 item 2 |
-| M3 | Google Cloud: project, External + Testing consent screen, test users, Web OAuth client, origin and redirect URI | §6.2 steps 2 to 4 |
-| M4 | Create the tokens `wp-ci` and `wp-access-setup` | §7.3 |
-| M5 | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` (both the top level and `env.dev`) | Manual so the ID lands in the repo. For resources auto-provisioned by a deploy through the dashboard/Git: the ID "will not be written back" to the repo ([docs](https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning)) |
-| M6 | Run `scripts/access.sh` locally with env from the password store; note the AUD | Then revoke `wp-access-setup` |
-| M7 | Set the three Worker secrets (`wrangler secret put`, or `--secrets-file` on the first deploy) | Before the first deploy, because of `secrets.required` |
-| M8 | `gh secret set` for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` | |
+| M1 | Check the account: which account the `atqamz.com` zone is in, what is in that account (Workers, Zero Trust org, the Protect all Workers card) | [Runbook M1](bootstrap.md#m1-find-the-cloudflare-account); §2.3, decision #1 |
+| M2 | Zero Trust onboarding (team name, Free, payment details) if the account has no org yet | [Runbook M2](bootstrap.md#m2-zero-trust-free-onboarding); decision #16, §9.2 item 2 |
+| M3 | Google Cloud: project, External consent screen, test users, Web OAuth client, origin and redirect URI | [Runbook M3](bootstrap.md#m3-google-oauth-client); §6.2 steps 2 to 4 |
+| M4 | Create the tokens `wp-ci` and `wp-access-setup` | [Runbook M4](bootstrap.md#m4-cloudflare-api-tokens); §7.3 |
+| M5 | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` (both the top level and `env.dev`) | [Runbook M5](bootstrap.md#m5-create-the-d1-database); manual so the ID lands in the repo |
+| M6 | Create the Access app and policy (`scripts/access.sh`, or the API calls in the runbook), note the AUD, then revoke `wp-access-setup` | [Runbook M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud) |
+| M7 | Set the three Worker secrets | [Runbook M7](bootstrap.md#m7-set-the-three-worker-secrets); before the first deploy, because of `secrets.required` |
+| M8 | `gh secret set` for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` | [Runbook M8](bootstrap.md#m8-set-the-github-actions-secrets) |
 | M9 | Test on Android and iPhone: install, Google login, offline start (airplane mode), offline edit, session expiry, the log in again button, and a service-worker update (deploy a second version, see the update prompt, apply it; once more with an expired session) | §6.5; risk #1 |
-| M10 | Add the `wp` row to `atqamz/github`, enable secret scanning and push protection | §7.5; after the repo has content |
+| M10 | ~~Add the `wp` row to `atqamz/github`, enable secret scanning and push protection~~ **Done** (the row is merged and applied; secret scanning and push protection are enabled) | §7.5 |
+
+Do M5, M7 and M8 before the first push to `main` that contains `ci.yml`: that push runs the deploy job.
 
 **Automatic** (CI, every push to `main`):
 
@@ -766,7 +770,7 @@ Notes: `dist/` and `.wrangler/` are build and dev output and are gitignored, so 
 2. **An unnoticed shared Cloudflare account** (§2.3). Impact: quota, the Access org, token sweeps, and the login look. Mitigation: the manual check M1 before writing anything.
 3. **Leaks through the public repo**: emails in fixtures, CI logs, artifacts, `.dev.vars`, D1 exports, screenshots. Mitigation: `.gitignore` from the first commit, secret scanning and push protection, fake data, no data artifacts.
 4. **A leaked deploy token** gives the power to deploy code to a Worker connected to D1. Mitigation: minimum scope, two separate tokens, `main` through PRs, only official first-party actions pinned to SHAs, 7-day D1 Time Travel ([docs](https://developers.cloudflare.com/d1/reference/time-travel/)).
-5. **A Google consent in Testing status expires every 7 days** and **Zero Trust onboarding asks for a card**. Both are friction, not failures.
+5. **A Google consent in Testing status may expire every 7 days** (Google exempts apps that request only `openid`, `email` and `profile`; whether Cloudflare's Google integration stays within those is unverified, [bootstrap M3](bootstrap.md#m3-google-oauth-client)) and **Zero Trust onboarding asks for a card**. Both are friction, not failures.
 6. **The dev `AUTH_MODE` leaks into production.** Mitigation: the flag only in the `npm run dev` command, checked in `npm run check`.
 7. **Account quota** (§2.5): a polling bug or another Worker in the same account.
 8. **Toolchain churn:** wrangler 4.x releases very often; `@cloudflare/vite-plugin` 1.62.5 pulls in an alpha `miniflare` 5.x ([npm](https://www.npmjs.com/package/@cloudflare/vite-plugin)); Vite is on major 8 and TypeScript on major 7; Node 24 LTS vs 26. Mitigation: lockfile and Dependabot.
