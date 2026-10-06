@@ -11,8 +11,11 @@ const url = (path: string) => `https://wp.example.test${path}`;
 
 const setup = (extra: Partial<Bindings> = {}) => {
   const { db, sqlite, calls } = createDb();
-  const env: Bindings = { DB: db, AUTH_MODE: "dev", DEV_WHO: "b", ...extra };
-  return { env, db, sqlite, calls };
+  const reads: string[] = [];
+  const pages: Record<string, string> = { round2: "<h1>round2</h1>" };
+  const DESIGN: Bindings["DESIGN"] = { get: async (key) => (reads.push(key), pages[key] ?? null) };
+  const env: Bindings = { DB: db, DESIGN, AUTH_MODE: "dev", DEV_WHO: "b", ...extra };
+  return { env, db, sqlite, calls, reads };
 };
 
 const call = (env: Bindings, path: string, init?: RequestInit) => worker.fetch(new Request(url(path), init), env);
@@ -113,7 +116,7 @@ test("a JWT travels through the router and picks the side", async () => {
   const jwk = { ...(await exportJWK(publicKey)), kid: "k", alg: "RS256", use: "sig" };
   const handler = createWorker(createAuthenticator(async () => Response.json({ keys: [jwk] })));
   const { db } = createDb();
-  const env: Bindings = { DB: db, ACCESS_TEAM_DOMAIN: "team.example.test", ACCESS_AUD: "aud", ALLOWED_EMAILS: "a@example.test,b@example.test" };
+  const env: Bindings = { DB: db, DESIGN: { get: async () => null }, ACCESS_TEAM_DOMAIN: "team.example.test", ACCESS_AUD: "aud", ALLOWED_EMAILS: "a@example.test,b@example.test" };
   const jwt = await new SignJWT({ email: "B@Example.test" })
     .setProtectedHeader({ alg: "RS256", kid: "k" })
     .setIssuer("https://team.example.test")
@@ -278,4 +281,71 @@ test("no response carries CORS headers", async () => {
     const res = await call(bindings, path, init);
     assert.deepEqual([...res.headers.keys()].filter((name) => name.startsWith("access-control-")), [], `${init?.method ?? "GET"} ${path}`);
   }
+});
+
+test("design pages need authentication before the KV is read", async () => {
+  const { env, reads } = setup({ AUTH_MODE: undefined });
+  for (const path of ["/design/round2/", "/design/round2", "/design/", "/design/Bad"]) {
+    const res = await call(env, path);
+    assert.equal(res.status, 401, path);
+    assert.deepEqual(await res.json(), { error: "unauthorized" });
+  }
+  assert.deepEqual(reads, []);
+});
+
+test("GET and HEAD serve a design page with the private headers", async () => {
+  const { env, reads } = setup();
+  const headers = {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "private, no-store",
+    "x-robots-tag": "noindex, nofollow",
+    "x-content-type-options": "nosniff",
+  };
+  for (const path of ["/design/round2/", "/design/round2"]) {
+    const res = await call(env, path);
+    assert.equal(res.status, 200);
+    for (const [name, value] of Object.entries(headers)) assert.equal(res.headers.get(name), value, name);
+    assert.equal(await res.text(), "<h1>round2</h1>");
+  }
+  const head = await call(env, "/design/round2/", { method: "HEAD" });
+  assert.equal(head.status, 200);
+  for (const [name, value] of Object.entries(headers)) assert.equal(head.headers.get(name), value, name);
+  assert.equal(await head.text(), "");
+  assert.deepEqual(reads, ["round2", "round2", "round2"]);
+});
+
+test("a missing design page is 404 json", async () => {
+  const { env } = setup();
+  const res = await call(env, "/design/absent/");
+  assert.equal(res.status, 404);
+  assert.deepEqual(await res.json(), { error: "not_found" });
+});
+
+test("bad design names are 404 without reading the KV", async () => {
+  const { env, reads } = setup();
+  for (const path of ["/design/", "/design/../round2", "/design/%2e%2e/", "/design/Round2/", "/design/-a/", `/design/${"a".repeat(41)}/`, "/design/round2/extra", "/design/round2//", "/design/a/b/"]) {
+    const res = await call(env, path);
+    assert.equal(res.status, 404, path);
+    assert.deepEqual(await res.json(), { error: "not_found" });
+  }
+  assert.equal((await call(env, `/design/${"a".repeat(40)}/`)).status, 404);
+  assert.deepEqual(reads, ["a".repeat(40)]);
+});
+
+test("design pages reject other methods with Allow", async () => {
+  const { env, reads } = setup();
+  for (const method of ["POST", "PUT", "DELETE"]) {
+    const res = await call(env, "/design/round2/", { method });
+    assert.equal(res.status, 405, method);
+    assert.equal(res.headers.get("allow"), "GET, HEAD");
+    assert.deepEqual(await res.json(), { error: "method_not_allowed" });
+  }
+  assert.deepEqual(reads, []);
+});
+
+test("a KV failure on a design page is a generic 500", async () => {
+  const { env } = setup({ DESIGN: { get: async () => { throw new Error("kv down /home/secret"); } } });
+  const res = await call(env, "/design/round2/");
+  assert.equal(res.status, 500);
+  assert.deepEqual(await res.json(), { error: "internal" });
 });

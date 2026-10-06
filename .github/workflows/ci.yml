@@ -73,7 +73,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
-          for path in / /api/health; do
+          for path in / /api/health /design/round2/; do
             ok=
             for _ in 1 2 3 4 5 6 7 8 9 10; do
               res=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 20 "https://wp.atqamz.com$path" 2>/dev/null) || res=
