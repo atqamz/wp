@@ -4,7 +4,9 @@ Discussion document, not a final decision. Research as of 6 October 2026; every 
 
 > **Privacy.** This repo is public. This document only covers the *structure* of the spreadsheet (sheet names, columns, types, formulas, dropdowns). No real names, phone numbers, addresses, guest names, vendor names, amounts or dates. Examples use made-up placeholders like `Name A`, `+62 8xx-xxxx-xxxx`, `Rp X`.
 
-In short: one Cloudflare Worker that serves both static assets and `/api/*`, data in D1, login through Cloudflare Access (email OTP), a frontend in plain HTML/CSS/JS with no build step and a data layer kept separate from the views. Data is stored locally in IndexedDB so it works offline, then synced to D1. Details and reasons below.
+In short: one Cloudflare Worker that serves both static assets and `/api/*`, data in D1, login through Cloudflare Access with a Google identity provider, a React + TypeScript + Vite single-page app (English UI) with a data layer kept separate from the views. Data is stored locally in IndexedDB so it works offline, then synced to D1. Details and reasons below.
+
+> **Status.** This document is the discussion record; `docs/infra.md` holds the stack decisions and wins where they differ. Sections that `docs/infra.md` superseded are marked **Superseded** where they start, and its §9.4 lists every section's status. Section 6 was rewritten when the frontend changed from "no build step" to React + TypeScript + Vite; the earlier framework matrix is gone.
 
 ---
 
@@ -194,8 +196,8 @@ Target Tabungan ──compared by hand──▶ Anggaran total
 | Target Tabungan | Deposit entries per month per person + progress toward the target | MVP |
 | List Seserahan | Generic list (price, link, category, status, total) | MVP |
 | List Administrasi | Generic checklist (document, amount, detail, quantity, done). The KUA process notes become static text | MVP |
-| Kontak Vendor | One vendor table with status `opsi`/`fix` (the FIX table becomes a filter) + call/WhatsApp buttons | MVP (merge) |
-| List Tamu | One guest table (side, category, name, number of people) + total per side/category | MVP (merge) |
+| Kontak Vendor | One vendor list with status `option`/`confirmed` (the FIX table becomes a filter) + call/WhatsApp buttons | MVP (merge) |
+| List Tamu | One guest list (side, category, name, number of people) + total per side/category | MVP (merge) |
 | Rundown Acara | Rundown per event + **wedding-day mode** (offline, highlights "now/next", tick-off) | MVP |
 | List Lagu | Generic list (title, singer, note) | MVP |
 
@@ -209,14 +211,14 @@ Target Tabungan ──compared by hand──▶ Anggaran total
 
 **Merged:**
 
-- the couple's date and name (DASHBOARD + Timeline label) → one `settings` table;
-- vendor plan + FIX → one table;
-- DP/Termin 1/Termin 2 → the `payments` table;
-- 12 guest blocks → one table.
+- the couple's date and name (DASHBOARD + Timeline label) → the `settings` table;
+- vendor plan + FIX → one `vendor` kind in `items`;
+- DP/Termin 1/Termin 2 → `payment` rows in `budget_entries`;
+- 12 guest blocks → one `guest` kind in `items`.
 
 ### The laziest way: one generic list screen
 
-Seven of the eleven sheets have the same shape: rows with a few fields, a status/checkbox, and one total. So build **one** list+form component configured per table (fields, input type, columns to sum, group by), instead of seven separate screens.
+Seven of the eleven sheets have the same shape: rows with a few fields, a status/checkbox, and one total. That is exactly what the generic `items` table is for (§7): build **one** list+form component configured per `kind` (fields, input type, columns to sum, group by), instead of seven separate screens.
 
 Only three dedicated screens:
 
@@ -255,7 +257,7 @@ All of them are just client-side calculations or one link:
 ### Backlog (in priority order)
 
 1. **"Add to calendar"** for payment due dates and tasks. It's an `.ics` file generated on the client, then the phone's calendar handles the reminder. Zero server code. This is the cheapest replacement for push.
-2. **CSV export** per table, for backup and archive after the event. D1 Time Travel is only 7 days on the free plan, see [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+2. **CSV export** per `kind` (`docs/features.md` §5.4), for backup and archive after the event. D1 Time Travel is only 7 days on the free plan, see [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
 3. **Extra guest fields:** phone number, invitation sent, attendance status, and a WhatsApp invitation link.
 4. **Share rundown** to WhatsApp as text (`https://wa.me/?text=…`, text URL-encoded; [WhatsApp FAQ](https://faq.whatsapp.com/5913398998672934)).
 5. **Web Push reminder.** Only if `.ics` turns out to be not enough, see §5.6.
@@ -265,7 +267,7 @@ All of them are just client-side calculations or one link:
 
 ### Indonesian wedding specifics implied by the sheet
 
-- **Three events:** *lamaran*, *akad*, *resepsi*. So the `event` enum in the budget, and the grouping of the rundown (the sheet combines *akad* + *resepsi* in one rundown).
+- **Three events:** *lamaran* (engagement), *akad* (the marriage contract ceremony), *resepsi* (reception). So the `event` enum in the budget (`engagement`, `ceremony`, `reception`), and the grouping of the rundown (the sheet combines *akad* + *resepsi* in one rundown, so the rundown uses `engagement` and `wedding`).
 - **Seserahan:** categories exactly like the sheet's dropdown; there is a total estimate and a purchase link.
 - **Paperwork:** KUA document checklist and process notes on the N1/N2/N4 forms and *numpang nikah* (getting married at another KUA).
 - **Mahar:** appears in the budget and in the paperwork.
@@ -313,25 +315,25 @@ A super-lazy alternative we deliberately **didn't** pick: a single table `items(
 A manual router with a `switch` on `pathname`, no framework. The contract:
 
 ```
-GET  /api/sync?since=<rev>   → { rev, changes: { <table>: [rows...] } }
+GET  /api/sync?since=<rev>   → { rev, me: "a"|"b", changes: { <table>: [rows...] } }
 POST /api/sync               ← { mutations: [{ id, table, op: "create"|"update"|"delete", row_id, patch }] }
                              → { rev, rows: { <table>: [rows after applied] } }
 GET  /api/login              → 302 to "/" (only used to trigger the Access login, see §5.5)
 ```
 
-Tables and columns are whitelisted in the Worker. Sync details are in §5.
+The three tables (`items`, `budget_entries`, `settings`), their columns and the `kind` registry are whitelisted in the Worker. Sync details are in §5.
 
 ### 3.4 Overview
 
 ```
-Partner A's phone / Partner B's phone (PWA: Service Worker + IndexedDB)
+Partner A's phone / Partner B's phone (PWA: React SPA + Service Worker + IndexedDB)
         │  HTTPS wp.atqamz.com
         ▼
-Cloudflare Access (Worker-level, email OTP) ──reject unless it's one of those 2 emails
+Cloudflare Access (hostname-based, Google IdP) ──reject unless it's one of those 2 emails
         ▼
 Worker "wp"
-  ├─ static assets (public/)  → free, doesn't use request quota
-  └─ /api/sync, /api/login    → D1 "wp"
+  ├─ static assets (dist/client, built by Vite)  → free, doesn't use request quota
+  └─ /api/sync, /api/login                       → D1 "wp"
 ```
 
 ### 3.5 Free plan limits (checked 6 October 2026)
@@ -350,7 +352,7 @@ Worker "wp"
 | Durable Objects | SQLite-backed only; 100,000 requests/day; 13,000 GB-s/day; 5 million rows read/day; 100,000 rows written/day; 5 GB | operations error until 00:00 UTC; storage full → `SQLITE_FULL` | https://developers.cloudflare.com/durable-objects/platform/pricing/ · https://developers.cloudflare.com/durable-objects/platform/limits/ |
 | Access (Zero Trust Free) | free "for up to 50 users". A seat is used when a user authenticates | the 51st user can't be added. **Unverified** in the official docs what exactly happens | https://developers.cloudflare.com/reference-architecture/architectures/sase/ · https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/ |
 | Access onboarding | payment details must be filled in when setting up Zero Trust. For the Free plan "you will not be charged" | – | https://developers.cloudflare.com/cloudflare-one/setup/ |
-| Access session | from expiring immediately up to one month; global and application default 24 hours | the user has to log in again (new OTP code) | https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ |
+| Access session | from expiring immediately up to one month; global and application default 24 hours | the user has to log in again (the login flow is in `docs/infra.md` §6) | https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ |
 | Workers Builds (CI) | 3,000 build minutes/month; 1 concurrent build; 20 minute timeout | builds queue / fail | https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/ |
 
 ### 3.6 Usage estimate and what breaks first
@@ -359,7 +361,7 @@ Rough assumption: every app open = 1 pull + a few pushes.
 
 - **Workers requests:** 2 people × 30 opens × 3 requests ≈ 180 requests/day, under 0.2% of 100,000.
 - **D1 rows read:** total data is roughly thousands of rows. Pull uses the `rev` index, so only changed rows are read. Even a full pull of 1,000 rows × 60 times/day = 60 thousand rows read, about 1.2% of 5 million.
-- **D1 rows written:** 1 edit ≈ 1 table row + 1 `rev` index row + 1 `sync_state` row ≈ 3. So 300 edits/day ≈ 900, under 1% of 100,000.
+- **D1 rows written:** 1 edit ≈ 1 table row + 1 `rev` index row + 1 `sync_state` row, plus another index only when its column changed, so about 3 to 5. So 300 edits/day is at most about 1,500, under 2% of 100,000.
 
 For two people, nothing breaks **unless there's a bug**. Risks in order:
 
@@ -372,6 +374,8 @@ For two people, nothing breaks **unless there's a bug**. Risks in order:
 ---
 
 ## 4. Auth for two people
+
+> **Superseded.** The recommendation below (email OTP, Worker-level Access) was replaced by Cloudflare Access with a Google identity provider, a hostname-based app and an inline policy; see `docs/infra.md` §6. The option table and the traps are kept as the record of the comparison; the traps are rechecked in `docs/infra.md` §6.5.
 
 | Option | Code to write | UX on the phone | Cost | Notes |
 |---|---|---|---|---|
@@ -394,7 +398,7 @@ Reason: zero auth code to write, managed by Cloudflare, and revoking is just edi
 
 **Traps to handle:**
 
-- **`ctx.access` isn't available.** A Worker with static assets runs behind an internal router, and that router "does not pass `ctx.access` to the user Worker" ([docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)). So validate the `Cf-Access-Jwt-Assertion` header ourselves using the JWKS at `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)). The `jose` library supports Cloudflare Workers ([README](https://github.com/panva/jose)). This is a dependency worth having because it's security-related. The email from the JWT is used for the `updated_by` column.
+- **`ctx.access` isn't available.** A Worker with static assets runs behind an internal router, and that router "does not pass `ctx.access` to the user Worker" ([docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)). So validate the `Cf-Access-Jwt-Assertion` header ourselves using the JWKS at `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)). The `jose` library supports Cloudflare Workers ([README](https://github.com/panva/jose)). This is a dependency worth having because it's security-related. The side (`a` or `b`) derived from the JWT email is used for the `updated_by` column, never the email itself (`docs/infra.md` §6.4).
 - **Manifest.** A manifest that needs credentials must use `crossorigin="use-credentials"`, "even if the manifest file is in the same origin" ([MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest)). Without it, the manifest hits the login redirect and install can fail.
 - **Session expiring inside the PWA.** API requests get redirected to the login page. How to handle it is in §5.5.
 - **Zero Trust onboarding asks for payment details** even on Free ([setup](https://developers.cloudflare.com/cloudflare-one/setup/)). If that's not acceptable, use **Plan B: the device-key cookie**: the least code, no third party, and offline-friendly.
@@ -424,36 +428,60 @@ The sheet has no RSVP column, so the MVP has **no public part at all**. If we wa
 
 ### 5.1 Service Worker strategy
 
-- **App shell** (HTML, CSS, JS, icons, vendor libs) is *precached* under a versioned cache name, then served cache-first.
-- **Navigation:** always served from the cached `index.html`, so the app still opens without signal.
-- **`/api/*`:** **network-only**, never goes into the Cache API. Data lives in IndexedDB.
-- **Update:** a new SW shows a "New version, reload" banner. `skipWaiting` is called when the banner is tapped.
-- **No Workbox.** About 20 lines is enough:
+- **App shell** (`/`, the hashed JS and CSS in `assets/`, the manifest, the icons) is *precached* under a cache name that changes on every build, then served cache-first. The list of files is generated at build time by a small Vite plugin ([infra §5.7](infra.md#57-pwa-and-service-worker)), because the file names carry content hashes.
+- **Navigation:** every navigation is answered with the cached `/` (the SPA entry), so the app still opens without signal.
+- **`/api/*`:** **network-only**, the service worker doesn't touch it and it never goes into the Cache API. Data lives in IndexedDB.
+- **Update:** the build writes a new cache name and file list into `sw.js`, so the file changes byte for byte and the browser installs the new worker, which waits. The page shows a "New version, reload" banner; tapping it posts `skipWaiting`, and `controllerchange` reloads the page. There is no `clients.claim()`, so on the very first visit the page is only controlled from the next load.
+- **No Workbox.** About 25 lines (`src/sw.js`; the build prepends `self.WP = { cache, files }`). The build output was verified in a scratch project; behaviour in a browser is **not yet verified** (checklist M9 in `docs/infra.md` §8.2):
 
 ```js
-const CACHE = 'wp-v1';
-const SHELL = ['/', '/index.html', '/app/main.js', '/app/style.css', '/manifest.webmanifest'];
+const { cache, files } = self.WP;
 
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))));
-self.addEventListener('activate', e => e.waitUntil(
-  caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-));
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  if (url.pathname.startsWith('/api/')) return;
-  if (e.request.mode === 'navigate') {
-    e.respondWith(caches.match('/index.html').then(r => r || fetch(e.request)));
-    return;
-  }
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(cache).then((c) => c.addAll(files)));
 });
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== cache).map((k) => caches.delete(k)))),
+  );
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data === "skipWaiting") self.skipWaiting();
+});
+
+self.addEventListener("fetch", (e) => {
+  const { request } = e;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/api/")) return;
+  const key = request.mode === "navigate" ? "/" : request;
+  e.respondWith(caches.match(key).then((hit) => hit ?? fetch(request)));
+});
+```
+
+Registration and the update prompt, `src/pwa.ts` (a sketch, not run):
+
+```ts
+export function registerServiceWorker(onUpdate: (apply: () => void) => void): void {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    const offer = () => {
+      const waiting = reg.waiting;
+      if (waiting) onUpdate(() => waiting.postMessage("skipWaiting"));
+    };
+    offer();
+    reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", offer));
+  });
+  navigator.serviceWorker.addEventListener("controllerchange", () => location.reload());
+}
 ```
 
 ### 5.2 Reading and writing offline
 
 - **IndexedDB** ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)) is the source of data for the UI.
-  - One object store per table, plus an `outbox` store and a `meta` store (which holds the last `rev`).
-  - Use the `idb` wrapper (about 3.4 KB gzip, measured from `build/index.js` of version 8.0.3), or write our own promise wrapper of about 30 lines. Dexie (about 31 KB gzip) is overkill for this need.
+  - One object store per D1 table (`items`, `budget_entries`, `settings`), plus an `outbox` store and a `meta` store (which holds the last `rev`).
+  - A hand-written promise wrapper of about 30 lines, typed by the table spec in `shared/` (decision in `docs/infra.md` §5.6). The `idb` wrapper (about 3.4 KB gzip, measured from `build/index.js` of version 8.0.3) is the drop-in; Dexie (about 31 KB gzip) is overkill for this need.
 - **Write:**
   1. Update the local store (the UI changes immediately).
   2. Add a mutation `{ id: crypto.randomUUID(), table, op, row_id, patch }` to `outbox`.
@@ -470,17 +498,18 @@ For two people, this strategy is enough without CRDTs:
 
 - **`rev` from the server.** One global counter in `sync_state`. Every write request bumps that counter inside one `batch()` (a transaction), and all rows written get that `rev`. Pull uses `WHERE rev > ?`. This cursor doesn't depend on the phone's clock.
 - **Last-write-wins per field.** The client only sends the fields that changed (`patch`). So if Partner A changes the price and Partner B changes the status on the same row, both survive. If it's the same field, whichever reaches the server last wins.
-- **See who changed it.** The `updated_by` and `updated_at` columns are shown. If a pull overwrites a field that was just edited locally, show a toast "changed by Partner B just now".
+- **See who changed it.** The `updated_by` (`a` or `b`, shown as the partner's label from `settings`) and `updated_at` columns are shown. If a pull overwrites a field that was just edited locally, show a toast "changed by Partner B just now".
 - **Delete = tombstone** (`deleted_at`). If one person deletes and the other edits, the delete wins. Undo is just clearing `deleted_at`.
 - **List order** (rundown, tasks) uses `sort REAL` (fractional index: insert between two numbers). Moving one row only writes one row, so there's no renumber conflict.
 - **Leftover case:** if an ack is lost and the mutation is resent late, someone else's edit on the same field can get overwritten. This risk is accepted. The safety nets are `updated_by` and 7-day D1 Time Travel.
 
-Example write in the Worker (applied in one `env.DB.batch([...])`):
+Example write in the Worker (applied in one `env.DB.batch([...])`): a changed typed column is set directly, and a changed key inside `data` is merged with `json_patch`, so two phones editing different keys of one row both survive (columns and keys come from the `kind` registry, never from the request):
 
 ```sql
 UPDATE sync_state SET rev = rev + 1 WHERE id = 1;
-UPDATE vendors
-   SET phone = ?1, status = ?2,
+UPDATE items
+   SET status = ?1,
+       data = json_patch(coalesce(data, '{}'), ?2),
        rev = (SELECT rev FROM sync_state WHERE id = 1), updated_at = ?3, updated_by = ?4
  WHERE id = ?5;
 ```
@@ -545,223 +574,202 @@ UPDATE vendors
 
 ---
 
-## 6. Frontend without a build step
+## 6. Frontend: React, TypeScript, Vite
 
-### 6.1 Principles
+The operator chose React + TypeScript + Vite, replacing the earlier no-build-step plan (native ES modules, an import map and vendored libraries). It is a working choice that may be revised, so this section is about keeping the UI layer replaceable. The decisions, versions and sources (router, state, validation, shared types, tests, PWA tooling, build and deploy) are in `docs/infra.md` §5; they aren't repeated here.
 
-- **Native ES modules** plus one **import map** to name the vendor libraries. Import maps are supported in Chrome 89, Safari 16.4 and Firefox 108 ([MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap), [browser-compat-data](https://github.com/mdn/browser-compat-data)).
-- **Libraries are *vendored*** into `public/vendor/` with pinned versions. No CDN at runtime, so offline is safe and no third party sees the traffic.
-- **Layer separation:**
+### 6.1 Principles and layers
+
+- A React 19 single-page app built by Vite and served by the same Worker as static assets. The UI text is English.
+- The layers (only the frontend and its neighbours):
 
 ```
-public/
-  index.html            import map, <link rel="manifest" crossorigin="use-credentials">
-  manifest.webmanifest
-  sw.js
-  app/
-    main.js             boot, register SW, router
-    router.js           hash router (#/budget, #/vendor/…)
-    domain/             pure functions: budget total, remainder, countdown, savings progress, phone number normalisation
-    store/              db.js (IndexedDB), sync.js (outbox + pull), api.js (fetch + login detection)
-    views/              one file per screen + generic-list.js. ONLY this layer gets replaced by a framework
-    ui/                 small helpers (HTML escape, Rupiah format via Intl.NumberFormat('id-ID'))
-  vendor/               third-party libs (pinned)
-src/worker.js           API
+index.html              <link rel="manifest" crossorigin="use-credentials">
+public/                 manifest.webmanifest, icons (copied as is)
+shared/                 tables.ts (the three table specs and the `kind` registry: the SQL whitelist), validate.ts: used by the SPA and the Worker
+src/
+  main.tsx              boot, register the service worker, route switch
+  router.ts             hash router hook (#/budget, #/vendor/…)
+  pwa.ts                service worker registration and update prompt
+  sw.js                 service worker source (stamped at build time)
+  domain/               pure functions: budget total, remainder, countdown, savings progress, phone number normalisation
+  store/                db.ts (IndexedDB), sync.ts (outbox + pull), api.ts (fetch + login detection), store.ts (snapshot + subscribe)
+  hooks/                use-store.ts: the only bridge between the store and React
+  views/                one file per screen + generic-list.tsx. Replaced if React is ever replaced
+  ui/                   small components, text.ts (all UI strings), Rupiah and date formatting through Intl
+worker/                 index.ts, auth.ts, sync.ts: the API
 migrations/0001_init.sql
 wrangler.jsonc
 ```
 
-**Rules that make a framework migration cheap:**
+**Rules that keep the UI layer replaceable:**
 
-1. `views/` must not `fetch` or touch IndexedDB. A view only calls `store` (for example `list(table)`, `save(table, row)`, `remove(table, id)`, `subscribe(fn)`) and `domain` functions.
-2. `domain/` is pure (input → output, no DOM), tested with `node --test` with no dependencies.
-3. The store emits change events (`EventTarget`). Any framework can subscribe: React through [`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore), Vue through `ref`, Svelte through stores.
-4. Routing uses the hash: zero server configuration, safe with the SW, and framework routers generally have a hash mode. The Navigation API is only in Safari 26.2 and URLPattern in Safari 26 ([browser-compat-data](https://github.com/mdn/browser-compat-data)). Too new, skip for now.
-5. User text is always escaped before it goes into `innerHTML`, or use `textContent`.
+1. `views/` must not `fetch` or touch IndexedDB. A view only uses `store` through hooks (for example `useTable(table)` and functions such as `save(table, row)` and `remove(table, id)`) and `domain` functions.
+2. `domain/` is pure (input → output, no DOM, no React), tested with `node --test` with no dependencies.
+3. The store keeps an immutable snapshot and a `subscribe` function. React reads it through [`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore); any other framework can subscribe the same way (Vue through `ref`, Svelte through stores).
+4. Routing uses the hash: zero server configuration, safe with the service worker, and framework routers generally have a hash mode. The Navigation API is only in Safari 26.2 and URLPattern in Safari 26 ([browser-compat-data](https://github.com/mdn/browser-compat-data)). Too new, skip for now.
+5. React escapes text by default. Never use `dangerouslySetInnerHTML` with user text.
+6. All UI strings are English and live in one file, `src/ui/text.ts`. There is no i18n library (no second language is planned). Numbers and dates are written through `Intl` (locale choice in `docs/features.md` §5.7).
+7. `npm run check` fails if `src/domain`, `src/store`, `shared` or `worker` imports React, so rules 1 to 3 can't drift silently.
 
-### 6.2 Decision matrix (material for a discussion with Partner B, deliberately **not** decided here)
+**Exit path:** if React is dropped, `store/`, `domain/`, `shared/`, the Worker and the D1 schema don't change. Only `views/`, `ui/`, `hooks/` and `main.tsx` are rewritten.
 
-Size = gzip `-9` of the published ESM file, measured on 6 October 2026. Versions and release dates are from the npm registry.
+### 6.2 Where each decision lives
 
-| Option | No build? | Size | Learning curve | Later migration path | Fits offline/PWA | Maintenance status |
-|---|---|---|---|---|---|---|
-| A. Vanilla + Web Components ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_components)) | yes | 0 KB | low for the basics, gets more long-winded as the UI grows | custom elements can be used in any framework; views get rewritten | yes | web standard |
-| B. Lit 3 ([docs](https://lit.dev/docs/getting-started/)) | yes (without TS decorators) | ±6.1 KB (`lit-core.min.js`) | medium | still web components; easy to wrap in another framework | yes | active (3.3.3, May 2026) |
-| C. Preact + htm (+hooks) ([no-build guide](https://preactjs.com/guide/v10/no-build-workflows/)) | yes | ±4.9 + 1.6 + 0.6 KB | medium (React style) | to React/Preact+JSX is nearly mechanical (tagged template `html` → JSX) | yes | active. **Preact 11.0.0 was just released on 30 September 2026**; 10.x (10.29.8) is still available. htm is stable but its last release was in 2022 |
-| D. Alpine.js ([docs](https://alpinejs.dev/essentials/installation)) | yes | ±19.9 KB | low (HTML attributes) | rewrite. Not tidy for a multi-screen SPA | yes | active (3.17.4, Sep 2026) |
-| E. Vue 3 browser build ([docs](https://vuejs.org/guide/quick-start.html)) | yes (templates compiled in the browser) | ±62.9 KB (`vue.esm-browser.prod.js`) | medium | natural to Vue SFC + Vite | yes | active (3.5.43, Sep 2026) |
-| F. HTMX ([docs](https://htmx.org/docs/)) | yes | ±16.8 KB (`htmx.min.js`) | low | – | **bad**: every screen needs HTML from the server, which clashes with offline-first | active |
-| G. petite-vue ([repo](https://github.com/vuejs/petite-vue)) | yes | small | low | to Vue | yes | **stalled**: last release 0.4.1, Jan 2022 |
-
-**Guiding questions for the discussion:**
-
-- Who will maintain it after the event?
-- Do you want to learn something used at work (React/Vue), or the one with the least abstraction?
-- How important is "later we can just move to Vite"?
-
-Whichever is chosen, `store/`, `domain/`, the Worker, and the D1 schema don't change.
+| Topic | Decision | Section in `docs/infra.md` |
+|---|---|---|
+| Build and serving | Vite 8 + `@cloudflare/vite-plugin`, SPA mode, one Worker | §5.2 |
+| Router | None; hash routing in about 10 lines | §5.1 |
+| Data and state | `store/` + `domain/`, `useSyncExternalStore`, no state library | §5.6 |
+| Validation | Hand-written, from the table spec | §5.1, §5.5 |
+| Sharing types with the Worker | A `shared/` folder, three `tsconfig` files | §5.5 |
+| Tests | `node --test` for pure code; no component tests | §5.1 |
+| PWA and service worker | Hand-written service worker + a small Vite plugin; not `vite-plugin-pwa` | §5.7 |
+| CI and deploy | `npm run check`, then migrations, `vite build`, `wrangler deploy` | §7.2 |
 
 ---
 
-## 7. Data model sketch (D1)
+## 7. Data model (D1)
 
-Conventions:
+**Decided (operator, final):** one generic `items` table for every list-shaped thing, one separate table `budget_entries` only for the budget and its payments, a `settings` table, and a one-row `sync_state` counter. The rationale (why generic, the exit rule, which columns each `kind` uses and what goes into `data`) is in `docs/features.md` §7.2; this section holds the SQL, the formats and the import mapping. The two must agree: change one, change the other. The earlier sketch of 12 per-feature tables is gone.
 
-- money = `INTEGER` rupiah (never float);
-- date = `TEXT 'YYYY-MM-DD'`, time = `TEXT 'HH:MM'`, month = `TEXT 'YYYY-MM'`;
-- boolean = `INTEGER 0/1`;
-- `id` = UUID from the client.
+### 7.1 Conventions
 
-Every data table has the same sync columns and an index on `rev`.
+These follow the decisions in `docs/features.md` §6.1:
+
+- **id:** opaque `TEXT`, created on the client with `crypto.randomUUID()` (UUID v4);
+- **instants** (`created_at`, `updated_at`, `deleted_at`): `TEXT`, RFC 3339 in UTC with `Z`, for example `2026-10-06T05:00:00Z`. They sort as text;
+- **date only** (`due_on`, `done_on`): `TEXT 'YYYY-MM-DD'`. **Time of day** is only stored where local meaning matters (the rundown): `"HH:MM"` inside `data`, read together with the IANA zone in `settings.timezone`;
+- **money:** `INTEGER` whole rupiah plus `currency TEXT` (default `IDR`) on every row that has an amount, never float. This departs from ISO 4217's minor unit 2 for IDR on purpose (`docs/features.md` §6.1 decision 3);
+- **phone:** E.164, `+628…`, kept in `data.phone`; the `+` is dropped only when building a `wa.me` link;
+- **identifiers are English** (tables, columns, enum values, `kind` values). Indonesian words stay only in italic prose with a gloss and as quoted spreadsheet labels in the import mapping. `a` and `b` name the two partners: that matches Partner A and Partner B in these docs and `who` in `docs/features.md`, and it doesn't record which partner is the groom; the private import script maps the sheet's groom's and bride's sides onto `a` and `b`;
+- **status values** are per `kind` and listed in the registry in `docs/features.md` §7.2: `todo`/`done` (tasks, rundown), `option`/`confirmed`/`cancelled` (vendors), `todo`/`sent`/`confirmed`/`declined` (guests), `todo`/`in_progress`/`done` (bridal gifts), `active`/`archived` (projects), `due`/`paid` (payments);
+- **sync columns on every synced table:** `rev` (the server counter, §5.3), `created_at`, `updated_at`, `updated_by` (`a` or `b`, derived by the Worker from the verified Access email, or `import`; **never an email**, and a `CHECK` enforces it), `deleted_at` (tombstone). Rows are never hard-deleted, which is also what keeps the foreign keys safe;
+- **not created:** the append-only `events` table (its shape is decided in `docs/features.md` §6.1 decision 5; it is created when the first consumer appears), attachments (R2, backlog), full-text search (FTS5 virtual tables aren't supported by `wrangler d1 export`, `docs/features.md` §5.2: search runs on the client), and the secret for a calendar feed (not stored as plain text in D1).
+
+### 7.2 Schema
+
+This is `migrations/0001_init.sql`. It was applied to a local D1 (wrangler 4.147.0) in a scratch project and every constraint below rejected a deliberately bad row there (**verified locally**; behaviour on the Cloudflare edge is unverified):
 
 ```sql
-CREATE TABLE sync_state (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL);
+CREATE TABLE sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  rev INTEGER NOT NULL
+);
 INSERT INTO sync_state (id, rev) VALUES (1, 0);
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
-  value TEXT,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
+  value TEXT NOT NULL,
+  rev INTEGER NOT NULL,
+  created_at TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_at TEXT NOT NULL CHECK (updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_by TEXT CHECK (updated_by IS NULL OR updated_by IN ('a', 'b', 'import')),
+  deleted_at TEXT CHECK (deleted_at IS NULL OR deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z')
 );
 
-CREATE TABLE tasks (
+CREATE TABLE items (
   id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES items (id),
+  kind TEXT NOT NULL,
+  parent_id TEXT REFERENCES items (id),
   title TEXT NOT NULL,
-  start_date TEXT,
-  end_date TEXT,
-  done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE vendors (
-  id TEXT PRIMARY KEY,
-  category TEXT,
-  name TEXT NOT NULL,
-  phone TEXT,
-  pic TEXT,
+  status TEXT,
+  group_key TEXT,
+  due_on TEXT CHECK (due_on IS NULL OR due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  done_on TEXT CHECK (done_on IS NULL OR done_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  amount INTEGER CHECK (amount IS NULL OR amount >= 0),
+  currency TEXT NOT NULL DEFAULT 'IDR' CHECK (length(currency) = 3),
+  qty INTEGER CHECK (qty IS NULL OR qty >= 0),
+  who TEXT CHECK (who IS NULL OR who IN ('a', 'b', 'both')),
   note TEXT,
-  status TEXT NOT NULL DEFAULT 'opsi' CHECK (status IN ('opsi', 'fix')),
+  data TEXT CHECK (data IS NULL OR json_valid(data)),
   sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
+  rev INTEGER NOT NULL,
+  created_at TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_at TEXT NOT NULL CHECK (updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_by TEXT CHECK (updated_by IS NULL OR updated_by IN ('a', 'b', 'import')),
+  deleted_at TEXT CHECK (deleted_at IS NULL OR deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z')
 );
+CREATE INDEX items_rev ON items (rev);
+CREATE INDEX items_kind_due ON items (kind, due_on);
+CREATE INDEX items_parent ON items (parent_id);
 
-CREATE TABLE budget_items (
+CREATE TABLE budget_entries (
   id TEXT PRIMARY KEY,
-  event TEXT NOT NULL CHECK (event IN ('lamaran', 'akad', 'resepsi')),
-  name TEXT NOT NULL,
-  amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
-  vendor_id TEXT REFERENCES vendors (id),
-  note TEXT,
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE payments (
-  id TEXT PRIMARY KEY,
-  budget_item_id TEXT NOT NULL REFERENCES budget_items (id),
-  label TEXT NOT NULL,
+  project_id TEXT REFERENCES items (id),
+  entry_type TEXT NOT NULL CHECK (entry_type IN ('planned', 'payment')),
+  budget_id TEXT REFERENCES budget_entries (id),
+  vendor_id TEXT REFERENCES items (id),
+  title TEXT NOT NULL,
+  group_key TEXT,
+  status TEXT CHECK (status IS NULL OR status IN ('due', 'paid')),
   amount INTEGER NOT NULL CHECK (amount >= 0),
-  due_date TEXT,
-  paid_on TEXT,
+  currency TEXT NOT NULL DEFAULT 'IDR' CHECK (length(currency) = 3),
+  due_on TEXT CHECK (due_on IS NULL OR due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  done_on TEXT CHECK (done_on IS NULL OR done_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  who TEXT CHECK (who IS NULL OR who IN ('a', 'b', 'both')),
   note TEXT,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE savings_entries (
-  id TEXT PRIMARY KEY,
-  month TEXT NOT NULL,
-  contributor TEXT NOT NULL CHECK (contributor IN ('pria', 'wanita')),
-  amount INTEGER NOT NULL CHECK (amount >= 0),
-  note TEXT,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE seserahan_items (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  url TEXT,
-  price INTEGER CHECK (price >= 0),
-  category TEXT,
-  status TEXT NOT NULL DEFAULT 'belum' CHECK (status IN ('belum', 'proses', 'selesai')),
+  data TEXT CHECK (data IS NULL OR json_valid(data)),
   sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
+  rev INTEGER NOT NULL,
+  created_at TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_at TEXT NOT NULL CHECK (updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  updated_by TEXT CHECK (updated_by IS NULL OR updated_by IN ('a', 'b', 'import')),
+  deleted_at TEXT CHECK (deleted_at IS NULL OR deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
+  CHECK (
+    (entry_type = 'planned' AND budget_id IS NULL AND group_key IS NOT NULL AND status IS NULL AND due_on IS NULL AND done_on IS NULL)
+    OR
+    (entry_type = 'payment' AND budget_id IS NOT NULL AND vendor_id IS NULL AND status IS NOT NULL AND (done_on IS NULL OR status = 'paid'))
+  )
 );
-
-CREATE TABLE admin_docs (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  amount INTEGER CHECK (amount >= 0),
-  detail TEXT,
-  qty INTEGER,
-  done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE guests (
-  id TEXT PRIMARY KEY,
-  side TEXT NOT NULL CHECK (side IN ('pria', 'wanita')),
-  category TEXT NOT NULL,
-  name TEXT NOT NULL,
-  pax INTEGER NOT NULL DEFAULT 1 CHECK (pax >= 0),
-  note TEXT,
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE rundown_items (
-  id TEXT PRIMARY KEY,
-  event TEXT NOT NULL,
-  start_time TEXT,
-  end_time TEXT,
-  title TEXT NOT NULL,
-  pic TEXT,
-  note TEXT,
-  highlights TEXT,
-  done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE TABLE songs (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  artist TEXT,
-  note TEXT,
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-
-CREATE INDEX settings_rev ON settings (rev);
-CREATE INDEX tasks_rev ON tasks (rev);
-CREATE INDEX vendors_rev ON vendors (rev);
-CREATE INDEX budget_items_rev ON budget_items (rev);
-CREATE INDEX payments_rev ON payments (rev);
-CREATE INDEX payments_item ON payments (budget_item_id);
-CREATE INDEX savings_entries_rev ON savings_entries (rev);
-CREATE INDEX seserahan_items_rev ON seserahan_items (rev);
-CREATE INDEX admin_docs_rev ON admin_docs (rev);
-CREATE INDEX guests_rev ON guests (rev);
-CREATE INDEX rundown_items_rev ON rundown_items (rev);
-CREATE INDEX songs_rev ON songs (rev);
+CREATE INDEX budget_entries_rev ON budget_entries (rev);
+CREATE INDEX budget_entries_budget ON budget_entries (budget_id);
+CREATE INDEX budget_entries_due ON budget_entries (entry_type, due_on);
 ```
 
-### Sheet → table mapping
+How to read it:
 
-| Sheet | Table | Mapping notes |
+- **`items`** is the table of `docs/features.md` §7.2 plus `currency` and `created_at` (money and time formats from §6.1). One row per task, vendor, guest, bridal gift, rundown line, song, saving, contribution, note, and so on; `kind` says which. A project (the wedding) is the row with `kind = 'project'`, and `project_id` of every other row points to it. `parent_id` links a contribution to its saving. `qty` is the number of people for a guest (`pax`). Everything a `kind` needs beyond the typed columns lives in `data` (JSON), for example `data.phone`, `data.pic`, `data.url`, `data.singer`, `data.start_time`.
+- **`budget_entries`** is the only separate table, because it is where money accuracy matters most. One table holds both row types: a `planned` row is a budget line (`group_key` = the event, `amount` = planned cost, optional `vendor_id` pointing at a vendor item), a `payment` row belongs to a planned row through `budget_id` (`status` `due` or `paid`, `due_on`, `done_on`, `who` = payer). The table-level `CHECK` makes the two shapes mutually exclusive and forbids a payment date on an unpaid payment; the self-reference and `vendor_id` are real foreign keys. Remaining amounts and totals are **calculated**, never stored. One table (not two) keeps a single `rev` pull and a single export shape.
+- **What the database does not enforce:** which `kind` values exist, which statuses and columns belong to a `kind`, the shape of `data`, and that a payment's `currency` equals its planned row's. The `kind` registry in `shared/tables.ts` and the validation in `shared/validate.ts` enforce those, in the SPA and again in the Worker (`docs/infra.md` §5.5).
+- **D1 limit that shaped the SQL:** a `LIKE` or `GLOB` pattern may be at most 50 bytes ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/), 21 April 2026). A full instant pattern (`…T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z`) is longer and failed with "LIKE or GLOB pattern too complex" (**verified locally**), so the instant checks only test the date, the `T` and the `Z`.
+- **Foreign keys** are enforced by D1 by default, "identical to the behaviour you would observe when setting `PRAGMA foreign_keys = on`" ([D1 foreign keys](https://developers.cloudflare.com/d1/sql-api/foreign-keys/), 21 April 2026); the local D1 rejected a dangling `parent_id` and a payment pointing at a missing planned row (**verified locally**). So the Worker applies a batch in outbox order, parents first, and the client never sends a child before its parent. `PRAGMA defer_foreign_keys = on` exists for the opposite case and isn't needed.
+- **JSON patches:** the Worker merges a changed `data` key without touching the others, with `json_patch` (RFC 7396 merge patch; a `null` value removes a key). D1 supports `json_patch`, `json_valid` and the other JSON functions ([D1 JSON](https://developers.cloudflare.com/d1/sql-api/query-json/), 21 April 2026), and a patch that sets one key and removes another worked on the local D1 (**verified locally**).
+- **Rows written per edit** (the free plan counts index rows): the row, the `rev` index, the `sync_state` row, and a further index only when its column changed, so about 3 to 5. 300 edits a day is at most about 1,500 of the 100,000 daily writes (an estimate).
+
+### 7.3 Settings keys
+
+`settings` is key/value. The keys known so far (more can be added without a migration):
+
+| Key | Value | Used by |
 |---|---|---|
-| DASHBOARD + Timeline (label) | `settings` | `wedding_date`, `couple_label` |
-| Timeline (header) | `settings` | `timeline_start` (optional) |
-| Timeline (tasks) | `tasks` | checkbox K → `done` |
-| Anggaran (3 tables) | `budget_items` + `payments` | `event` from the source table. Filled DP/Lunas, Termin 1, Termin 2 → one `payments` row each with `paid_on` empty (the real payment date isn't recorded in the sheet; fill it in by hand or mark "paid" without a date). `Total Dibayar`/`Sisa` are **not stored**, they're calculated |
-| Target Tabungan | `savings_entries` + `settings.savings_target` | year (dropdown) + month (dropdown) → `month`. Two `Masuk` columns → two rows (`pria`/`wanita`) |
-| List Seserahan | `seserahan_items` | Selesai → `selesai`, On Proses → `proses`, Belum Selesai → `belum` |
-| List Administrasi | `admin_docs` | Selesai → `done = 1`, Belum → `0` |
-| Kontak Vendor (left) | `vendors` | Action `FIX` → `status = 'fix'`. The right table is **ignored** (a frozen derivative). Phone numbers normalised to `+62…` |
-| List Tamu (12 blocks) | `guests` | left blocks → `side='pria'`, right → `'wanita'`. Block title → `category`. Count column → `pax` |
-| Rundown (2 tables) | `rundown_items` | `Waktu` "HH.MM - HH.MM" → `start_time`/`end_time` "HH:MM". Table title → `event` |
-| List Lagu | `songs` | – |
+| `ceremony_date` | `YYYY-MM-DD` | countdown and "H-day" offsets (`docs/features.md` W1) |
+| `timezone` | IANA zone, for example `Asia/Jakarta` | reading `data.start_time` and `data.end_time` |
+| `partner_a_label`, `partner_b_label` | display names | shown instead of `a` and `b`; typed in the app, never in the repo |
+| `hijri_calendar`, `hijri_offset_days` | calendar name, integer | the approximate Hijri date (`docs/features.md` §5.7) |
+| `holidays` | JSON array of dates | working-day count (W6) |
+| `portion_multiplier` | number | catering estimate (W16) |
+
+**No email is stored in D1, in `settings` or anywhere else.** The login emails live only in the Worker secret `ALLOWED_EMAILS` (and the Access policy and the password store). It is an ordered pair: position 1 is `a`, position 2 is `b`. After the Worker verifies the Access JWT, it compares the `email` claim with the pair and derives the side (`docs/infra.md` §6.3 and §6.4). That side is what the Worker writes to `updated_by`, what it returns to the client as `me` (so the client can default `who` to `me` for "I'll take it" and show "changed by"), and what a `who` value of `a` or `b` means. The labels are display names, which are personal data: they live in D1 only, never in the repo.
+
+### 7.4 Sheet → table mapping
+
+All imported rows get a `project_id` pointing at one `project` item, created first. "Labels" below are the sheet's own words, quoted; the values written to D1 are English.
+
+| Sheet | Becomes | Mapping notes |
+|---|---|---|
+| DASHBOARD | `settings` | The wedding date → `ceremony_date`. The couple label is a name, so it is **not** imported; type `partner_a_label` and `partner_b_label` in the app |
+| Timeline (header, Gantt grid) | – | `Tanggal Dimulai`, `Tampilkan Minggu` and the Gantt grid are not imported |
+| Timeline (tasks) | `items`, `kind = 'task'` | `Persiapan` → `title`; `End Date` → `due_on`; `Start Date` → `data.start_on`; the checkbox → `status` `done` or `todo`, with `done_on` empty (the sheet doesn't record when) |
+| Anggaran Pernikahan (3 tables) | `budget_entries` | Each filled `Kegiatan` row → a `planned` row: `title`, `amount` = `Tagihan (Awal)`, `group_key` = the event of its table (`ANGGARAN LAMARAN` → `engagement`, `ANGGARAN AKAD` → `ceremony`, `ANGGARAN RESEPSI` → `reception`). Each filled `DP/Lunas`, `Termin 1`, `Termin 2` → a `payment` row (`budget_id` → the planned row, `title` "Down payment or full payment", "Instalment 1", "Instalment 2", `status = 'paid'`, `done_on` and `due_on` empty). `Total Dibayar` and `Tagihan (Sisa)` are **not stored**, they're calculated; the broken `Subtotal Kategori` row is ignored |
+| Target Tabungan | `items`, `kind = 'saving'` and `'contribution'` | `TARGET` → one `saving` row (`title` "Wedding fund", `amount` = the target). Each filled month and `Masuk` column → a `contribution` (`parent_id` → the saving, `amount`, `done_on` = the first day of that month, `who` = `a` or `b` by column; the private import script says which column is which) |
+| List Seserahan | `items`, `kind = 'bridal_gift'` | `Kebutuhan` → `title`; `Harga (Rp)` → `amount`; `Link Pembelian` → `data.url`; `Kategori` → `group_key`, translated (Perangkat Alat Solat → "Prayer set", Make Up & Skin Care → "Make-up and skincare", Peralatan Mandi → "Toiletries", Pakaian Dalam → "Underwear", Pakaian Luar → "Outerwear", Kebutuhan Lain → "Other"); `Status`: Selesai → `done`, On Proses → `in_progress`, Belum Selesai → `todo` |
+| List Administrasi | `items`, `kind = 'task'`, `group_key = 'kua'` | `Dokumen Pernikahan` → `title`; `Nominal` → `amount`; `Detail` → `note`; `Jumlah` → `qty`; `Status`: Selesai → `done`, Belum → `todo`. The `CATATAN` text becomes static text in the app |
+| Kontak Vendor (left table) | `items`, `kind = 'vendor'` | `Nama Vendor` → `title`; `Ops Vendor` → `group_key` (`Entertaiment` is imported as "Entertainment"); `No Tlp` → `data.phone`, normalised to `+62…`; `PIC` → `data.pic`; `Action` `FIX` → `status = 'confirmed'`, otherwise `'option'`. The right table (`FIX KERJASAMA VENDOR`) is **ignored** (a frozen derivative) |
+| List Tamu (12 blocks) | `items`, `kind = 'guest'` | One row per filled guest line: the name → `title`; the left blocks (`LIST TAMU MEMPELAI LAKI-LAKI`) and right blocks (`LIST TAMU MEMPELAI PEREMPUAN`) → `who = 'a'` or `'b'`; the block title → `group_key`, translated (Teman → friends, Kolega → colleagues, Keluarga → family, Tetangga → neighbours, Teman Orang Tua → parents' friends, VIP → VIP); the count column → `qty`; `status = 'todo'` |
+| Rundown Acara (2 tables) | `items`, `kind = 'rundown'` | `Acara` → `title`; the table (`RUNDOWN ACARA LAMARAN` → `engagement`, `RUNDOWN RESEPSI DAN PERNIKAHAN` → `wedding`) → `group_key`; `Waktu` "HH.MM - HH.MM" → `data.start_time` and `data.end_time` "HH:MM"; `PIC` → `data.pic`; `Keterangan` → `note`; `Highlights` → `data.highlights`; the row order → `sort`; the checkbox → `status` `done` or `todo` |
+| List Lagu | `items`, `kind = 'song'` | `Judul` → `title`; `Penyanyi` → `data.singer`; the row order → `sort` |
 | Skenario Budget | – | not imported |
 
 ### One-time import path
@@ -771,7 +779,7 @@ Personal data **must not** go into the repo.
 1. **Sort out first** which data is real and which is template sample data.
 2. **Read the ODS directly** with a Python stdlib script (`zipfile` + `xml.etree`) from `content.xml`. Take the `office:value`, `office:date-value` and `office:boolean-value` attributes, not the display text, so dates and numbers don't get broken by local formatting. Cell coordinates per sheet are hardcoded according to §1.
    - Alternative: export all sheets to CSV with LibreOffice. The 12th token of the CSV filter, `-1`, exports each sheet to its own file ([LibreOffice help](https://help.libreoffice.org/latest/en-US/text/shared/guide/csv_params.html)). But CSV loses data types (dates, currency "Rp."), so it's less recommended.
-3. **The script produces `import.sql`** with `INSERT`s using `rev = 1` and `updated_by = 'import'`.
+3. **The script produces `import.sql`** following the mapping above: one `project` item first, then `items`, then the `planned` rows of `budget_entries`, then their `payment` rows (parents before children, because of the foreign keys). Every row gets a fresh UUID, `rev = 1`, `created_at` and `updated_at` set to the import time in RFC 3339 UTC, and `updated_by = 'import'`; the script ends with `UPDATE sync_state SET rev = 1;`.
    - The script itself may live in the repo (only coordinates and structure, no data).
    - Its input and output are kept **outside the repo** (e.g. `~/wp-private/`) or in a `.gitignore`d folder.
 4. **Remove `BEGIN TRANSACTION`/`COMMIT`** if present ([D1 import](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
@@ -781,7 +789,7 @@ Personal data **must not** go into the repo.
    npx wrangler d1 execute wp --remote --file=../wp-private/import.sql
    ```
    The import file limit is 5 GiB, far above what we need.
-6. **Match** the row counts and totals (budget, *seserahan*, savings) against the spreadsheet locally. Don't paste the numbers in an issue or PR.
+6. **Match** the row counts and totals (budget, bridal gifts, savings) against the spreadsheet locally. Don't paste the numbers in an issue or PR.
 7. **Delete `import.sql`.** The spreadsheet is archived, not deleted.
 
 ---
@@ -806,38 +814,22 @@ Personal data **must not** go into the repo.
 
 Use a Worker **Custom Domain**. Cloudflare creates the DNS record and certificate itself, and all paths are routed to the Worker ([docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)). `wrangler.jsonc` sketch ([config reference](https://developers.cloudflare.com/workers/wrangler/configuration/)):
 
-```jsonc
-{
-  "name": "wp",
-  "main": "src/worker.js",
-  "compatibility_date": "2026-10-01",
-  "workers_dev": false,
-  "preview_urls": false,
-  "routes": [{ "pattern": "wp.atqamz.com", "custom_domain": true }],
-  "assets": { "directory": "./public" },
-  "d1_databases": [{ "binding": "DB", "database_name": "wp", "database_id": "<output of wrangler d1 create>" }]
-}
-```
+The `wrangler.jsonc` (Worker entry, `assets` with SPA mode and `run_worker_first`, D1 binding, `secrets.required`, the dev-only `env.dev` block) is in `docs/infra.md` §5.2. The earlier sketch here (`main: src/worker.js`, `assets.directory: ./public`) is superseded: with the Vite plugin the assets directory is generated, and the Worker is `worker/index.ts`.
 
 Notes:
 
-- With hash routing, the `not_found_handling: "single-page-application"` mode isn't needed.
-- If we later move to path routing, enable SPA mode and add `run_worker_first: ["/api/*"]`. Reason: in SPA mode, a browser navigation to an API path gets served HTML instead ([docs](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)), and `/api/login` has to reach the Worker.
+- With the Vite plugin, `vite build` writes `dist/client` (assets) and `dist/wp` (Worker plus a generated `wrangler.json`), and `wrangler deploy` follows `.wrangler/deploy/config.json` to it (`docs/infra.md` §5.2).
+- SPA mode is on (`not_found_handling: "single-page-application"`), and `run_worker_first: ["/api/*"]` keeps `/api/login` reaching the Worker: in SPA mode, a browser navigation to an API path gets served HTML ([docs](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)).
 
 ### Deploy flow
 
-| | Workers Builds (Git integration) | GitHub Actions + `wrangler-action` |
-|---|---|---|
-| Setup | connect the GitHub repo in the dashboard. Push to the production branch → deploy. Other branches → preview ([docs](https://developers.cloudflare.com/workers/ci-cd/builds/)) | workflow YAML + Cloudflare API token stored in GitHub secrets ([repo](https://github.com/cloudflare/wrangler-action)) |
-| Free | 3,000 build minutes/month, 1 concurrent build ([docs](https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/)) | GitHub Actions quota for public repos |
-| Secrets in GitHub | none | yes (API token) |
+> **Superseded.** The earlier advice here was Workers Builds. `docs/infra.md` §7 reversed it: GitHub Actions calling `npx` for `vite` and `wrangler` directly, with an account-owned token, because Workers Builds only accepts user-owned tokens and a second CI system would be needed for the checks. The deploy sequence is migrations, `vite build`, `wrangler deploy` (§7.2 there).
 
-**Advice: Workers Builds.**
+Still valid from the earlier version:
 
-- Deploy command: `npx wrangler d1 migrations apply wp --remote && npx wrangler deploy` ([migrations](https://developers.cloudflare.com/d1/reference/migrations/)).
-- **Preview builds:** "Preview URLs are public by default", and D1 is only isolated "when you bind the Preview to a separate resource" ([Previews](https://developers.cloudflare.com/workers/previews/)). That means that, without extra settings, a preview from a branch can read the real DB through a public URL. Pick one: turn previews off (`preview_urls: false`), protect them with Worker-level Access, or bind the preview to a separate D1. Whether this isolation option is available on the free plan is **unverified**.
-- **Initial `.gitignore`** (public repo): `.wrangler/`, `node_modules/`, `.dev.vars`, `*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`.
-- **Local dev:** `wrangler dev` with a local D1 seeded with **fake data** only.
+- **Preview builds:** "Preview URLs are public by default", and D1 is only isolated "when you bind the Preview to a separate resource" ([Previews](https://developers.cloudflare.com/workers/previews/)). That means that, without extra settings, a preview from a branch can read the real DB through a public URL. `docs/infra.md` §7.4 settles it: previews are off (`preview_urls: false`).
+- **Initial `.gitignore`** (public repo): `.wrangler/`, `dist/`, `node_modules/`, `.dev.vars*`, `.env*`, `*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`.
+- **Local dev:** `npm run dev` (the Vite dev server running the Worker locally, with a local D1 seeded with **fake data** only).
 
 ---
 
@@ -865,7 +857,7 @@ Notes:
    - the "Subtotal Kategori" row that miscalculates.
 
    The import has to validate, not copy raw.
-9. **A drawn-out framework debate.** Mitigation: build the `store/` + `domain/` layers first, with vanilla views. The framework decision can follow without throwing away work.
+9. **A drawn-out framework debate.** Closed: the operator chose React + TypeScript + Vite (`docs/infra.md` §5). The remaining risk is that the choice is revised later; the layer rules in §6.1 keep that cheap.
 10. **After the event.** Who maintains it, and do we want to archive the data (export) and then shut down the Worker?
 
 **Open questions for you two:**
@@ -884,15 +876,15 @@ Notes:
 
 **Concrete next step (one evening):**
 
-1. **Decide first:** auth (Access OTP or device-key) and the time left until the wedding day. The framework does *not* need deciding yet.
-2. **End-to-end spike on `wp.atqamz.com`** with just **one** table (`budget_items` + `payments`):
-   - Worker + static assets + D1 + Worker-level Access;
+1. **Decide first:** auth (Access with the Google IdP, or the device-key Plan B) and the time left until the wedding day. The framework is decided: React + TypeScript + Vite (`docs/infra.md`).
+2. **End-to-end spike on `wp.atqamz.com`** with just the budget (`budget_entries`: planned lines and their payments):
+   - Worker + Vite-built static assets + D1 + hostname-based Access;
    - IndexedDB outbox, `GET/POST /api/sync`, SW app shell;
-   - vanilla views.
+   - React views over the `store/` and `domain/` layers.
 3. **Test on two real phones** (Android and iOS):
    - install to the Home Screen;
-   - OTP login inside the PWA;
+   - Google login inside the PWA;
    - edit offline on both phones then go online at the same time (conflict);
    - session expires → log in again button.
 4. **If it passes:** add the generic list screen for the other 7 sheets, then the wedding-day rundown, then run the one-time import (§7). The spreadsheet is officially retired.
-5. **After the MVP works:** discuss the framework with Partner B using the §6.2 matrix. The migration is only replacing `views/`.
+5. **After the MVP works:** if React is ever to be replaced, the migration is only `views/`, `ui/`, `hooks/` and `main.tsx` (§6.1).

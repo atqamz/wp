@@ -1,13 +1,13 @@
 # Feature research: wedding and household hub (wp)
 
-Discussion material, not a final decision. Research as of 6 October 2026. A companion to `docs/brainstorm.md` (branch `hand/f00cf2fa15f0e/t1-a2`), which covers the spreadsheet, the Cloudflare architecture, auth and sync. This document covers **features**: what is worth building, what should be left to other apps, and what data is needed.
+Discussion material, not a final decision. Research as of 6 October 2026. A companion to `docs/brainstorm.md` (the spreadsheet, the data model, offline and sync) and `docs/infra.md` (the stack decisions: Cloudflare, auth, React + TypeScript + Vite, CI). This document covers **features**: what is worth building, what should be left to other apps, and what data is needed.
 
 > **Privacy.** This repo is public. This document contains no real name, phone number, address, amount, date or document detail of anyone. The couple is written as **Partner A** and **Partner B**. Example amounts use a placeholder (`Rp X`). The figures that do appear are public facts about products, regulations or surveys, with their sources.
 
 ## How to read
 
 - **Effort:** `S` = about one working day (one list configuration and one screen, no new platform component). `M` = two to four days. `L` = more than a week, or needs a new platform component.
-- **Platform need** (only a note so it fits the stack decisions of the other worker, no stack recommendation here): `client` = runs in the browser without a server; `D1` = relational database; `R2` = file storage; `cron` = scheduled task; `push` = native notifications; `email` = sending email; `realtime` = live sync between phones; `static` = static files are enough.
+- **Platform need** (only a note so it fits the stack in `docs/infra.md`; this document makes no stack recommendation): `client` = runs in the browser without a server; `D1` = relational database; `R2` = file storage; `cron` = scheduled task; `push` = native notifications; `email` = sending email; `realtime` = live sync between phones; `static` = static files are enough.
 - **Evidence:** inline links. `[UNVERIFIED]` = could not be confirmed from a source that opened successfully (only a search snippet, a doubtful secondary source, or a page that failed to load). `(tested locally)` = the author's experiment on Node v26.10.0 / ICU 78.3, not a quote.
 - **The scores in §7** are the author's judgement, not data. The formula is written there so it can be challenged.
 
@@ -21,7 +21,7 @@ Discussion material, not a final decision. Research as of 6 October 2026. A comp
 
 1. **Market.** Foreign planners (The Knot, Zola, Joy, Bridebook) are free for couples because the money comes from vendors or registries. The Indonesian products found are vendor marketplaces (Bridestory, Weddingku) and digital invitation platforms. Paid planning tools are tucked away (Wevitation). In this research **no** product was found that models the *KUA* (Office of Religious Affairs, the marriage registry) process, a vendor book + payment schedule, and an *amplop* (wedding-gift envelope) ledger in one private app. That is not proof such a product doesn't exist.
 2. **The strongest lessons from the behavioural research:** capture has to be fast, two people are equal, default items are unassigned, nudges are rare and specific, no scores or streaks, and data can be taken away (export).
-3. **Suggested core:** one generic `items` model + a "This week" screen + tasks from a template, a budget with a payment schedule, a vendor book, and a guest list. JSON/CSV export from day one.
+3. **Suggested core:** one generic `items` model (plus a separate table for the budget and its payments) + a "This week" screen + tasks from a template, a budget with a payment schedule, a vendor book, and a guest list. JSON/CSV export from day one.
 4. **Household (after the wedding):** worth building small: recurring bills and renewals (vehicle tax, *STNK* (vehicle registration), *BPJS* (national health insurance), insurance), savings goals, an *amplop* ledger and family occasions. Better left to other apps: shopping lists, a shared calendar, a vault of document scans, a *KPR* (home mortgage) calculator, trip itineraries.
 5. **Reminders:** the "This week" screen and an "Add to calendar" button (`.ics`) first. Push isn't needed yet.
 6. **Sensitive documents:** don't store scans of the *KTP*/*KK* (national ID card/family card) or *NIK* (national ID number) in the app. Store the ready status, the date, and the location of the document.
@@ -83,7 +83,7 @@ What was **not** found (don't treat as fact): a study comparing "assign vs claim
 7. **Own little, interoperate for the rest.** Calendar, shopping list, vault: hand them off, connect through `.ics`, links, CSV. (Evidence 2, 3)
 8. **Undo everywhere.** Soft delete and a "recently deleted" screen, because two people edit the same data. ([NN/g 10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/): users often perform actions by mistake and need a clear way out; [Apple HIG undo](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/undo-and-redo.json))
 9. **Data can be taken away.** JSON and CSV export from day one. Too many couple and household apps die or change owners (§5.4).
-10. **Indonesia-first.** Whole rupiah, date `6 Oct 2026`, Hijri as an approximate display, WhatsApp for sharing, casual Indonesian UI language.
+10. **Indonesia-first, English UI.** Whole rupiah, date `6 Oct 2026`, Hijri as an approximate display and WhatsApp for sharing; the interface text itself is English (§5.7).
 
 ### 1.4 Weekly-use test
 
@@ -233,7 +233,7 @@ All deadlines are counted back or forward from **H** = the *akad* day. Working d
 |---|---|---|---|---|---|
 | W1 | **H-day and countdown.** The *akad* date, time zone, countdown, the approximate Hijri date next to it | One number that makes every deadline relative. Visible every time the app opens | S | `settings`: *akad* date (`YYYY-MM-DD`), IANA zone, Partner A/B labels | client |
 | W2 | **Task timeline from a template** with offsets from H. Tasks can be changed or deleted. One tap for "I'll take it". A "needs a decision" flag | Weekly. An app that remembers what has to be done reduces the load of anticipating (§1.2 #6) | M | `task`: title, `due_on`, `done_on`, `who` (empty = anyone), `group_key` (phase), note, decision flag | D1 + static template file |
-| W3 | **The "This week" screen.** Tasks due or late, payments in the next 7 days, hanging decisions, document renewals | The anchor of the weekly sofa session. The only "reminder" that needs no infrastructure | S | Queries over `task`, `payment`, `doc` | client |
+| W3 | **The "This week" screen.** Tasks due or late, payments in the next 7 days, hanging decisions, document renewals | The anchor of the weekly sofa session. The only "reminder" that needs no infrastructure | S | Queries over `task` and `doc` items and the `payment` rows of `budget_entries` | client |
 | W4 | **Agreement notes.** Important decisions: what, who agreed, when, the reason | Common advice for family conflict is to write down the agreement ([IDN Times](https://www.idntimes.com/life/relationship/cara-hadapi-keluarga-terlalu-ikut-campur-persiapan-nikah-c1c2-01-zn5b2-d3brgs)). Used when there's a "what did we say back then" argument | S | `note`: title, body, date, `who` | D1 |
 
 ### 3.2 Phase 1: Marriage administration (roughly H-3 months to H+7 HK)
@@ -251,7 +251,7 @@ Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
 | W8 | **Events** as a group: *lamaran*, *siraman* (pre-wedding bathing ritual), *midodareni* (Javanese eve-of-wedding ritual), *pengajian* (Quran recital gathering), *akad*, *resepsi* (wedding reception), *ngunduh mantu* (groom's family reception for the new bride), *tasyakuran* (thanksgiving gathering). A template that can be edited and deleted. Used as the `group_key` in tasks, budget, rundown | The structure of the budget and rundown follows the events. Which ones are used differs per family and region (*ngunduh mantu* is optional: [Popbela](https://www.popbela.com/relationship/married/perbedaan-resepsi-dan-ngunduh-mantu-00-925lr-2j6wk6)) | S | `settings`: list of events (name, optional date, zone) | client |
-| W9 | **The *seserahan*/*hantaran* (a related term for the gift offering) list.** Name, price, purchase link, category, status (not yet/in progress/done), total | Weekly while hunting for items; used in the shop. From the original sheet (brainstorm §1.6) | S | `item` of *seserahan* kind: title, `amount`, link, `group_key`, `status`, `who` | D1 |
+| W9 | **The *seserahan*/*hantaran* (a related term for the gift offering) list.** Name, price, purchase link, category, status (not yet/in progress/done), total | Weekly while hunting for items; used in the shop. From the original sheet (brainstorm §1.6) | S | `bridal_gift` item: title, `amount`, `data.url`, `group_key`, `status`, `who` | D1 |
 
 *Mahar* (the groom's wedding payment) is not a separate feature: record it as a budget item or a note. PMA 30/2024 doesn't mention *mahar* ([PDF](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf), searched by grep by the researcher). The legal difference between *mahar* and *seserahan* could not be verified: `[UNVERIFIED]`.
 
@@ -259,17 +259,17 @@ Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim
 
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
-| W11 | **Vendor book.** Category, status (option/fix/cancelled), contact, PIC, taps to call and WhatsApp, key contract facts (extra charges outside the contract, cancellation rules, emergency contact) | Vendor meetings and the wedding day. WO fraud rarely leads anywhere ([Kontan](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)), so contracts and contacts must be easy to find. Mandatory questions to a WO: extra charges outside the contract, a backup plan ([Popbela](https://www.popbela.com/relationship/married/pertanyaan-wedding-organizer-00-vmqqn-l796gq)) | S | `vendor`: name, `group_key` (category), `status`, E.164 phone, PIC, `amount` (quoted price), contract link, note | D1 |
+| W11 | **Vendor book.** Category, status (option/confirmed/cancelled), contact, PIC, taps to call and WhatsApp, key contract facts (extra charges outside the contract, cancellation rules, emergency contact) | Vendor meetings and the wedding day. WO fraud rarely leads anywhere ([Kontan](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)), so contracts and contacts must be easy to find. Mandatory questions to a WO: extra charges outside the contract, a backup plan ([Popbela](https://www.popbela.com/relationship/married/pertanyaan-wedding-organizer-00-vmqqn-l796gq)) | S | `vendor`: name, `group_key` (category), `status`, E.164 phone, PIC, `amount` (quoted price), contract link, note | D1 |
 | W12 | **Quote comparison per category.** Several option vendors side by side, price first | Price is the entry point: 70.13% of Bridestory vendor leads come from viewing or asking for a price ([Bridestory](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)); budget is the hardest thing for 64% of respondents ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)) | S | A view over `vendor` (grouped by `group_key`) | client |
-| W13 | **Budget and payments.** Budget items per event (planned vs spent), payment rows (down payment, instalments, final settlement) with a due date and a payment date, remainder, "late" mark, a "next 7 days" list. Bridestory 2017 survey result: only 49.1% kept to the budget, so the gap between plan and actual needs to be visible | Weekly. Vendor payments are real money and real deadlines. The original sheet has no due date (brainstorm §1.4) | M | `budget` (title, `group_key` = event, planned `amount`, `parent_id` = optional vendor) and `payment` (`parent_id` = budget item, `amount`, `due_on`, `done_on`, `who` = payer) | D1 |
-| W14 | **Wedding fund.** Target, deposits per person or source (Partner A, Partner B, parents, others), progress, "need to save Rp X per month" = (target minus collected) divided by months left | Weekly to monthly. 45% of Jakpat respondents fund from personal savings and 40% from joint savings ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), so recording per source is meaningful. The money actually sits in the account/Kantong (pocket); the app only records | S | `saving` (target, deadline) and `contribution` (`parent_id`, `amount`, `done_on`, `who`) | D1 |
+| W13 | **Budget and payments.** Budget items per event (planned vs spent), payment rows (down payment, instalments, final settlement) with a due date and a payment date, remainder, "late" mark, a "next 7 days" list. Bridestory 2017 survey result: only 49.1% kept to the budget, so the gap between plan and actual needs to be visible | Weekly. Vendor payments are real money and real deadlines. The original sheet has no due date (brainstorm §1.4) | M | `budget_entries` rows of type `planned` (title, `group_key` = event, planned `amount`, optional `vendor_id`) and `payment` (`budget_id` = the planned row, `status`, `amount`, `due_on`, `done_on`, `who` = payer) | D1 |
+| W14 | **Wedding fund.** Target, deposits per person or source (Partner A, Partner B, parents, others), progress, "need to save Rp X per month" = (target minus collected) divided by months left | Weekly to monthly. 45% of Jakpat respondents fund from personal savings and 40% from joint savings ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), so recording per source is meaningful. The money actually sits in the account/Kantong (pocket); the app only records | S | `saving` (target, deadline) and `contribution` (`parent_id`, `amount`, `done_on`, `who`) items | D1 |
 | W15 | **Payment proof as a link** to Drive/Photos, not an upload. Upload to `R2` only later (see W15b in §7) | The trail for WO fraud and disputes. A link is cheap; upload needs R2 (§5.3) | S | `payment.data.link` | D1 |
 
 ### 3.5 Phase 4: Guests and invitations
 
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
-| W16 | **One-table guest list.** Side (Partner A/B), category, name, number of people (pax), phone number, invitation status, note. Totals per side and category. **An adjustable catering portion multiplier** (the 2x or 2.5x rule differs between sources: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). CSV import and export | Weekly in the invitation phase; the total drives the catering budget, which can be 40-60% of the reception budget ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)) | M | `guest`: name, `group_key` (side and category), `qty` (pax), phone, `status`, note | D1 + client (CSV) |
+| W16 | **One-table guest list.** Side (Partner A/B), category, name, number of people (pax), phone number, invitation status, note. Totals per side and category. **An adjustable catering portion multiplier** (the 2x or 2.5x rule differs between sources: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). CSV import and export | Weekly in the invitation phase; the total drives the catering budget, which can be 40-60% of the reception budget ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)) | M | `guest`: name, `who` (side), `group_key` (category), `qty` (pax), `data.phone`, `status`, note | D1 + client (CSV) |
 | W17 | **Invitation tracker** with a "send via WhatsApp" button per guest (`wa.me/<number>?text=...`, [official format](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/)) and a sent marker | Weekly while sending; the message is sent manually by the user, not automatically | S | `guest.status` ("not yet/sent/confirmed/not coming") | client |
 | W18 | **Import RSVP/check-in results from a digital invitation service**, through CSV/Excel. Many platforms offer export, e.g. invi.id ([page](https://invi.id)) | Only if you two use an external invitation service (§8: not built ourselves) | M | Matching names to `guest` | client |
 | W19 | **Read-only link** for parents or the WO: rundown, guest total, vendor contacts. A random token per link, revocable | Couples want to involve people outside themselves ([Massimi et al.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)). A privacy risk, so it's postponed and kept narrow | M | Token table (hash), scope per link | D1 + public endpoint |
@@ -436,7 +436,7 @@ Effort S. Platform: client.
 ### 5.3 Attachments and photos
 
 - **Start with a link column** to Drive/Photos (W15). Cheap, no new platform.
-- **Upload needs R2.** Free: 10 GB-month, 1 million Class A and 10 million Class B operations per month, free egress ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)). Enabling it goes through the "R2 subscription" checkout ([R2 get started](https://developers.cloudflare.com/r2/get-started/)). Whether a payment method is required isn't stated in the docs: `[UNVERIFIED]`. Brainstorm §3.2 concludes it is. Confirm with the stack worker before depending on it.
+- **Upload needs R2.** Free: 10 GB-month, 1 million Class A and 10 million Class B operations per month, free egress ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)). Enabling it goes through the "R2 subscription" checkout ([R2 get started](https://developers.cloudflare.com/r2/get-started/)). Whether a payment method is required isn't stated in the docs: `[UNVERIFIED]`. Brainstorm §3.2 concludes it is. Confirm with the account owner before depending on it (`docs/infra.md` §9.2).
 - **Don't store files in D1.** The limit for one row, string, or blob is 2 MB ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/)).
 - **Shared album photos:** since 31 March 2025 the Google Photos Library API only accesses items created by the app itself ([Google](https://developers.google.com/photos/support/updates)). Picking the user's photos goes through the Picker API with a session and `pickerUri` ([guide](https://developers.google.com/photos/picker/guides/get-started-picker)). So photo albums stay in Google Photos/iCloud, the app only stores the link.
 - **If upload is added one day** (payment proof, contracts): compress on the client, random file names, authorisation before access ([OWASP](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)), the `item` metadata holds SHA-256, mime, size. Effort L because it touches R2, signed access, and sync. This is what makes W15b (upload) postponed (§7).
@@ -483,23 +483,25 @@ The sync and offline design is in brainstorm §5 (a shell with a Service Worker,
 
 iOS facts that affect the design (verified in the brainstorm, not here): Home Screen web app data isn't deleted by the 7-day ITP rule ([WebKit](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)); Background Sync isn't supported in Safari and Firefox ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)), so the outbox is only sent while the app is open. The total effort is on the platform side, not in the features.
 
-### 5.7 Indonesian language, dates, money, and Hijri
+### 5.7 Language, dates, money, and Hijri
 
-The results below were tested locally (Node v26.10.0, ICU 78.3). Target browsers may differ, so retest in Chrome Android and Safari iOS.
+The UI is English; this section only covers how Indonesian-context values are written. The results below were tested locally (Node v26.10.0, ICU 78.3). Target browsers may differ, so retest in Chrome Android and Safari iOS.
 
 | Topic | Result / rule | Notes |
 |---|---|---|
-| UI language | Casual Indonesian, all text in one file | No i18n library (no need for a second language yet) |
+| UI language | English only. Every UI string is English, kept in one TypeScript file (no i18n library, no second language). Indonesian terms that have no English equivalent (*KUA*, *seserahan*, *amplop*, *akad*) stay as proper nouns, with a gloss on first use | The operator's decision. This is separate from the `Intl` locale below, which controls only how numbers and dates are written |
 | Rupiah | `new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR"}).format(600000)` produces `Rp 600.000` with a non-breaking space; no decimals | The compact format rounds (`59 jt` for 58,500,000), don't use it for money |
 | ISO conflict | The ISO 4217 list (SIX, published 17 September 2026) lists IDR with **minor unit 2** ([list-one.xml](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)). MDN: currency formatting uses the ISO digits by default ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat)). But the local test shows 0 decimals for IDR in `id-ID` | Don't guess the cause. The storage decision is in §6 |
-| Date | `6 Okt 2026` (medium), `6 Oktober 2026` (long), `Selasa, 06 Oktober 2026` (full), `06/10/2026` | Official writing is usually day-month name-year or dd/mm/yyyy; the official rule wasn't found: `[UNVERIFIED]` |
-| Time | `12.00` with a period as the separator | |
+| Date | `id-ID`: `6 Okt 2026` (medium), `6 Oktober 2026` (long), `Selasa, 06 Oktober 2026` (full), `06/10/2026`. `en-ID` (tested locally): `6 Oct 2026` (medium), `Tuesday, 6 October 2026` (full) | Official writing is usually day-month name-year or dd/mm/yyyy; the official rule wasn't found: `[UNVERIFIED]`. With an English UI, use `en-ID` so month and day names are English while the day-month-year order stays |
+| Time | `12.00` with a period as the separator (`id-ID` and `en-ID`) | |
 | Time zone | WIB (Western Indonesia Time) UTC+7, WITA (Central Indonesia Time) UTC+8, WIT (Eastern Indonesia Time) UTC+9, no DST ([Wikipedia](https://id.wikipedia.org/wiki/Waktu_di_Indonesia), secondary) | Store the IANA name (`Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`), not the abbreviation; abbreviations depend on the locale: `12.00 WIB`, `13.00 WITA`, `14.00 WIT` for the same instant |
 | Hijri | Five Islamic calendars in the test runtime. For 6 Oct 2026: `islamic` 25, `islamic-umalqura` 25, `islamic-civil` 23, `islamic-tbla` 24, `islamic-rgsa` 25 *Rabiulakhir* (Rabi' al-thani) 1448 | A difference of up to 2 days for the same date. MDN lists `islamic-civil`, `islamic-tbla`, `islamic-umalqura` ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/supportedValuesOf)) but not `islamic-rgsa` |
 | Start of Ramadan 1447 | `islamic-umalqura`, `-civil`, `-rgsa`, `islamic`: 18 Feb 2026; `islamic-tbla`: 17 Feb 2026 | A comparison of algorithms, not the official Indonesian date |
 | Official Hijri months | Kemenag sets them through the *sidang isbat* (the moon-sighting session) ([Wikipedia](https://id.wikipedia.org/wiki/Sidang_isbat), secondary). The latest MABIMS criteria (3 degrees height, 6.4 degrees elongation) couldn't be sourced: `[UNVERIFIED]` | The algorithm in the browser can be off by one day from Kemenag's decision |
 | National holidays | A joint decree of 3 ministers every year; 2026: 17 national holidays and 8 collective leave days ([Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)). No official open dataset found. The unofficial repo [APIHariLibur_V2](https://github.com/guangrei/APIHariLibur_V2) is sourced from Google Calendar, GPL-3.0 licence | A manual seed per year that can be edited. Don't depend on an unofficial API |
 | *Weton*/auspicious days | An optional Javanese practice (*weton* is the Javanese birth-day calendar cycle) ([Wikipedia](https://id.wikipedia.org/wiki/Weton), secondary) | An optional note per date, not a constraint on the schedule |
+
+**Locale choice for an English UI (tested locally, same runtime):** `en-ID` gives `Rp 600.000`, `6 Oct 2026`, `12.00` and, with `-u-ca-islamic-umalqura`, `25 Rabiʻ II 1448 AH`; `en-GB` and `en-US` give `IDR 600,000`, so they are not used for money. Whether `en-ID` is present in the ICU data of Chrome Android and Safari iOS is `[UNVERIFIED]`; the fallback is `en-GB` for dates with a hand-written `Rp` prefix for money. The Hijri table above lists the Indonesian month names only as test results; the UI shows the English forms.
 
 **Verdict:** Hijri is only shown next to the date, labelled "approximate", with a calendar choice and a manual offset of ±1-2 days. **Not used to compute legal deadlines.** Effort S, one `Intl` call.
 
@@ -548,7 +550,7 @@ No integration is built. What is decided now is only what's expensive to change 
 | 3 | **Money** | Whole-rupiah integer + a currency code per row (default `IDR`), never float | The whole UI uses whole rupiah. Departs from ISO 4217 which gives IDR minor unit 2: ISO-based integrations (e.g. payment APIs that use minor units) need a ×100 conversion. The alternative: store `amount_minor` ×100 (ISO-faithful, the same shape as the Stripe API: [Stripe](https://docs.stripe.com/currencies)); more complicated for a single-currency household. Whichever is chosen, write it in the export schema | [ISO 4217 (SIX)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml); the safe integer limit 2^53-1 is far above the need ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)) |
 | 4 | **Phone** | `+<country code><digits>` (E.164). Drop the `+` only when building the `wa.me` link | The same format for `tel:`, `wa.me`, vCard | [ITU E.164](https://www.itu.int/rec/T-REC-E.164/en); the 15-digit limit couldn't be confirmed from a primary source: `[UNVERIFIED]` |
 | 5 | **Change feed** | Per row: an ever-increasing `rev`, `updated_at`, `updated_by`, `deleted_at` (tombstone), like the brainstorm sync design. That is already a change feed that any consumer can pull (`WHERE rev > ?`). An **append-only `events` table** (a shape aligned with CloudEvents: `id`, `source`, `type`, `time`, `subject`, `data`) has its shape decided now, and is created when the first consumer appears | History before there's a consumer has low value (YAGNI). The outbox pattern: write the message in the same transaction as the data change; consumers must be idempotent by tracking IDs | [CloudEvents](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md), [outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html) |
-| 6 | **Export format** | `export.json` holds `format_version` and `$schema` (JSON Schema 2020-12); one CSV per item kind with the same column names as the JSON; `calendar.ics`; `contacts.vcf`. Build JSON and CSV first (S) | JSON is lossless; CSV is convenient. RFC 4180: CSV uses CRLF and double quotes for fields containing commas, quotes, or newlines | [JSON Schema](https://json-schema.org/specification), [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) |
+| 6 | **Export format** | `export.json` holds `format_version` and `$schema` (JSON Schema 2020-12); one CSV per item kind and one for `budget_entries`, with the same column names as the JSON; `calendar.ics`; `contacts.vcf`. Build JSON and CSV first (S) | JSON is lossless; CSV is convenient. RFC 4180: CSV uses CRLF and double quotes for fields containing commas, quotes, or newlines | [JSON Schema](https://json-schema.org/specification), [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) |
 | 7 | **Calendar feed** | UID = item ID; SEQUENCE from `rev`; LAST-MODIFIED from `updated_at`; items without a time as date-only (all-day); tasks as `VTODO` with `DUE`; read-only; a stable URL with a random token in the path | UID is a global and persistent identifier; SEQUENCE is a revision counter | [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). For the calendar as a whole, RFC 7986 adds `REFRESH-INTERVAL` which is only a hint ([RFC 7986](https://www.rfc-editor.org/rfc/rfc7986.html)) |
 | 8 | **Vendor vCard** | UID = item ID; `KIND:org` for companies | `VERSION:4.0` and `FN` are mandatory | [RFC 6350](https://www.rfc-editor.org/rfc/rfc6350.html) |
 | 9 | **Webhook shape** (not built) | HMAC-SHA256 signature over `msg_id.timestamp.payload`, headers `webhook-id`, `webhook-timestamp`, `webhook-signature`; payload `type`, `timestamp`, `data` | Aligned with an existing specification, no redesign | [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md) |
@@ -561,7 +563,7 @@ Not added now: an `external_refs` column or an integrations table. Adding a colu
 
 - An OAuth app in Testing status: up to 100 test users, authorisation from test users expires in 7 days ([Google Cloud Help](https://support.google.com/cloud/answer/15549945)); refresh tokens live 7 days ([Google Identity](https://developers.google.com/identity/protocols/oauth2)). Production without verification shows a warning screen when scopes are sensitive.
 - The Drive scopes `drive.file` and `drive.appdata` are not sensitive; `drive` and `drive.readonly` are restricted ([Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)). The classification of Calendar scopes wasn't verified well: `[UNVERIFIED]` ([Calendar auth](https://developers.google.com/workspace/calendar/api/auth)).
-- This means: a Google integration beyond login needs a weekly re-login or a warning screen. This is a platform fact, not a recommendation. The login decision is with the stack worker.
+- This means: a Google integration beyond login needs a weekly re-login or a warning screen. This is a platform fact, not a recommendation. The login decision is in `docs/infra.md` §6 (Cloudflare Access with a Google identity provider).
 
 ### 6.3 Future integration candidates: feasibility only
 
@@ -591,7 +593,7 @@ Scale: **cheap**, **medium**, **hard**, **not feasible** (for a private two-pers
 
 ### 6.4 Platform needs per feature class
 
-Only facts to match against the stack decisions of the other worker (free plan, checked 6 October 2026).
+Only facts to match against the stack decisions in `docs/infra.md` (free plan, checked 6 October 2026).
 
 | Feature class | Storage | Push | Files | Cron | Realtime |
 |---|---|---|---|---|---|
@@ -693,83 +695,77 @@ Cross-cutting (`X`) features that appear in the table, with their effort and pla
 
 ### 7.2 The smallest data model for wedding and household
 
-**Two options.**
+**Decided (operator, final): one generic `items` table for everything that is list-shaped, plus one separate table, `budget_entries`, only for the budget and its payments.** This section holds the rationale and the `kind` registry; the SQL, the formats and the import mapping are in [brainstorm §7](brainstorm.md#7-data-model-d1). The two must agree: change one, change the other. Formats (ID, time, money, phone) are the decisions in §6.1.
+
+**The two options that were compared.**
 
 | | One generic model (`items`) | A table per feature |
 |---|---|---|
-| Example | One `items` table with a `kind` column, a few typed columns for what is summed or sorted, and one JSON `data` column for the rest | 12 tables in brainstorm §7: `tasks`, `vendors`, `budget_items`, `payments`, `guests`, `rundown_items`, and so on, and a new table for each household feature |
+| Example | One `items` table with a `kind` column, a few typed columns for what is summed or sorted, and one JSON `data` column for the rest | A table per feature: `tasks`, `vendors`, `guests`, `rundown_items`, and so on, and a new table for each household feature (an earlier sketch had 12) |
 | New feature | Configuration: column list, labels, totals, grouping. No migration | A new migration, a new whitelist in the Worker, new sync code, new export code |
 | Sync | One `rev` index, one table to pull | One `rev` index per table |
 | Export, import, integration | Uniform: one row shape, one change feed | One per table |
-| SQL constraints | Weak per `kind`: `CHECK` only for what applies generally (`amount >= 0`). Per-`kind` validation is done in code through a registry | Strong: typed columns, `NOT NULL`, `CHECK` per table, real foreign keys |
+| SQL constraints | Weak per `kind`: `CHECK` only for what applies generally (`amount >= 0`, date format, `who`). Per-`kind` validation is done in code through a registry | Strong: typed columns, `NOT NULL`, `CHECK` per table, real foreign keys |
 | Queries | Needs an index on `(kind, due_on)`; the contents of `data` can't be indexed cheaply | Plain, clear SQL; simple aggregation |
 | Risk | A typo in `kind` or JSON contents silently slips through without a registry | Lots of repeated code; adding a feature feels expensive so small features don't get built |
 | Switching direction later | Moving one `kind` to its own table = one `INSERT ... SELECT` per `kind` (the author's inference) | Merging tables into a generic one = more work (the author's inference) |
 
-**Recommendation: the generic model, with one exit rule.** All the lists, checklists and notebooks in §3 and §4 are rows with a few fields, a status, and a total. The column table is kept as small as possible:
+**Decision: generic, with one exception and one exit rule.** All the lists, checklists and notebooks in §3 and §4 are rows with a few fields, a status, and a total, so they share `items`. The exception is the budget and its payments, which get their own table, `budget_entries`: that is where money accuracy matters most, and it is the one place that needs real constraints (a payment must belong to a budget line, an unpaid payment has no payment date, a budget line has no due date) and real foreign keys. The exit rule below covers every other `kind`.
 
-```sql
-CREATE TABLE settings (
-  key TEXT PRIMARY KEY, value TEXT,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
+**`items`, column by column.** The exact types and constraints are in brainstorm §7.2.
 
-CREATE TABLE items (
-  id TEXT PRIMARY KEY,
-  project_id TEXT,
-  kind TEXT NOT NULL,
-  parent_id TEXT,
-  title TEXT NOT NULL,
-  status TEXT,
-  group_key TEXT,
-  due_on TEXT,
-  done_on TEXT,
-  amount INTEGER CHECK (amount IS NULL OR amount >= 0),
-  qty INTEGER CHECK (qty IS NULL OR qty >= 0),
-  who TEXT CHECK (who IS NULL OR who IN ('a', 'b', 'both')),
-  note TEXT,
-  data TEXT,
-  sort REAL NOT NULL DEFAULT 0,
-  rev INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT, deleted_at INTEGER
-);
-CREATE INDEX items_rev ON items (rev);
-CREATE INDEX items_kind_due ON items (kind, due_on);
-CREATE INDEX items_parent ON items (parent_id);
-```
+| Columns | Meaning |
+|---|---|
+| `id`, `project_id`, `kind`, `parent_id` | Client-created ID; the project the row belongs to; which `kind` of row it is (registry below); an optional parent (a contribution's saving) |
+| `title`, `status`, `group_key`, `note` | The name; a status from the `kind`'s own list; the group (category, phase, event, moment); free text |
+| `due_on`, `done_on` | Dates only (`YYYY-MM-DD`), see §6.1 decision 2 |
+| `amount`, `currency`, `qty` | Whole rupiah and a currency code (default `IDR`), see §6.1 decision 3; a count (pax) |
+| `who` | `a`, `b` or `both`. The Worker derives `a` and `b` from the verified Access email (an ordered pair in a Worker secret, `docs/infra.md` §6.4), so no email is stored in D1; the display names are in `settings` and never go into the repo |
+| `data` | JSON for what the `kind` needs beyond the columns (phone, PIC, links, start and end time) |
+| `sort` | A fractional index (`REAL`) for manual order |
+| `rev`, `created_at`, `updated_at`, `updated_by`, `deleted_at` | Sync and audit: the server counter, RFC 3339 instants, who changed it, the tombstone (§6.1 decision 5) |
 
-This is a sketch, not the final schema; the sync conventions (`rev`, tombstone, `sort` REAL) follow brainstorm §5 and §7. `who` holds `a`/`b`/`both`, mapped to the two login accounts on the server or in `settings` which doesn't go into the repo. A project (wedding, renovation, trip) is a row with `kind = project`, and `project_id` points to it, so there's no need for a `projects` table.
+A project (wedding, renovation, trip) is a row with `kind = project`, and `project_id` points to it, so there's no `projects` table. `settings` is a small key/value table with the same sync columns (keys in brainstorm §7.3). `sync_state` is a one-row revision counter.
 
-**The `kind` registry** (one object in code, used by the client and the Worker for validation, building list screens, and totals):
+**The `kind` registry** (one object in code, `shared/tables.ts`, used by the client and the Worker for validation, building list screens, and totals):
 
 | `kind` | Used by | Meaningful columns | Contents of `data` |
 |---|---|---|---|
 | `project` | all | `title`, `status` (active/archived) | – |
-| `task` | W2, W5, W7, W23, W24, H7 | `due_on`, `done_on`, `who`, `group_key` (phase) | decision flag, template rules |
-| `vendor` | W11, W12 | `group_key` (category), `status` (option/fix/cancelled), `amount` (quote) | E.164 phone, PIC, contract link, key facts |
-| `budget` | W13, H10 | `group_key` (event), `amount` (planned), `parent_id` (vendor, optional) | – |
-| `payment` | W13 | `parent_id` (budget item), `amount`, `due_on`, `done_on`, `who` (payer) | proof link |
-| `saving`, `contribution` | W14, H2 | the target in `amount` and `due_on`; a contribution has `parent_id`, `amount`, `done_on`, `who` | source of funds |
-| `guest` | W16, W17 | `group_key` (side and category), `qty` (pax), `status` | phone |
-| `seserahan` | W9 | `group_key` (category), `amount` (price), `status`, `who` | purchase link |
-| `rundown` | W20 | `group_key` (event), `due_on`, `done_on`, `sort` | start and end time, PIC |
-| `song` | W22 | `group_key` (moment) | singer |
+| `task` | W2, W5, W7, W23, W24, H7 | `status` (todo/done), `due_on`, `done_on`, `who`, `group_key` (phase; `kua` for the KUA checklist), `amount`, `qty`, `note` | `start_on`, decision flag, template rules |
+| `vendor` | W11, W12 | `group_key` (category), `status` (option/confirmed/cancelled), `amount` (quote) | `phone` (E.164), `pic`, contract link, key facts |
+| `guest` | W16, W17 | `who` (side: `a` or `b`), `group_key` (category), `qty` (pax), `status` (todo/sent/confirmed/declined) | `phone` |
+| `bridal_gift` | W9 | `group_key` (category), `amount` (price), `status` (todo/in_progress/done), `who` | `url` (purchase link) |
+| `rundown` | W20 | `group_key` (event: `engagement` or `wedding`), `due_on` (date), `status` (todo/done), `done_on`, `sort` | `start_time`, `end_time` (local time, zone in `settings`), `pic`, `highlights` |
+| `song` | W22 | `group_key` (moment), `sort` | `singer` |
 | `note` | W4, H13 | `note`, `due_on` | – |
-| `gift` | W25, H12 | `group_key` (event), `amount`, `done_on` | direction (incoming/outgoing) |
+| `saving` | W14, H2 | the target in `amount`, the deadline in `due_on` | – |
+| `contribution` | W14, H2 | `parent_id` (the saving), `amount`, `done_on`, `who` | source of funds |
+| `cash_gift` | W25, H12 | `group_key` (event), `amount`, `done_on` | direction (incoming/outgoing) |
 | `recurring` | H3, H4, H7 | `amount`, `due_on` (next due), `done_on` (last), `who` | period, recurring date |
 | `doc` | H9 | `due_on` (expiry) | physical location, holder |
 | `expense` | H1 | `amount`, `done_on`, `who` (payer), `group_key` (category) | split |
 
-**Exit rule:** move a `kind` to its own table only if it (a) needs relational integrity beyond `parent_id`, (b) needs a per-kind `CHECK` that matters for money, (c) scans thousands of rows per query, or (d) has a different retention or privacy rule (e.g. `doc` if one day it stores scans). Today none of them qualifies.
+**`budget_entries`** holds two row types in one table, so one `rev` pull and one export shape serve both:
 
-**D1 load:** rows read are counted by rows scanned ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)), so the `rev` and `(kind, due_on)` indexes matter. At thousands of rows and a limit of 5 million reads per day, there's no problem as long as there's no polling or repeated scanning.
+| `entry_type` | Used by | Meaningful columns | Contents of `data` |
+|---|---|---|---|
+| `planned` | W13, H10 | `title`, `group_key` (event: `engagement`, `ceremony`, `reception`, or an area of a household project), `amount` (planned), `vendor_id` (optional vendor item) | – |
+| `payment` | W13 | `budget_id` (the planned row), `status` (due/paid), `amount`, `due_on`, `done_on`, `who` (payer) | proof link |
 
-**An honest note:** the brainstorm sketches 12 per-feature tables and that also makes sense for the wedding alone. This generic recommendation is driven by the extension to household: every new table brings a migration, a whitelist, sync, and export, and that's what makes small features like H4 or W22 feel not worth it. If you two prefer SQL clarity over flexibility, the middle path is to keep per-feature tables only for W13 (budget and payments, where money accuracy matters most) and generic for the rest.
+Remaining amounts, totals per event and "late" marks are calculated, never stored.
+
+**Exit rule:** move a `kind` to its own table only if it (a) needs relational integrity beyond `parent_id`, (b) needs a per-kind `CHECK` that matters for money, (c) scans thousands of rows per query, or (d) has a different retention or privacy rule (e.g. `doc` if one day it stores scans). The budget and payments already took (a) and (b). Today no other `kind` qualifies.
+
+**D1 load:** rows read are counted by rows scanned ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)), so the `rev` and `(kind, due_on)` indexes on `items` and the `(entry_type, due_on)` index on `budget_entries` matter. At thousands of rows and a limit of 5 million reads per day, there's no problem as long as there's no polling or repeated scanning.
+
+**What the generic model costs:** the database can't tell a task from a guest, so the registry and the Worker's validation carry that; and the contents of `data` can't be indexed cheaply, so anything that is sorted, summed or filtered must be a typed column. The driver for choosing generic is the extension to household: every new table brings a migration, a whitelist, sync, and export, and that's what makes small features like H4 or W22 feel not worth it.
 
 ### 7.3 The core that gets built first
 
 **Core = one model, five screens (This week, tasks, budget and fund, vendors, guests), one export button:**
 
-1. The `items` + `settings` model + sync (the stack worker's business).
+1. The `items` + `budget_entries` + `settings` model + sync (SQL in brainstorm §7; stack in `docs/infra.md`).
 2. A generic list screen configured through the registry.
 3. "This week" (W3).
 4. Tasks from a template (W2) with H-day (W1).
@@ -783,7 +779,7 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 
 | Stage | When (relative to H) | Contents | Done when |
 |---|---|---|---|
-| M0: spike | first week | Login, sync, one `kind` end to end (a stack worker decision) | Two phones see the same data, with an offline edit |
+| M0: spike | first week | Login, sync, one `kind` end to end (see `docs/infra.md` §8.2) | Two phones see the same data, with an offline edit |
 | M1: core | H-11 months | Items 1-7 above, plus the one-time import from the old spreadsheet | You two use the "This week" screen three weeks in a row (measure: both sides touch that week's list) |
 | M2: administration and vendors | done before H-6 months | W5 and W6 (KUA checklist, working days), W8, W9, W12, W4, the W24 template, search (X4) | The KUA checklist is filled in and reviewed in the weekly session |
 | M3: wedding day | done before H-3 months | W20 (offline rundown), W21, W17, W22, W23; the monthly backup routine | Wedding-day rehearsal at H-2 weeks: the rundown opens in airplane mode |
@@ -791,7 +787,7 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 | M5: household v1 | after M4 | H3, H4, H2, then H12 if validated; H7, H1, H10 if requested | Real bills and renewals are in the app and show up in "This week" |
 | Later | undated | X3 subscribed feed, X5 digest, W19 family link, X7 generic CSV import | Only if there's a real reason |
 
-**Not a deliverable:** UI and view components, the framework choice, and IaC, which other workers decide and which aren't researched here.
+**Not a deliverable:** UI and view components, the framework choice and IaC. They are not researched here; the decisions are in `docs/infra.md` §3 and §5 (React + TypeScript + Vite, wrangler only).
 
 ### 7.4 Main risks
 
@@ -836,20 +832,19 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 
 ### 8.2 The five most decisive decisions (for the operator)
 
-1. **Data model: generic `items` or a table per feature** (§7.2). Recommendation: generic, with an optional exception for budget and payments. This decides whether small household features are worth building.
-2. **Core scope** (§7.3). Recommendation: model + "This week" + tasks + budget/payments + vendors + guests + export. Everything else waits.
-3. **Money representation** (§6.1 #3). Recommendation: whole rupiah as an integer plus a currency code. Alternative: ×100 to match ISO 4217. It has to be written in the export schema before the first data.
+1. **Data model** (§7.2). **Decided by the operator:** one generic `items` table plus a separate `budget_entries` table only for the budget and its payments. This keeps small household features cheap.
+2. **Core scope** (§7.3). **Decided by the operator:** model + "This week" + tasks + budget/payments + vendors + guests + export. Everything else waits.
+3. **Money representation** (§6.1 #3). **Decided by the operator:** whole rupiah as an integer plus a currency code (the ×100 alternative to match ISO 4217 was dropped). It is written in the export schema before the first data.
 4. **Reminder strategy** (§5.1). Recommendation: the "This week" screen + `.ics` per item first; one weekly digest later; push only if proven necessary.
 5. **Sensitive document policy** (§5.8). Recommendation: no NIK and no scans; a document index only; scans in Bitwarden or Drive.
 
 ### 8.3 Questions for the operator
 
 1. The estimated *akad* date, or its time window? (Decides the templates and the M1-M3 schedule.)
-2. Can the platform the stack worker chose guarantee offline writes, or do some features have to be cut? (Decides W20 and offline capture.)
+2. Can the stack in `docs/infra.md` guarantee offline writes, or do some features have to be cut? (Decides W20 and offline capture.)
 3. Is R2 allowed (the "R2 subscription" checkout and possibly a payment method, §5.3)? If not, attachments stay links forever.
-4. Is one generic table acceptable for all data, or do budget and payments need their own table?
-5. How long is the old spreadsheet run in parallel, and which data is real (brainstorm §9)?
-6. Who maintains the app after the event, and when is it archived or shut down (brainstorm §9 #10)?
+4. How long is the old spreadsheet run in parallel, and which data is real (brainstorm §9)?
+5. Who maintains the app after the event, and when is it archived or shut down (brainstorm §9 #10)?
 
 ### 8.4 Questions for you two
 
