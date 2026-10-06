@@ -359,3 +359,53 @@ test("writes made during a flush are sent by the same trigger", async () => {
   assert.equal(store.getSnapshot().pending, 0);
   assert.deepEqual(titles(store.getSnapshot().rows.items), ["Plan", "one", "two"]);
 });
+
+test("a lost acknowledgement is replayed safely and the server's row comes back", async () => {
+  const server = createServer();
+  const real = server.as("a");
+  let lost = false;
+  const fetcher: typeof real = async (url, init) => {
+    const response = await real(url, init);
+    if (init.method === "POST" && lost) {
+      lost = false;
+      throw new TypeError("connection dropped after the server applied the request");
+    }
+    return response;
+  };
+  const persistence = memoryPersistence();
+  const store = createStore({ persistence, api: createApi(fetcher) });
+  await store.open();
+  lost = true;
+  const project = idOf(await store.create("items", { kind: "project", title: "Plan", status: "active" }));
+  await store.sync();
+  const snap = store.getSnapshot();
+  assert.deepEqual([snap.pending, snap.rejected.length, snap.link, server.rev], [0, 0, "online", 1]);
+  assert.equal(posts(server).length, 2);
+  assert.equal(snap.rows.items.find((row) => row.id === project)?.rev, 1);
+  assert.equal((await persistence.load()).rows.items.length, 1);
+});
+
+test("an update aimed at a row the server does not have is parked with the server's reason", async () => {
+  const server = createServer();
+  const missing = "00000000-0000-4000-8000-0000000000bb";
+  const persistence = memoryPersistence();
+  await persistence.write({
+    outbox: {
+      put: [
+        {
+          id: missing,
+          table: "items",
+          op: "update",
+          row_id: missing,
+          patch: { note: "x", updated_at: "2026-10-06T00:00:00Z" },
+          seq: 1,
+          at: "2026-10-06T00:00:00Z",
+        },
+      ],
+    },
+  });
+  const { store } = client(server, "b", persistence);
+  await store.open();
+  assert.deepEqual([store.getSnapshot().pending, store.getSnapshot().rejected.length], [0, 1]);
+  assert.match(store.getSnapshot().rejected[0].rejected!.join(), /no such row/);
+});

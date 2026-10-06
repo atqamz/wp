@@ -18,6 +18,8 @@ const references = [
   ["budget_id", "budget_entries", "entry_type", "planned"],
 ] as const;
 
+type Refusal = { status: number; errors: string[] };
+
 const json = (status: number, body: unknown) => Response.json(body, { status });
 
 const refuse = (status: number, errors: string[], index?: number) =>
@@ -40,9 +42,9 @@ export const createServer = () => {
   const seen: Seen[] = [];
   const control = { down: false, session: "ok" as Session, fail: [] as number[] };
 
-  const pointers = (draft: State, table: TableName, row: Dict, columns: readonly string[]) => {
+  const pointers = (draft: State, table: TableName, row: Dict, columns: readonly string[]): Refusal | null => {
     const errors: string[] = [];
-    if (table === "settings") return errors;
+    if (table === "settings") return null;
     for (const [column, targetTable, kindColumn, kind] of references) {
       if (!columns.includes(column) || row[column] == null) continue;
       const target = draft[targetTable].get(row[column] as string);
@@ -54,53 +56,62 @@ export const createServer = () => {
         errors.push("currency: must equal the planned row's currency");
       }
     }
-    return errors;
+    return errors.length > 0 ? { status: 409, errors } : null;
   };
 
-  const apply = (draft: State, mutation: Mutation, side: Side, at: string, next: number, touched: Map<string, Dict>) => {
+  const apply = (
+    draft: State,
+    mutation: Mutation,
+    side: Side,
+    at: string,
+    next: number,
+    wrote: Set<string>,
+  ): Refusal | null => {
     const { table, row_id: id, patch } = mutation;
     const row = draft[table].get(id);
     const write = (value: Dict) => {
-      const stored = { ...value, rev: next, updated_by: side, updated_at: at };
-      draft[table].set(id, stored);
-      touched.set(`${table}/${id}`, stored);
+      draft[table].set(id, { ...value, rev: next, updated_by: side, updated_at: at });
+      wrote.add(`${table}/${id}`);
     };
     if (mutation.op === "create") {
       if (row && table === "settings") write(applyPatch(row, { value: patch.value }));
       else if (!row) {
         const created = { ...blank(table, patch), ...patch, deleted_at: null };
-        const errors = pointers(draft, table, created, Object.keys(patch));
-        if (errors.length > 0) return errors;
+        const refused = pointers(draft, table, created, Object.keys(patch));
+        if (refused) return refused;
         write(created);
       }
-      return [];
+      return null;
     }
-    if (!row) return ["row_id: no such row"];
+    if (!row) return { status: 404, errors: ["row_id: no such row"] };
     if (mutation.op === "delete") {
-      if (table === "items" && row.kind === "project") return ["row_id: a project is archived, never deleted"];
+      if (table === "items" && row.kind === "project") return { status: 409, errors: ["row_id: a project is archived, never deleted"] };
       if (row.deleted_at === null) write({ ...row, deleted_at: at });
-      return [];
+      return null;
     }
     const undo = Object.keys(patch).filter((key) => key !== "updated_at").join() === "deleted_at" && patch.deleted_at === null;
-    if (row.deleted_at !== null && !undo) return [];
+    if (row.deleted_at !== null && !undo) return null;
     const errors = validateChange(table, row, patch);
-    if (errors.length > 0) return errors;
+    if (errors.length > 0) return { status: 400, errors };
     const merged = applyPatch(row, patch);
-    const pointing = pointers(draft, table, merged, Object.keys(patch));
-    if (pointing.length > 0) return pointing;
+    const refused = pointers(draft, table, merged, Object.keys(patch));
+    if (refused) return refused;
     write(merged);
-    return [];
+    return null;
   };
 
-  const changesSince = (since: number, only?: Map<string, Dict>): Changes => {
+  const changesSince = (since: number): Changes => {
     const out = Object.fromEntries(tableNames.map((table) => [table, [] as Dict[]]));
     for (const table of tableNames) {
-      for (const [id, row] of state[table]) {
-        const wanted = only ? only.has(`${table}/${id}`) : (row.rev as number) > since;
-        if (wanted) out[table].push(structuredClone(row));
-      }
+      for (const row of state[table].values()) if ((row.rev as number) > since) out[table].push(structuredClone(row));
     }
     return out as unknown as Changes;
+  };
+
+  const rowsOf = (mutations: readonly Mutation[]): Changes => {
+    const out = Object.fromEntries(tableNames.map((table) => [table, new Map<string, Dict>()]));
+    for (const { table, row_id } of mutations) out[table].set(row_id, structuredClone(state[table].get(row_id)!));
+    return Object.fromEntries(tableNames.map((table) => [table, [...out[table].values()]])) as unknown as Changes;
   };
 
   const post = (side: Side, text: string) => {
@@ -124,22 +135,20 @@ export const createServer = () => {
       if (errors.length > 0) return refuse(400, errors, index);
     }
     const draft = copy(state);
-    const touched = new Map<string, Dict>();
+    const wrote = new Set<string>();
     const at = toInstant(new Date());
     for (const [index, mutation] of mutations.entries()) {
-      const errors = apply(draft, mutation, side, at, rev + 1, touched);
-      if (errors.length > 0) return refuse(422, errors, index);
+      const refused = apply(draft, mutation, side, at, rev + 1, wrote);
+      if (refused) return refuse(refused.status, refused.errors, index);
     }
-    if (touched.size > 0) {
-      rev += 1;
-      state = draft;
-    }
-    return json(200, { rev, rows: changesSince(0, touched) });
+    state = draft;
+    if (wrote.size > 0) rev += 1;
+    return json(200, { rev, rows: rowsOf(mutations) });
   };
 
   const get = (side: Side, url: URL) => {
     const since = url.searchParams.get("since") ?? "0";
-    if (!/^\d+$/.test(since)) return refuse(400, ["since: must be a non-negative integer"]);
+    if (!/^\d+$/.test(since) || !Number.isSafeInteger(Number(since))) return refuse(400, ["since: must be a non-negative integer"]);
     seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since) });
     return json(200, { rev, me: side, changes: changesSince(Number(since)) });
   };
