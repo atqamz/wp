@@ -1,4 +1,5 @@
 import { tables } from "./tables.ts";
+import { applyPatch } from "./api.ts";
 import type { Column, Table, Type, Variant } from "./tables.ts";
 
 type Plain = Record<string, unknown>;
@@ -20,7 +21,7 @@ const ZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/;
 const DECIMAL = /^(0|[1-9]\d{0,5})(\.\d{1,4})?$/;
 const URL_SHAPE = /^https?:\/\/[^\s\p{Cc}\p{Cf}\p{Cs}/?#][^\s\p{Cc}\p{Cf}\p{Cs}]*$/iu;
 const UNWANTED = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}]/u;
-const VISIBLE = /[^\p{Z}\p{C}\sᅟᅠ⠀ㅤﾠ]/u;
+const VISIBLE = /[^\p{Z}\p{C}\p{Default_Ignorable_Code_Point}\s⠀]/u;
 
 const show = (v: unknown) => (typeof v === "string" ? JSON.stringify(v) : typeof v);
 
@@ -182,6 +183,8 @@ const checkColumns = (table: Table, input: Plain, mode: Mode, errors: string[]) 
     else if (column.server && mode !== "stored") errors.push(`${name}: set by the server, never by the client`);
     else if (mode === "patch" && (column.immutable || name === table.key || name === table.by)) {
       errors.push(`${name}: cannot be changed`);
+    } else if (mode === "patch" && column.clearOnly && value !== null && value !== undefined) {
+      errors.push(`${name}: can only be cleared with null in a patch`);
     } else if (value === null) {
       if (column.notNull) errors.push(`${name}: must not be null`);
     } else if (value !== undefined) {
@@ -230,6 +233,7 @@ export const validatePatch = (tableName: unknown, variantName: unknown, patch: u
   if (!isPlain(patch)) return ["patch: must be an object"];
   const errors: string[] = [];
   checkColumns(table, patch, "patch", errors);
+  if (!table.by && problem(table.columns[table.key].type, variantName)) errors.push(`${table.key}: the stored row key is invalid`);
   if (table.by) {
     const variant = lookup(table.variants, variantName);
     if (variant) checkVariant(table, variantName as string, variant, patch, "patch", errors);
@@ -237,6 +241,15 @@ export const validatePatch = (tableName: unknown, variantName: unknown, patch: u
   }
   checkValue(table, variantName, patch, errors);
   return errors;
+};
+
+export const validateChange = (tableName: unknown, stored: unknown, patch: unknown): string[] => {
+  const table = lookup<Table>(tables, tableName);
+  if (table === undefined) return [`unknown table ${show(tableName)}`];
+  if (!isPlain(stored)) return ["row: must be an object"];
+  const errors = validatePatch(tableName, stored[table.by ?? table.key], patch);
+  if (errors.length > 0) return errors;
+  return validateRow(tableName, applyPatch(stored, patch as Plain));
 };
 
 const mutationFields = ["id", "table", "op", "row_id", "patch"];
@@ -256,6 +269,7 @@ export const validateMutation = (mutation: unknown): string[] => {
     if (badRow) errors.push(`row_id: ${badRow}`);
   }
   if (!isPlain(mutation.patch)) errors.push("patch: must be an object");
+  else if (mutation.op === "delete" && Object.keys(mutation.patch).length > 0) errors.push("patch: must be empty for delete");
   else if (mutation.op === "create" && table !== undefined) {
     if (mutation.patch[table.key] !== mutation.row_id) errors.push(`patch.${table.key}: must equal row_id`);
     for (const e of validateCreate(mutation.table, mutation.patch)) errors.push(`patch.${e}`);

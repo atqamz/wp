@@ -46,7 +46,8 @@ export const toInstant = (date: Date): string => date.toISOString().replace(/\.\
 export const applyPatch = <T extends Record<string, unknown>>(row: T, patch: Record<string, unknown>): T => {
   const { data, ...fields } = patch;
   const merged: Record<string, unknown> = Object.fromEntries([...Object.entries(row), ...Object.entries(fields)]);
-  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+  if (data !== undefined) {
+    if (typeof data !== "object" || data === null || Array.isArray(data)) throw new TypeError("a data patch must be an object");
     const keys = new Map(Object.entries(typeof row.data === "object" && row.data !== null ? row.data : {}));
     for (const [key, value] of Object.entries(data)) {
       if (value === null) keys.delete(key);

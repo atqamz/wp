@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tables, tableNames } from "../shared/tables.ts";
 import type { Patch, Row, TableName } from "../shared/tables.ts";
 import { MAX_MUTATIONS, applyPatch, rowKey, toInstant } from "../shared/api.ts";
-import { validateCreate, validateMutation, validatePatch, validateRow } from "../shared/validate.ts";
+import { validateChange, validateCreate, validateMutation, validatePatch, validateRow } from "../shared/validate.ts";
 
 const migration = readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
 
@@ -643,6 +643,16 @@ test("settings values follow the known keys and unknown keys stay free", () => {
   assert.ok(validateRow("settings", { ...set("ceremony_date", "x"), rev: 1 }).some((e) => /value/.test(e)));
 });
 
+test("deleted_at can only be cleared in a patch", () => {
+  for (const [table, variant] of [
+    ["items", "task"],
+    ["budget_entries", "payment"],
+    ["settings", "ceremony_date"],
+  ])
+    for (const value of [instant, "2026-10-06", "", 5, true])
+      patchRejects(table, variant, { deleted_at: value }, /deleted_at: can only be cleared with null in a patch/);
+});
+
 test("created_at cannot be patched", () => {
   patchRejects("items", "task", { created_at: "2026-01-01T00:00:00Z" }, /created_at: cannot be changed/);
   patchRejects("budget_entries", "payment", { created_at: "2026-01-01T00:00:00Z" }, /created_at: cannot be changed/);
@@ -679,7 +689,6 @@ test("applyPatch merges shallowly and data key by key", () => {
   assert.deepEqual(applyPatch({ ...row, data: null }, { data: { pic: "q" } }).data, { pic: "q" });
   assert.deepEqual(applyPatch({ id: "x" }, { data: { pic: "q" } }), { id: "x", data: { pic: "q" } });
   assert.deepEqual(applyPatch(row, {}), row);
-  assert.deepEqual(applyPatch(row, { data: null }), row);
   assert.deepEqual(row, { id: "x", title: "t", amount: 5, who: "a", data: { phone, pic: "p", facts: "f" } });
   const hostile = applyPatch(row, JSON.parse('{"data":{"__proto__":{"polluted":true}}}'));
   assert.equal(({} as Obj).polluted, undefined);
@@ -768,6 +777,147 @@ test("validateMutation checks the envelope and a create row", () => {
   for (const junk of [undefined, null, 1, "x", [], true]) assert.ok(validateMutation(junk).length > 0);
 });
 
+const every: [string, Obj, Obj][] = patches.map(([table, , , base, patch]) => [table, stored(base), patch]);
+
+test("validateChange accepts every valid update and returns no errors", () => {
+  for (const [table, row, patch] of every) assert.deepEqual(validateChange(table, row, patch), [], `${table} ${row.id ?? row.key}`);
+  assert.deepEqual(validateChange("items", stored({ ...task, deleted_at: instant }), { deleted_at: null }), []);
+});
+
+test("validateChange rejects what the merged-row check alone would accept", () => {
+  const rows: [string, Obj][] = [
+    ["items", stored(task)],
+    ["budget_entries", stored(payment)],
+    ["settings", stored(setting)],
+  ];
+  const bypasses: [string, Obj, RegExp, boolean][] = [
+    ["rev", { rev: 99 }, /rev: set by the server/, true],
+    ["updated_by", { updated_by: "b" }, /updated_by: set by the server/, true],
+    ["id", { id: uuid(900) }, /id: cannot be changed/, true],
+    ["kind", { kind: "vendor" }, /kind: cannot be changed/, false],
+    ["entry_type", { entry_type: "planned" }, /entry_type: cannot be changed/, false],
+    ["key", { key: "other_key" }, /key: cannot be changed/, true],
+    ["created_at", { created_at: "2020-01-01T00:00:00Z" }, /created_at: cannot be changed/, true],
+    ["deleted_at", { deleted_at: instant }, /deleted_at: can only be cleared/, true],
+  ];
+  for (const [table, row] of rows) {
+    for (const [name, patch, pattern, mergedAloneAccepts] of bypasses) {
+      if (!(name in tables[table as TableName].columns)) continue;
+      if (mergedAloneAccepts) assert.deepEqual(validateRow(table, applyPatch(row, patch)), [], `merged-only path accepts ${name} on ${table}`);
+      const errors = validateChange(table, row, patch);
+      assert.ok(errors.some((e) => pattern.test(e)), `${table} ${name}: ${JSON.stringify(errors)}`);
+    }
+  }
+});
+
+test("validateChange rejects data patches that are not objects", () => {
+  for (const data of [null, [], ["phone"], "x", "{}", 5, true]) {
+    const errors = validateChange("items", stored(vendor), { data });
+    assert.ok(errors.some((e) => /^data: must be an object/.test(e)), `${JSON.stringify(data)}: ${JSON.stringify(errors)}`);
+  }
+  assert.ok(validateChange("items", stored(vendor), { data: { phone: "0812" } }).some((e) => /data.phone/.test(e)));
+  assert.ok(validateChange("items", stored(vendor), { data: { channel: "print" } }).some((e) => /data.channel: unknown key/.test(e)));
+  assert.deepEqual(validateChange("items", stored(vendor), { data: {} }), []);
+});
+
+test("applyPatch refuses a data patch that is not an object", () => {
+  const row = { id: "x", data: { pic: "p" } };
+  for (const data of [null, [], "x", 5, true]) assert.throws(() => applyPatch(row, { data }), TypeError, JSON.stringify(data));
+  assert.deepEqual(applyPatch(row, { data: undefined }), row);
+  assert.deepEqual(applyPatch(row, { title: "t" }), { ...row, title: "t" });
+});
+
+test("the settings known-key check comes from the stored row", () => {
+  const row = stored({ ...setting, key: "ceremony_date", value: "2027-06-01" });
+  assert.ok(validateChange("settings", row, { value: "banana" }).some((e) => /value: must be a date as YYYY-MM-DD for key ceremony_date/.test(e)));
+  assert.deepEqual(validateChange("settings", row, { value: "2027-07-01" }), []);
+  const free = stored({ ...setting, key: "some_future_key", value: "x" });
+  assert.deepEqual(validateChange("settings", free, { value: "banana" }), []);
+  const hijri = stored({ ...setting, key: "hijri_calendar", value: "islamic" });
+  assert.ok(validateChange("settings", hijri, { value: "gregory" }).length > 0);
+  for (const skipped of ["", undefined, null, 5, "Bad Key"])
+    assert.ok(validatePatch("settings", skipped, { value: "banana" }).some((e) => /key: the stored row key is invalid/.test(e)), String(skipped));
+  assert.ok(validateChange("settings", { ...row, key: "" }, { value: "banana" }).length > 0);
+  const { key: _key, ...noKey } = row;
+  assert.ok(validateChange("settings", noKey, { value: "banana" }).length > 0);
+});
+
+test("validateChange checks the stored row, the table and the shapes", () => {
+  assert.match(validateChange("users", stored(task), {})[0], /unknown table/);
+  assert.ok(validateChange("items", null, {}).length > 0);
+  assert.ok(validateChange("items", stored(task), null).length > 0);
+  assert.ok(validateChange("items", stored(task), []).length > 0);
+  assert.ok(validateChange("items", { ...stored(task), kind: "rundown" }, { status: "done" }).some((e) => /kind: unknown kind/.test(e)));
+  const { kind: _kind, ...noKind } = stored(task);
+  assert.ok(validateChange("items", noKind, { status: "done" }).length > 0);
+  const paid = stored({ ...payment, status: "paid", done_on: "2026-11-02" });
+  assert.ok(validateChange("budget_entries", paid, { status: "due" }).some((e) => /done_on: only allowed when status is paid/.test(e)));
+  assert.ok(validateChange("budget_entries", stored(payment), { done_on: "2026-11-02" }).length > 0);
+  assert.ok(validateChange("budget_entries", stored(payment), { amount: null }).length > 0);
+  assert.ok(validateChange("items", stored(task), { status: "confirmed" }).length > 0);
+  assert.ok(validateChange("items", stored(task), { title: null }).length > 0);
+  for (const junk of [undefined, 1, "x", true, () => 1, Symbol("s"), 10n])
+    for (const other of [undefined, null, {}, [], "x"]) {
+      assert.ok(Array.isArray(validateChange(junk, other, other)));
+      assert.ok(Array.isArray(validateChange("items", other, junk)));
+    }
+});
+
+test("a delete mutation carries an empty patch", () => {
+  const del = (patch: unknown) => ({ id: uuid(600), table: "items", op: "delete", row_id: task.id, patch });
+  assert.deepEqual(validateMutation(del({})), []);
+  for (const patch of [{ title: "x" }, { rev: 5 }, { deleted_at: instant }, { data: {} }, { status: "done" }])
+    assert.ok(validateMutation(del(patch)).some((e) => /^patch: must be empty for delete/.test(e)), JSON.stringify(patch));
+  assert.ok(validateMutation({ ...del({}), table: "settings", row_id: "ceremony_date" }).length === 0);
+  assert.deepEqual(validateMutation({ ...del({ title: "x" }), op: "update" }), []);
+});
+
+test("default-ignorable characters alone are blank, visible emoji stay accepted", () => {
+  const invisible = [
+    "︀",
+    "️",
+    "\u{e0100}",
+    "\u{e01ef}",
+    "͏",
+    "᠋",
+    "᠌",
+    "᠍",
+    "᠏",
+    "឴",
+    "឵",
+    "‍️",
+    "️️",
+    " ͏ ",
+    "឴឵᠋",
+    "ᅟ",
+    "ᅠ",
+    "ㅤ",
+    "ﾠ",
+    "⠀",
+  ];
+  for (const blank of invisible) {
+    rejects("items", { ...task, title: blank }, /title/);
+    rejects("items", { ...task, note: blank }, /note/);
+    rejects("items", { ...task, group_key: blank }, /group_key/);
+    rejects("settings", { ...setting, key: "label_free", value: blank }, /value/);
+    rejects("items", { ...vendor, data: { pic: blank } }, /data.pic/);
+  }
+  const visible = [
+    "\u{1f44d}\u{1f3fd}",
+    "❤️",
+    "\u{1f468}‍\u{1f469}‍\u{1f467}",
+    "\u{1f3f3}️‍\u{1f308}",
+    "1️⃣",
+    "a️",
+    "a͏",
+    "❤︎",
+  ];
+  for (const ok of visible) {
+    assert.deepEqual(validateCreate("items", { ...task, title: ok, note: ok }), [], ok);
+    assert.deepEqual(validateCreate("items", { ...task, title: `${ok}͏️` }), [], ok);
+  }
+});
+
 test("the batch cap and rejection shape are fixed", () => {
   assert.equal(MAX_MUTATIONS, 20);
 });
@@ -799,14 +949,16 @@ test("patch accepts field-level changes", () => {
   assert.deepEqual(validatePatch("items", "task", { status: "done" }), []);
   assert.deepEqual(validatePatch("items", "task", { status: "done", done_on: "2026-10-06", amount: 0 }), []);
   assert.deepEqual(validatePatch("items", "task", { amount: null, due_on: null, who: null, note: null }), []);
-  assert.deepEqual(validatePatch("items", "task", { deleted_at: instant, updated_at: instant }), []);
+  assert.deepEqual(validatePatch("items", "task", { updated_at: instant }), []);
   assert.deepEqual(validatePatch("items", "task", { deleted_at: null }), []);
+  assert.deepEqual(validatePatch("budget_entries", "payment", { deleted_at: null }), []);
+  assert.deepEqual(validatePatch("settings", "ceremony_date", { deleted_at: null }), []);
   assert.deepEqual(validatePatch("items", "vendor", { data: { phone, pic: null } }), []);
   assert.deepEqual(validatePatch("items", "guest", { who: "b", qty: 4 }), []);
   assert.deepEqual(validatePatch("items", "task", {}), []);
   assert.deepEqual(validatePatch("budget_entries", "payment", { status: "paid", done_on: "2026-11-02" }), []);
   assert.deepEqual(validatePatch("budget_entries", "planned", { amount: null, vendor_id: null }), []);
-  assert.deepEqual(validatePatch("settings", "", { value: "2027-07-01" }), []);
+  assert.deepEqual(validatePatch("settings", "ceremony_date", { value: "2027-07-01" }), []);
 });
 
 test("patch rejects what create rejects, field by field", () => {
@@ -826,7 +978,7 @@ test("patch rejects what create rejects, field by field", () => {
   patchRejects("budget_entries", "planned", { status: "due" }, /status: not used by entry_type planned/);
   patchRejects("budget_entries", "payment", { vendor_id: uuid(3) }, /vendor_id: not used/);
   patchRejects("budget_entries", "payment", { status: "due", done_on: "2026-11-02" }, /done_on: only allowed when status is paid/);
-  patchRejects("settings", "", { value: "" }, /value/);
+  patchRejects("settings", "ceremony_date", { value: "" }, /value/);
 });
 
 test("patch cannot clear required fields or change identity", () => {
@@ -840,7 +992,7 @@ test("patch cannot clear required fields or change identity", () => {
   patchRejects("budget_entries", "payment", { entry_type: "planned" }, /entry_type: cannot be changed/);
   patchRejects("budget_entries", "payment", { amount: null }, /amount: required for entry_type payment/);
   patchRejects("budget_entries", "planned", { group_key: null }, /group_key: required for entry_type planned/);
-  patchRejects("settings", "", { key: "other" }, /key: cannot be changed/);
+  patchRejects("settings", "ceremony_date", { key: "other" }, /key: cannot be changed/);
   patchRejects("items", "rundown", { status: "done" }, /kind: unknown kind/);
   patchRejects("items", undefined, { status: "done" }, /kind: unknown kind/);
 });

@@ -27,6 +27,7 @@ export type Column = {
   default?: string | number;
   server?: true;
   immutable?: true;
+  clearOnly?: true;
 };
 
 export type Variant = {
@@ -52,6 +53,7 @@ const required = <const T extends Type>(sql: Sql, type: T) => ({ sql, type, notN
 const withDefault = <const C extends Column>(column: C, value: string | number) => ({ ...column, default: value });
 const server = <const C extends Column>(column: C) => ({ ...column, server: true as const });
 const immutable = <const C extends Column>(column: C) => ({ ...column, immutable: true as const });
+const clearOnly = <const C extends Column>(column: C) => ({ ...column, clearOnly: true as const });
 
 const who = ["a", "b", "both"] as const;
 
@@ -60,7 +62,7 @@ const syncColumns = {
   created_at: immutable(required("TEXT", "instant")),
   updated_at: required("TEXT", "instant"),
   updated_by: server(optional("TEXT", ["a", "b", "import"] as const)),
-  deleted_at: optional("TEXT", "instant"),
+  deleted_at: clearOnly(optional("TEXT", "instant")),
 };
 
 const syncNames = Object.keys(syncColumns);
@@ -205,9 +207,16 @@ export type Row<T extends TableName> = {
 
 type Discriminator<T extends TableName> = (typeof tables)[T] extends { by: infer B extends string } ? B : never;
 
+type Flagged<T extends TableName, F extends "immutable" | "clearOnly"> = {
+  [C in keyof Columns<T>]: Columns<T>[C] extends { [K in F]: true } ? C : never;
+}[keyof Columns<T>];
+
 export type Patch<T extends TableName> = Partial<
-  Omit<Row<T>, "rev" | "updated_by" | "created_at" | (typeof tables)[T]["key"] | Discriminator<T>>
->;
+  Omit<
+    Row<T>,
+    "rev" | "updated_by" | Flagged<T, "immutable"> | Flagged<T, "clearOnly"> | (typeof tables)[T]["key"] | Discriminator<T>
+  >
+> & { [C in Flagged<T, "clearOnly">]?: null };
 
 export type ItemRow = Row<"items">;
 export type BudgetEntryRow = Row<"budget_entries">;
