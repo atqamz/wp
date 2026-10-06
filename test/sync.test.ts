@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { MAX_BODY_BYTES, MAX_MUTATIONS } from "../shared/api.ts";
 import type { Mutation, Rejection, SyncResult } from "../shared/api.ts";
 import { getSync, postSync } from "../worker/sync.ts";
-import { CLIENT_STAMP, NOW, STAMP, apply, count, createDb, currentRev, id, mutation, payment, planned, setting, stored, task, vendor } from "./sync-db.ts";
+import { CLIENT_STAMP, NOW, STAMP, apply, count, createDb, currentEpoch, currentRev, id, mutation, payment, planned, setting, stored, task, vendor } from "./sync-db.ts";
 
 const fresh = async (...seed: Mutation[]) => {
   const env = createDb();
@@ -591,4 +591,53 @@ test("a statement that fails inside the write batch leaves nothing written", asy
   assert.equal(count(sqlite, "items"), before.items + 1);
   ok(await apply(db, [task(4)]));
   assert.equal(currentRev(sqlite), before.rev + 1);
+});
+
+const EPOCH = /^[0-9a-f]{32}$/;
+
+test("every success response carries the epoch of the database, and it never changes", async () => {
+  const { db, sqlite } = await fresh();
+  const epoch = currentEpoch(sqlite);
+  assert.match(epoch, EPOCH);
+  const pull = async (query = "") => (await (await getSync(new URL(`https://x.test/api/sync${query}`), db, "a")).json()) as { epoch: string };
+  assert.equal((await pull()).epoch, epoch);
+  const written = ok(await apply(db, [task(4), mutation("delete", "items", id(4))]));
+  const noop = ok(await apply(db, [mutation("update", "items", id(4), {})]));
+  const empty = ok(await apply(db, []));
+  const posted = (await (await post(db, { mutations: [task(5)] })).json()) as { epoch: string };
+  assert.deepEqual([written.epoch, noop.epoch, empty.epoch, posted.epoch], [epoch, epoch, epoch, epoch]);
+  assert.equal((await pull("?since=1")).epoch, epoch);
+  assert.equal((await pull("?since=99")).epoch, epoch);
+  assert.equal(currentEpoch(sqlite), epoch);
+});
+
+test("no request can set the epoch", async () => {
+  const { db, sqlite } = await fresh(task(4), setting("epoch", "x"));
+  const epoch = currentEpoch(sqlite);
+  const attempts: unknown[][] = [
+    [{ ...task(5), patch: { ...task(5).patch, epoch: "deadbeef" } }],
+    [mutation("update", "items", id(4), { epoch: "deadbeef" })],
+    [{ ...mutation("create", "items", "1", { id: 1, rev: 0, epoch: "deadbeef" }), table: "sync_state" }],
+    [{ ...mutation("update", "items", "1", { epoch: "deadbeef" }), table: "sync_state" }],
+    [{ ...mutation("delete", "items", "1"), table: "sync_state" }],
+    [mutation("update", "settings", "epoch", { value: "deadbeef" })],
+    [{ ...task(6), epoch: "deadbeef" }],
+  ];
+  for (const mutations of attempts) await apply(db, mutations);
+  const response = await post(db, { mutations: [], epoch: "deadbeef" });
+  assert.equal(response.status, 400);
+  const query = (await (await getSync(new URL("https://x.test/api/sync?epoch=deadbeef&since=0"), db, "a")).json()) as { epoch: string };
+  assert.equal(query.epoch, epoch);
+  assert.equal(currentEpoch(sqlite), epoch);
+});
+
+test("the epoch is read in the same batch as the revision, never by a query of its own", async () => {
+  const { db, calls } = await fresh(task(4));
+  calls.length = 0;
+  ok(await apply(db, [task(5)]));
+  await getSync(new URL("https://x.test/api/sync"), db, "a");
+  const statements = calls.flat();
+  assert.equal(statements.filter((sql) => /epoch/.test(sql)).length, 2);
+  assert.equal(statements.filter((sql) => /^SELECT rev, epoch FROM sync_state/.test(sql)).length, 2);
+  assert.equal(calls.length, 3);
 });

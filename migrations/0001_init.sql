@@ -1,8 +1,9 @@
 CREATE TABLE sync_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  rev INTEGER NOT NULL
+  rev INTEGER NOT NULL,
+  epoch TEXT NOT NULL
 );
-INSERT INTO sync_state (id, rev) VALUES (1, 0);
+INSERT INTO sync_state (id, rev, epoch) VALUES (1, 0, lower(hex(randomblob(16))));
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,

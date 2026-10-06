@@ -115,6 +115,8 @@ export const stored = (sqlite: DatabaseSync, table: string, key: string) => {
   return found === undefined ? undefined : { ...found };
 };
 
+export const currentEpoch = (sqlite: DatabaseSync) => (sqlite.prepare("SELECT epoch FROM sync_state").get() as { epoch: string }).epoch;
+
 export const currentRev = (sqlite: DatabaseSync) => (sqlite.prepare("SELECT rev FROM sync_state").get() as { rev: number }).rev;
 
 export const count = (sqlite: DatabaseSync, table: string) => (sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;

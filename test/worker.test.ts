@@ -80,14 +80,16 @@ test("a sync round trip through the router", async () => {
   const { env, sqlite } = setup();
   const post = await postJson(env, { mutations: [task(2)] });
   assert.equal(post.status, 200);
-  const result = (await post.json()) as { rev: number; rows: { items: { id: string; updated_by: string; updated_at: string }[] } };
+  const result = (await post.json()) as { rev: number; epoch: string; rows: { items: { id: string; updated_by: string; updated_at: string }[] } };
+  assert.match(result.epoch, /^[0-9a-f]{32}$/);
   assert.equal(result.rev, 1);
   assert.equal(result.rows.items.length, 1);
   assert.equal(result.rows.items[0].updated_by, "b");
   assert.match(result.rows.items[0].updated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.notEqual(result.rows.items[0].updated_at, "2026-10-01T00:00:00Z");
   const pull = await call(env, "/api/sync?since=0");
-  const pulled = (await pull.json()) as { rev: number; me: string; changes: { items: unknown[] } };
+  const pulled = (await pull.json()) as { rev: number; epoch: string; me: string; changes: { items: unknown[] } };
+  assert.equal(pulled.epoch, result.epoch);
   assert.deepEqual([pulled.rev, pulled.me, pulled.changes.items.length], [1, "b", 1]);
   assert.equal((sqlite.prepare("SELECT count(*) AS n FROM items").get() as { n: number }).n, 1);
 });

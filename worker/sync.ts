@@ -36,6 +36,7 @@ const parseRow = (raw: Raw): Raw => (typeof raw.data === "string" ? { ...raw, da
 
 const collect = (results: Result[]) => ({
   rev: results[tableNames.length].results[0].rev as number,
+  epoch: results[tableNames.length].results[0].epoch as string,
   rows: Object.fromEntries(tableNames.map((name, i) => [name, results[i].results.map(parseRow)])) as Changes,
 });
 
@@ -43,8 +44,8 @@ export const pull = async (db: Db, since: number) => {
   const reads = tableNames.map((name) =>
     db.prepare(`SELECT * FROM ${name} WHERE rev > ? ORDER BY rev, ${tables[name].key}`).bind(since),
   );
-  const { rev, rows } = collect(await db.batch([...reads, db.prepare("SELECT rev FROM sync_state WHERE id = 1")]));
-  return { rev, changes: rows };
+  const { rev, epoch, rows } = collect(await db.batch([...reads, db.prepare("SELECT rev, epoch FROM sync_state WHERE id = 1")]));
+  return { rev, epoch, changes: rows };
 };
 
 const load = async (db: Db, mutations: Mutation[]): Promise<World> => {
@@ -182,7 +183,7 @@ export const applyMutations = async (db: Db, who: Side, mutations: unknown[], no
       .bind(...ids);
   });
   const bump = writes.length > 0 ? [db.prepare("UPDATE sync_state SET rev = rev + 1 WHERE id = 1"), ...writes] : [];
-  const results = await db.batch([...bump, ...reads, db.prepare("SELECT rev FROM sync_state WHERE id = 1")]);
+  const results = await db.batch([...bump, ...reads, db.prepare("SELECT rev, epoch FROM sync_state WHERE id = 1")]);
   return collect(results.slice(-(tableNames.length + 1)));
 };
 
@@ -191,8 +192,8 @@ export const getSync = async (url: URL, db: Db, who: Side) => {
   if (!/^(0|[1-9]\d*)$/.test(since) || !Number.isSafeInteger(Number(since))) {
     return reject(400, ["since: must be a non-negative integer"]);
   }
-  const { rev, changes } = await pull(db, Number(since));
-  return json({ rev, me: who, changes } satisfies SyncResponse);
+  const { rev, epoch, changes } = await pull(db, Number(since));
+  return json({ rev, epoch, me: who, changes } satisfies SyncResponse);
 };
 
 const readText = async (request: Request, max: number) => {

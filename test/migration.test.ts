@@ -72,6 +72,19 @@ test("sync_state starts at rev 0", () => {
   assert.deepEqual({ ...migrated().prepare("SELECT id, rev FROM sync_state").get() }, { id: 1, rev: 0 });
 });
 
+const epochOf = (db: DatabaseSync) => (db.prepare("SELECT epoch FROM sync_state").get() as { epoch: string }).epoch;
+
+test("sync_state starts with a random 32 character hex epoch, different for every database", () => {
+  const [first, second] = [epochOf(migrated()), epochOf(migrated())];
+  assert.match(first, /^[0-9a-f]{32}$/);
+  assert.match(second, /^[0-9a-f]{32}$/);
+  assert.notEqual(first, second);
+});
+
+test("sync_state rejects an epoch that is null", () => {
+  assert.throws(() => migrated().exec("UPDATE sync_state SET epoch = NULL"), /NOT NULL constraint failed/);
+});
+
 test("accepts a valid item", () => {
   insert(migrated(), "items", itemRow());
 });
@@ -103,7 +116,7 @@ test("settings rejects a bad updated_by", () => {
 });
 
 test("sync_state rejects a second row", () => {
-  assert.throws(() => migrated().exec("INSERT INTO sync_state (id, rev) VALUES (2, 0)"), /CHECK constraint failed/);
+  assert.throws(() => migrated().exec("INSERT INTO sync_state (id, rev, epoch) VALUES (2, 0, 'x')"), /CHECK constraint failed/);
 });
 
 test("budget_entries accepts a planned row and its payments", () => {
