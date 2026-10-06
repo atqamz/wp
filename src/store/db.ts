@@ -1,5 +1,6 @@
 import { tableNames, tables } from "../../shared/tables.ts";
-import type { Persistence, Persisted } from "./persistence.ts";
+import { assemble } from "./persistence.ts";
+import type { Persistence } from "./persistence.ts";
 
 const wait = <T>(request: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -35,8 +36,7 @@ export const indexedDbPersistence = (name = "wp"): Persistence => {
         tx.objectStore("meta").get("rev"),
         tx.objectStore("meta").get("me"),
       ];
-      const [items, budget_entries, settings, outbox, rev, me] = await Promise.all(reads.map(wait));
-      return { rows: { items, budget_entries, settings }, outbox, meta: { rev: rev ?? 0, me: me ?? null } } as Persisted;
+      return assemble(await Promise.all(reads.map(wait)));
     },
     write: async ({ rows, outbox, meta }) => {
       const tx = (await open()).transaction(stores, "readwrite");

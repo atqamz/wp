@@ -1,4 +1,5 @@
 import type { Mutation, Side } from "../../shared/api.ts";
+import { tableNames } from "../../shared/tables.ts";
 import type { Row, TableName } from "../../shared/tables.ts";
 
 export type Pending = Mutation & { seq: number; at: string; rejected?: string[] };
@@ -18,4 +19,13 @@ export type Write = {
 export type Persistence = {
   load(): Promise<Persisted>;
   write(write: Write): Promise<void>;
+};
+
+export const assemble = (results: readonly unknown[]): Persisted => {
+  const [outbox, rev, me] = results.slice(tableNames.length);
+  return {
+    rows: Object.fromEntries(tableNames.map((table, index) => [table, results[index]])),
+    outbox,
+    meta: { rev: rev ?? 0, me: me ?? null },
+  } as Persisted;
 };
