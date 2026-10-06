@@ -13,18 +13,22 @@ const finished = (tx: IDBTransaction) =>
     tx.onerror = tx.onabort = () => reject(tx.error);
   });
 
-export const indexedDbPersistence = async (name = "wp"): Promise<Persistence> => {
-  const opening = indexedDB.open(name, 1);
-  opening.onupgradeneeded = () => {
-    for (const table of tableNames) opening.result.createObjectStore(table, { keyPath: tables[table].key });
-    opening.result.createObjectStore("outbox", { keyPath: "seq" });
-    opening.result.createObjectStore("meta");
-  };
-  const db = await wait(opening);
+export const indexedDbPersistence = (name = "wp"): Persistence => {
+  let opened: Promise<IDBDatabase> | undefined;
+  const open = () =>
+    (opened ??= (() => {
+      const opening = indexedDB.open(name, 1);
+      opening.onupgradeneeded = () => {
+        for (const table of tableNames) opening.result.createObjectStore(table, { keyPath: tables[table].key });
+        opening.result.createObjectStore("outbox", { keyPath: "seq" });
+        opening.result.createObjectStore("meta");
+      };
+      return wait(opening);
+    })());
   const stores = [...tableNames, "outbox", "meta"];
   return {
     load: async () => {
-      const tx = db.transaction(stores, "readonly");
+      const tx = (await open()).transaction(stores, "readonly");
       const reads = [
         ...tableNames.map((table) => tx.objectStore(table).getAll()),
         tx.objectStore("outbox").getAll(),
@@ -35,7 +39,7 @@ export const indexedDbPersistence = async (name = "wp"): Promise<Persistence> =>
       return { rows: { items, budget_entries, settings }, outbox, meta: { rev: rev ?? 0, me: me ?? null } } as Persisted;
     },
     write: async ({ rows, outbox, meta }) => {
-      const tx = db.transaction(stores, "readwrite");
+      const tx = (await open()).transaction(stores, "readwrite");
       for (const table of tableNames) for (const row of rows?.[table] ?? []) tx.objectStore(table).put(row);
       for (const entry of outbox?.put ?? []) tx.objectStore("outbox").put(entry);
       for (const seq of outbox?.drop ?? []) tx.objectStore("outbox").delete(seq);
