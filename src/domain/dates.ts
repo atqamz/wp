@@ -1,3 +1,5 @@
+import { DEFAULT_ZONE } from "./settings.ts";
+
 const DAY = 86_400_000;
 
 const utc = (date: string) => Date.parse(`${date}T00:00:00Z`);
@@ -10,7 +12,7 @@ export const daysUntil = (date: string | null, today: string) => (date === null 
 
 export const isOverdue = (due: string | null, today: string) => due !== null && due < today;
 
-export const todayIn = (now: Date, zone: string) => {
+const dayIn = (now: Date, zone: string) => {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })
       .formatToParts(now)
@@ -18,3 +20,15 @@ export const todayIn = (now: Date, zone: string) => {
   );
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
+
+export const zoneSupported = (zone: string) => {
+  if (typeof zone !== "string") return false;
+  try {
+    dayIn(new Date(0), zone);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const todayIn = (now: Date, zone: string) => dayIn(now, zoneSupported(zone) ? zone : DEFAULT_ZONE);
