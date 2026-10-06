@@ -17,4 +17,4 @@ npm run check
 
 ## Bootstrap
 
-`wrangler.jsonc` holds a placeholder `database_id`. The real ID comes from `wrangler d1 create wp` during the bootstrap: see section 8 of `docs/infra.md` on the `docs` branch (`git show docs:docs/infra.md`).
+The top-level D1 binding in `wrangler.jsonc` holds the real production `database_id`. Only `env.dev` keeps the all-zero placeholder, which must never reach production. The bootstrap that created the database is in section 8 of `docs/infra.md` on the `docs` branch (`git show docs:docs/infra.md`).
