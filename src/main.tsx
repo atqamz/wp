@@ -4,6 +4,7 @@ import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useProject } from "./hooks/use-plan.ts";
 import { useRoute } from "./router.ts";
+import { ErrorBoundary } from "./ui/error-boundary.tsx";
 import { Shell } from "./ui/shell.tsx";
 import { listViews, views } from "./ui/registry.ts";
 import { text } from "./ui/text.ts";
@@ -74,7 +75,9 @@ const root = createRoot(document.getElementById("root")!);
 
 root.render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
 
