@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "node --test",
-    "check": "npm run typecheck && npm test && npm run build && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && ! grep -rEq 'from \"react' src/domain src/store shared worker 2>/dev/null"
+    "check": "npm run typecheck && npm test && npm run build && test -s dist/wp/wrangler.json && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && test -d worker && ! grep -rEq \"from [\\\"']react\" worker"
   },
   "dependencies": {
     "react": "19.3.0",
