@@ -36,21 +36,22 @@ export const indexedDbPersistence = (name = "wp"): Persistence => {
         tx.objectStore("meta").get("rev"),
         tx.objectStore("meta").get("me"),
         tx.objectStore("meta").get("epoch"),
+        tx.objectStore("meta").get("generation"),
       ];
       return assemble(await Promise.all(reads.map(wait)));
     },
     reset: async (expected, next) => {
       const tx = (await open()).transaction(stores, "readwrite");
-      const current = tx.objectStore("meta").get("epoch");
-      let applied = false;
+      const current = tx.objectStore("meta").get("generation");
+      let generation: string | null = null;
       current.onsuccess = () => {
         if ((current.result ?? null) !== expected) return;
-        applied = true;
+        generation = crypto.randomUUID();
         for (const name of stores) tx.objectStore(name).clear();
-        for (const [key, value] of Object.entries(next)) tx.objectStore("meta").put(value, key);
+        for (const [key, value] of Object.entries({ ...next, generation })) tx.objectStore("meta").put(value, key);
       };
       await finished(tx);
-      return applied;
+      return generation;
     },
     write: async ({ rows, outbox, meta }) => {
       const tx = (await open()).transaction(stores, "readwrite");

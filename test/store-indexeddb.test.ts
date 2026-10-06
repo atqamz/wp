@@ -54,10 +54,13 @@ const withFake = async (meta: Record<string, unknown>, run: (fake: ReturnType<ty
   }
 };
 
-test("a reset clears the three row stores, the outbox and meta in one transaction, then writes the new meta", async () => {
-  await withFake({ epoch: "old" }, async ({ calls, transactions }) => {
-    const applied = await indexedDbPersistence("fake").reset("old", { epoch: "new", rev: 0, me: "a" });
-    assert.equal(applied, true);
+const next = { epoch: "new", rev: 0, me: "a" } as const;
+
+test("a reset clears the three row stores, the outbox and meta in one transaction, then writes the new meta with a fresh generation", async () => {
+  await withFake({ generation: "g1" }, async ({ calls, transactions }) => {
+    const generation = await indexedDbPersistence("fake").reset("g1", next);
+    assert.match(generation ?? "", /^[0-9a-f-]{36}$/);
+    assert.notEqual(generation, "g1");
     assert.equal(transactions.length, 1);
     assert.deepEqual(transactions[0].sort(), [...tableNames, "meta", "outbox"].sort());
     const clears = calls.filter((call) => call.op === "clear").map((call) => call.store);
@@ -67,6 +70,7 @@ test("a reset clears the three row stores, the outbox and meta in one transactio
       ["meta", "epoch", "new"],
       ["meta", "rev", 0],
       ["meta", "me", "a"],
+      ["meta", "generation", generation],
     ]);
     const lastClear = calls.map((call) => call.op).lastIndexOf("clear");
     const firstPut = calls.map((call) => call.op).indexOf("put");
@@ -75,14 +79,28 @@ test("a reset clears the three row stores, the outbox and meta in one transactio
   });
 });
 
-test("a reset does nothing when the stored epoch is no longer the one the caller believed foreign", async () => {
-  await withFake({ epoch: "reset by another tab" }, async ({ calls }) => {
-    assert.equal(await indexedDbPersistence("fake").reset("old", { epoch: "new", rev: 0, me: "a" }), false);
+test("a reset does nothing when another tab has reset since the caller read its generation", async () => {
+  await withFake({ generation: "written by the other tab", epoch: "same epoch" }, async ({ calls }) => {
+    assert.equal(await indexedDbPersistence("fake").reset("g1", next), null);
+    assert.equal(await indexedDbPersistence("fake").reset(null, next), null);
     assert.deepEqual(calls, []);
   });
-  await withFake({}, async ({ calls }) => {
-    assert.equal(await indexedDbPersistence("fake").reset("old", { epoch: "new", rev: 0, me: "a" }), false);
-    assert.equal(await indexedDbPersistence("fake").reset(null, { epoch: "new", rev: 0, me: "a" }), true);
+});
+
+test("a database that never reset has no generation, which matches only a caller that saw none", async () => {
+  await withFake({ epoch: "same epoch" }, async ({ calls }) => {
+    assert.equal(await indexedDbPersistence("fake").reset("g1", next), null);
+    assert.deepEqual(calls, []);
+    assert.notEqual(await indexedDbPersistence("fake").reset(null, next), null);
     assert.equal(calls.filter((call) => call.op === "clear").length, 5);
+  });
+});
+
+test("a reset caused by a lower revision keeps the epoch and still changes the generation", async () => {
+  await withFake({ epoch: "same epoch", generation: "g1" }, async ({ calls }) => {
+    const generation = await indexedDbPersistence("fake").reset("g1", { epoch: "same epoch", rev: 0, me: "a" });
+    assert.notEqual(generation, null);
+    assert.notEqual(generation, "g1");
+    assert.deepEqual(calls.filter((call) => call.op === "put").map((call) => call.args[1]), ["epoch", "rev", "me", "generation"]);
   });
 });

@@ -7,7 +7,7 @@ type Dict = Record<string, unknown>;
 export const memoryPersistence = (): Persistence => {
   const rows = new Map<TableName, Map<string, Dict>>(tableNames.map((table) => [table, new Map()]));
   const outbox = new Map<number, Pending>();
-  const meta: Meta = { rev: 0, me: null, epoch: null };
+  const meta: Meta = { rev: 0, me: null, epoch: null, generation: null };
   return {
     load: async () =>
       structuredClone({
@@ -25,11 +25,11 @@ export const memoryPersistence = (): Persistence => {
       Object.assign(meta, copy.meta);
     },
     reset: async (expected, next) => {
-      if (meta.epoch !== expected) return false;
+      if (meta.generation !== expected) return null;
       for (const table of tableNames) rows.get(table)!.clear();
       outbox.clear();
-      Object.assign(meta, structuredClone(next));
-      return true;
+      Object.assign(meta, structuredClone(next), { generation: crypto.randomUUID() });
+      return meta.generation;
     },
   };
 };

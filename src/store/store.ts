@@ -40,6 +40,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   let outbox: Pending[] = [];
   let rev = 0;
   let epoch: string | null = null;
+  let generation: string | null = null;
   let verified = false;
   let notice: Snapshot["notice"] = null;
   let me: Side | null = null;
@@ -106,8 +107,9 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     const discarded = outbox.length - landed;
     const lost = holdsServerData() || discarded > 0;
     const next = served.me ?? me;
-    const cleared = await persisting(() => persistence.reset(epoch, { epoch: served.epoch, rev: 0, me: next }));
-    if (cleared) {
+    const renewed = await persisting(() => persistence.reset(generation, { epoch: served.epoch, rev: 0, me: next }));
+    if (renewed !== null) {
+      generation = renewed;
       base = toMaps({ items: [], budget_entries: [], settings: [] });
       outbox = [];
       rev = 0;
@@ -123,6 +125,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       rev = saved.meta.rev;
       me = saved.meta.me ?? me;
       epoch = saved.meta.epoch;
+      generation = saved.meta.generation;
       notice = lost ? { discarded: Math.max(gone, 0) } : null;
     }
     emit();
@@ -209,6 +212,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     rev = saved.meta.rev;
     me = saved.meta.me;
     epoch = saved.meta.epoch;
+    generation = saved.meta.generation;
     loaded = true;
     emit();
     await sync().finally(() => {

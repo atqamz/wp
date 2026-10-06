@@ -16,7 +16,7 @@ const recording = (real: Persistence) => {
     reset: async (expected, meta) => {
       if (control.failing) throw new Error("QuotaExceededError");
       const applied = await real.reset(expected, meta);
-      if (applied) control.resets += 1;
+      if (applied !== null) control.resets += 1;
       return applied;
     },
   };
@@ -337,48 +337,126 @@ test("a push result without an epoch is retry-later, never a reset", async () =>
   assert.deepEqual([saved.outbox.length, saved.rows.items.length, saved.meta.epoch], [1, 2, server.epoch]);
 });
 
-test("a stale second tab adopts another tab's reset and never erases that tab's unsent writes", async () => {
-  const server = createServer();
+const twoTabs = async (server: Server) => {
   const real = memoryPersistence();
   const { control, persistence } = recording(real);
-  const real1 = server.as("a");
-  let tab1Down = false;
+  const direct = server.as("a");
+  const link = { down: false };
   const tab1 = createStore({
     persistence,
     api: createApi(async (url, init) => {
-      if (tab1Down) throw new TypeError("fetch failed");
-      return real1(url, init);
+      if (link.down) throw new TypeError("fetch failed");
+      return direct(url, init);
     }),
   });
   const tab2 = createStore({ persistence, api: createApi(server.as("a")) });
   await tab1.open();
-  idOf(await tab1.create("items", task("shared before the wipe")));
+  idOf(await tab1.create("items", task("shared before")));
   await tab1.sync();
   await tab2.open();
-  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["shared before the wipe"]);
+  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["shared before"]);
+  return { tab1, tab2, real, control, link };
+};
 
+test("a stale second tab adopts another tab's reset, its rows and its epoch, and never erases that tab's unsent writes", async () => {
+  const server = createServer();
+  const { tab1, tab2, real, control, link } = await twoTabs(server);
   server.wipe();
+  await writeOn(server, 2);
   await tab1.sync();
   assert.deepEqual(tab1.getSnapshot().notice, { discarded: 0 });
+  assert.deepEqual(titles(tab1.getSnapshot().rows.items), ["server 1", "server 2"]);
   assert.equal(control.resets, 1);
 
-  tab1Down = true;
+  link.down = true;
   const kept = idOf(await tab1.create("items", task("tab1 pending")));
   assert.equal((await real.load()).outbox.length, 1);
 
   await tab2.sync();
+  const adopted = tab2.getSnapshot();
   assert.equal(control.resets, 1);
-  assert.deepEqual(tab2.getSnapshot().notice, { discarded: 0 });
-  assert.equal(tab2.getSnapshot().storage, "ok");
-  assert.equal(tab2.getSnapshot().pending, 1);
-  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["tab1 pending"]);
+  assert.deepEqual(adopted.notice, { discarded: 0 });
+  assert.deepEqual([adopted.storage, adopted.link, adopted.pending], ["ok", "online", 1]);
+  assert.deepEqual(titles(adopted.rows.items), ["server 1", "server 2", "tab1 pending"]);
   assert.deepEqual((await real.load()).outbox.map((entry) => entry.row_id), [kept]);
+  assert.equal((await real.load()).meta.epoch, server.epoch);
 
-  tab1Down = false;
-  await tab1.sync();
+  await tab2.sync();
+  await tab2.sync();
+  assert.deepEqual([tab2.getSnapshot().link, tab2.getSnapshot().storage, control.resets], ["online", "ok", 1]);
   assert.equal(server.row("items", kept)?.title, "tab1 pending");
+
+  link.down = false;
+  await tab1.sync();
   const reopened = await reopen(server, real);
-  assert.deepEqual(titles(reopened.getSnapshot().rows.items), ["tab1 pending"]);
+  assert.deepEqual(titles(reopened.getSnapshot().rows.items), ["server 1", "server 2", "tab1 pending"]);
   assert.equal(reopened.getSnapshot().notice, null);
   assert.equal(control.resets, 1);
+});
+
+test("a rollback to a lower revision under the same epoch is reset once, and a stale second tab does not reset it again", async () => {
+  const server = createServer();
+  const { tab1, tab2, real, control, link } = await twoTabs(server);
+  const epoch = server.epoch;
+  server.rewind(0);
+  assert.equal(server.epoch, epoch);
+  await tab1.sync();
+  assert.deepEqual(tab1.getSnapshot().notice, { discarded: 0 });
+  assert.equal(control.resets, 1);
+
+  link.down = true;
+  const kept = idOf(await tab1.create("items", task("a pending after rollback")));
+  assert.deepEqual((await real.load()).outbox.map((entry) => entry.row_id), [kept]);
+
+  await tab2.sync();
+  assert.equal(control.resets, 1);
+  assert.deepEqual((await real.load()).outbox.map((entry) => entry.row_id), [kept]);
+  assert.deepEqual([tab2.getSnapshot().link, tab2.getSnapshot().storage], ["online", "ok"]);
+  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["a pending after rollback"]);
+
+  link.down = false;
+  await tab1.sync();
+  assert.equal(server.row("items", kept)?.title, "a pending after rollback");
+  const reopened = await reopen(server, real);
+  assert.deepEqual(titles(reopened.getSnapshot().rows.items), ["a pending after rollback"]);
+  assert.equal(control.resets, 1);
+});
+
+test("a phone that reset once resets again for a later mismatch, also after a restart", async () => {
+  const server = createServer();
+  const p = await synced(server);
+  server.wipe();
+  await p.store.sync();
+  assert.equal(p.control.resets, 1);
+  await writeOn(server, 1);
+  await p.store.sync();
+  server.wipe();
+  await p.store.sync();
+  assert.equal(p.control.resets, 2);
+  assert.equal(p.store.getSnapshot().link, "online");
+  assert.deepEqual(p.store.getSnapshot().notice, { discarded: 0 });
+  assert.equal((await p.real.load()).meta.epoch, server.epoch);
+
+  const restarted = await restart(p, server);
+  server.wipe();
+  await restarted.sync();
+  assert.equal(p.control.resets, 3);
+  assert.equal(restarted.getSnapshot().link, "online");
+  assert.equal((await p.real.load()).meta.epoch, server.epoch);
+});
+
+test("a stale tab that adopted another tab's reset resets again when the server changes again", async () => {
+  const server = createServer();
+  const { tab1, tab2, real, control } = await twoTabs(server);
+  server.wipe();
+  await tab1.sync();
+  await tab2.sync();
+  assert.equal(control.resets, 1);
+  server.wipe();
+  await writeOn(server, 2);
+  await tab2.sync();
+  assert.equal(control.resets, 2);
+  assert.deepEqual(titles(tab2.getSnapshot().rows.items), ["server 1", "server 2"]);
+  assert.equal(tab2.getSnapshot().link, "online");
+  assert.equal((await real.load()).meta.epoch, server.epoch);
 });
