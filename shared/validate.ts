@@ -19,7 +19,7 @@ const INSTANT = /^(\d{4}-\d\d-\d\d)T(\d\d):(\d\d):(\d\d)Z$/;
 const ZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/;
 const DECIMAL = /^(0|[1-9]\d{0,5})(\.\d{1,4})?$/;
 const URL_SHAPE = /^https?:\/\/[^\s\p{Cc}\p{Cf}\p{Cs}/?#][^\s\p{Cc}\p{Cf}\p{Cs}]*$/iu;
-const UNWANTED = /[\p{Cc}\p{Cf}\p{Cs}]/u;
+const UNWANTED = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}]/u;
 const VISIBLE = /[^\p{Z}\p{C}\sᅟᅠ⠀ㅤﾠ]/u;
 
 const show = (v: unknown) => (typeof v === "string" ? JSON.stringify(v) : typeof v);

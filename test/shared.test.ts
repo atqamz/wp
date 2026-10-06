@@ -456,7 +456,7 @@ test("sort is a finite number", () => {
 const maxed = (n: number, c = "a") => c.repeat(n);
 
 test("text rejects control, format and surrogate characters", () => {
-  for (const bad of ["\0", "\x07", "a\0b", "​", "‍", "‮", "﻿", "\ud800", "a\ud800b", "a\nb", "a\tb", "a\rb", "\x7f", "\x85"])
+  for (const bad of ["\0", "\x07", "a\0b", "​", "‌", "⁠", "‮", "﻿", "\ud800", "a\ud800b", "a\nb", "a\tb", "a\rb", "\x7f", "\x85"])
     for (const column of ["title", "group_key"])
       rejects("items", { ...task, [column]: `x${bad}` }, new RegExp(`${column}: must be a single-line string`));
   rejects("items", { ...task, title: "ok‮" }, /title/);
@@ -465,6 +465,29 @@ test("text rejects control, format and surrogate characters", () => {
   rejects("items", { ...vendor, data: { pic: "a\0b" } }, /data.pic/);
   rejects("items", { ...vendor, data: { facts: "a\nb" } }, /data.facts/);
   assert.deepEqual(validateCreate("items", { ...task, title: "Café 結婚 🎉" }), []);
+});
+
+test("text accepts the zero width joiner used by emoji sequences", () => {
+  const emoji = {
+    family: "\u{1F468}‍\u{1F469}‍\u{1F467}",
+    couple: "\u{1F469}‍❤️‍\u{1F468}",
+    rainbowFlag: "\u{1F3F3}️‍\u{1F308}",
+    keycap: "1️⃣",
+    skinTone: "\u{1F44D}\u{1F3FD}",
+  };
+  for (const [name, value] of Object.entries(emoji)) {
+    assert.deepEqual(validateCreate("items", { ...task, title: value, note: `a ${value}\nb` }), [], name);
+    assert.deepEqual(validateCreate("items", { ...task, title: `Trip ${value}`, group_key: value }), [], name);
+    assert.deepEqual(validatePatch("items", "task", { title: value, note: value }), [], name);
+  }
+  for (const bad of ["‍‍", "‍", " ‍ ", "‍​"]) {
+    rejects("items", { ...task, title: bad }, /title/);
+    rejects("items", { ...task, note: bad }, /note/);
+  }
+  for (const bad of ["​", "‌", "⁠", "﻿", "‮", "⁦"]) {
+    rejects("items", { ...task, title: `\u{1F468}‍\u{1F469}${bad}` }, /title/);
+    rejects("items", { ...task, note: `\u{1F468}‍\u{1F469}${bad}` }, /note/);
+  }
 });
 
 test("only a note may span lines", () => {
