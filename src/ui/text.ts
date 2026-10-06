@@ -131,6 +131,11 @@ export const text = {
     addPayment: "Add a payment",
     paymentLabel: "Label (optional)",
   },
+  notice: {
+    reset: "The data on the server was reset, so this phone was reset to match.",
+    discarded: (n: number) => `${plural(n, "change")} made on this phone could not be kept.`,
+    dismiss: "Dismiss",
+  },
   sync: {
     title: "Sync",
     synced: "Up to date",

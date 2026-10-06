@@ -14,6 +14,7 @@ export const actions = {
   remove: store.remove,
   setSetting: store.setSetting,
   discard: store.discard,
+  dismissNotice: store.dismissNotice,
   sync: store.sync,
   logIn: () => location.assign(LOGIN_URL),
 };

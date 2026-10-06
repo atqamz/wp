@@ -158,7 +158,7 @@ test("a 404, a 429 or a 5xx from the edge is retry-later, not a login problem", 
 
 test("a JSON 404 without a rejection body is retry-later; a JSON 404 rejection parks the mutation", async () => {
   const body = (status: number, payload: unknown) => async (_url: string, init: RequestInit) =>
-    init.method === "POST" ? Response.json(payload, { status }) : Response.json({ rev: 0, me: "a", changes: { items: [], budget_entries: [], settings: [] } });
+    init.method === "POST" ? Response.json(payload, { status }) : Response.json({ rev: 0, epoch: "e", me: "a", changes: { items: [], budget_entries: [], settings: [] } });
   const persistence = memoryPersistence();
   const stub = createStore({ persistence, api: createApi(body(404, { error: "not_found" })) });
   await stub.open();
@@ -172,7 +172,7 @@ test("a JSON 404 without a rejection body is retry-later; a JSON 404 rejection p
 });
 
 const stubbed = (reply: () => Response) => async (_url: string, init: RequestInit) =>
-  init.method === "POST" ? reply() : Response.json({ rev: 0, me: "a", changes: { items: [], budget_entries: [], settings: [] } });
+  init.method === "POST" ? reply() : Response.json({ rev: 0, epoch: "e", me: "a", changes: { items: [], budget_entries: [], settings: [] } });
 
 const seeded = async (count: number) => {
   const persistence = memoryPersistence();

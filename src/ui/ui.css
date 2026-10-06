@@ -28,6 +28,25 @@ section {
   color: var(--muted);
 }
 
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  width: calc(100% - 2rem);
+  max-width: 38rem;
+  margin: 0.75rem auto 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.notice p {
+  flex: 1;
+  margin: 0;
+}
+
 .hint {
   margin: 0;
   color: var(--muted);

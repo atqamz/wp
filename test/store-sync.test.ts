@@ -38,7 +38,7 @@ test("offline writes flush once the server is back, with server-owned columns fi
   assert.deepEqual([row.rev, row.updated_by], [1, "b"]);
   assert.equal(server.row("items", id)?.title, "Book a hall");
   const saved = await persistence.load();
-  assert.deepEqual([saved.outbox.length, saved.meta], [0, { rev: 1, me: "b" }]);
+  assert.deepEqual([saved.outbox.length, saved.meta], [0, { rev: 1, me: "b", epoch: server.epoch }]);
   assert.equal(saved.rows.items.length, 1);
 });
 
@@ -212,9 +212,9 @@ test("oversized pending mutations are split by the size cap and sent in order", 
   const fetcher = async (_url: string, init: RequestInit) => {
     if (init.method === "POST") {
       bodies.push(String(init.body));
-      return reply({ rev: bodies.length, rows: { items: [], budget_entries: [], settings: [] } });
+      return reply({ rev: bodies.length, epoch: "e", rows: { items: [], budget_entries: [], settings: [] } });
     }
-    return reply({ rev: bodies.length, me: "a", changes: { items: [], budget_entries: [], settings: [] } });
+    return reply({ rev: bodies.length, epoch: "e", me: "a", changes: { items: [], budget_entries: [], settings: [] } });
   };
   const persistence = memoryPersistence();
   await persistence.write({ outbox: { put: pending(12, 100_000) } });
@@ -323,8 +323,8 @@ test("pulls start from the stored rev and apply rows by rev only", async () => {
   const fetcher = async (_url: string, init: RequestInit) =>
     Response.json(
       init.method === "POST"
-        ? { rev: 9, rows: { items: [], budget_entries: [], settings: [] } }
-        : { rev: 1, me: "a", changes: { items: [stale], budget_entries: [], settings: [] } },
+        ? { rev: 9, epoch: server.epoch, rows: { items: [], budget_entries: [], settings: [] } }
+        : { rev: known, epoch: server.epoch, me: "a", changes: { items: [stale], budget_entries: [], settings: [] } },
     );
   const lagging = createStore({ persistence: a.persistence, api: createApi(fetcher) });
   await lagging.open();

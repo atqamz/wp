@@ -35,11 +35,13 @@ export const indexedDbPersistence = (name = "wp"): Persistence => {
         tx.objectStore("outbox").getAll(),
         tx.objectStore("meta").get("rev"),
         tx.objectStore("meta").get("me"),
+        tx.objectStore("meta").get("epoch"),
       ];
       return assemble(await Promise.all(reads.map(wait)));
     },
-    write: async ({ rows, outbox, meta }) => {
+    write: async ({ reset, rows, outbox, meta }) => {
       const tx = (await open()).transaction(stores, "readwrite");
+      if (reset) for (const name of stores) tx.objectStore(name).clear();
       for (const table of tableNames) for (const row of rows?.[table] ?? []) tx.objectStore(table).put(row);
       for (const entry of outbox?.put ?? []) tx.objectStore("outbox").put(entry);
       for (const seq of outbox?.drop ?? []) tx.objectStore("outbox").delete(seq);

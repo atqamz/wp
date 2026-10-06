@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
 import { SyncBadge } from "./sync-badge.tsx";
@@ -13,6 +14,7 @@ const tabs: { section: string; icon: IconName; label: string }[] = [
 ];
 
 export function Shell({ section, children }: { section: string; children: ReactNode }) {
+  const { notice } = useSnapshot();
   return (
     <>
       <header className="bar">
@@ -22,6 +24,17 @@ export function Shell({ section, children }: { section: string; children: ReactN
           <Icon name="settings" />
         </a>
       </header>
+      {notice && (
+        <div className="notice" role="status">
+          <p>
+            {text.notice.reset}
+            {notice.discarded > 0 && ` ${text.notice.discarded(notice.discarded)}`}
+          </p>
+          <button type="button" className="secondary" onClick={actions.dismissNotice}>
+            {text.notice.dismiss}
+          </button>
+        </div>
+      )}
       <main>{children}</main>
       <nav className="tabs" aria-label={text.nav.label}>
         {tabs.map((tab) => (
