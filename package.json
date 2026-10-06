@@ -1,0 +1,27 @@
+{
+  "name": "wp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "CLOUDFLARE_ENV=dev vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "test": "node --test",
+    "check": "npm run typecheck && npm test && npm run build && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && ! grep -rEq 'from \"react' src/domain src/store shared worker 2>/dev/null"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.62.5",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.2",
+    "wrangler": "4.147.0"
+  }
+}
