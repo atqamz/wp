@@ -3,6 +3,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export const text = {
   appName: "WP",
   loading: "Loading",
+  storageFailed: "This phone could not keep your change. Free some space or allow site data, then try again.",
   storageBroken: "This browser blocked local storage, so WP cannot start. Allow site data for this page and reload.",
   notFound: "Nothing here",
   gone: "This item was deleted",
@@ -83,7 +84,7 @@ export const text = {
   },
   invalid: {
     phone: "Enter a phone number such as 0812 3456 7890 or +62 812 3456 7890.",
-    int: "Enter whole rupiah, for example 2.500.000.",
+    int: "Enter a whole number, for example 2500000 or 2.500.000.",
   },
   quickAdd: {
     task: { label: "New task", placeholder: "Add a task" },
@@ -115,6 +116,7 @@ export const text = {
     remaining: "Remaining",
     over: "Over budget",
     progress: "Paid of planned",
+    paidNoEstimate: "Paid, no estimate",
     unestimated: (n: number) => `${plural(n, "line")} without an estimate`,
     addLabel: "New budget line",
     addPlaceholder: "Add a budget line",
@@ -131,6 +133,11 @@ export const text = {
   sync: {
     title: "Sync",
     synced: "Up to date",
+    storage: "Not saved on this phone",
+    storageBody: "This phone could not store your latest change, so it was not kept. Free some space or allow site data for this page, then enter it again.",
+    unknownRow: "A row that is no longer here",
+    cleared: "cleared",
+    yes: "yes",
     pending: (n: number) => `${n} waiting to sync`,
     offline: (n: number) => (n > 0 ? `Offline · ${n} waiting` : "Offline"),
     rejected: (n: number) => `${n} need attention`,
@@ -155,9 +162,19 @@ export const text = {
     signedInAs: (name: string) => `You are signed in as ${name}.`,
     export: "Export",
     exportAll: "Everything (JSON)",
-    exportLines: "Budget lines (CSV)",
-    exportPayments: "Payments (CSV)",
     syncDetails: "Sync details",
+  },
+  export: {
+    task: "Tasks (CSV)",
+    vendor: "Vendors (CSV)",
+    guest: "Guests (CSV)",
+    planned: "Budget lines (CSV)",
+    payment: "Payments (CSV)",
+  },
+  connect: {
+    title: "Can't reach the server yet",
+    body: "This phone has not loaded your plan yet. Check your connection and try again. Nothing is created until the plan has loaded once.",
+    retry: "Try again",
   },
   firstRun: {
     title: "What are you planning?",

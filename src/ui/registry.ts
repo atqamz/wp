@@ -56,6 +56,8 @@ export type ViewName = keyof typeof views;
 
 export const listViews = ["task", "vendor", "guest"] as const satisfies readonly ViewName[];
 
+export type ListName = (typeof listViews)[number];
+
 const variantOf = (name: ViewName): Variant => (tables[views[name].table].variants as Record<string, Variant>)[views[name].variant];
 
 export const fieldType = (name: ViewName, field: string): Type =>
