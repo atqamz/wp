@@ -146,7 +146,7 @@ test("addDays crosses month and year ends", () => {
   assert.equal(addDays("2026-10-06", -6), "2026-09-30");
 });
 
-test("today follows the project time zone, not the machine", () => {
+test("today follows the saved time zone, not the machine", () => {
   const now = new Date("2026-10-06T20:00:00Z");
   assert.equal(todayIn(now, "Asia/Jakarta"), "2026-10-07");
   assert.equal(todayIn(now, "UTC"), "2026-10-06");

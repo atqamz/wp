@@ -1,17 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const PORT = 54871;
 const base = `http://127.0.0.1:${PORT}`;
 const root = new URL("..", import.meta.url).pathname;
-const env = { ...process.env, CLOUDFLARE_ENV: "dev", WRANGLER_SEND_METRICS: "false" };
+const persist = mkdtempSync(join(tmpdir(), "wp-integration-"));
+const env = { ...process.env, CLOUDFLARE_ENV: "dev", WRANGLER_SEND_METRICS: "false", WP_PERSIST_TO: persist };
 
 const now = "2026-10-01T00:00:00Z";
 
 test("the dev Worker serves health and an authenticated sync round trip", { timeout: 120_000 }, async () => {
-  const migrate = spawnSync("node_modules/.bin/wrangler", ["d1", "migrations", "apply", "wp", "--local", "--env", "dev"], { cwd: root, env, encoding: "utf8" });
+  const migrate = spawnSync("node_modules/.bin/wrangler", ["d1", "migrations", "apply", "wp", "--local", "--env", "dev", "--persist-to", persist], { cwd: root, env, encoding: "utf8" });
   assert.equal(migrate.status, 0, migrate.stderr);
   const server = spawn("node_modules/.bin/vite", ["--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { cwd: root, env, stdio: "ignore" });
   let exited = false;
@@ -24,18 +28,16 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
     }
     assert.ok(ready, "dev server did not start");
     assert.deepEqual(await (await fetch(`${base}/api/health`)).json(), { ok: true });
-    const projectId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     const create = (table: string, row: Record<string, unknown>) => ({ id: crypto.randomUUID(), table, op: "create", row_id: row.id, patch: row });
     const mutations = [
-      create("items", { id: projectId, kind: "project", title: "Project", status: "active", created_at: now, updated_at: now }),
-      create("items", { id: taskId, kind: "task", project_id: projectId, title: "Task", status: "todo", created_at: now, updated_at: now }),
+      create("items", { id: taskId, kind: "task", title: "Task", status: "todo", created_at: now, updated_at: now }),
     ];
     const post = (body: unknown) => fetch(`${base}/api/sync`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
     const first = await post({ mutations });
     assert.equal(first.status, 200);
     const result = (await first.json()) as { rev: number; rows: { items: { id: string; updated_by: string }[] } };
-    assert.deepEqual(result.rows.items.map((row) => row.id).sort(), [projectId, taskId].sort());
+    assert.deepEqual(result.rows.items.map((row) => row.id), [taskId]);
     assert.equal(result.rows.items[0].updated_by, "a");
     const replay = (await (await post({ mutations })).json()) as { rev: number };
     assert.equal(replay.rev, result.rev);
@@ -51,5 +53,6 @@ test("the dev Worker serves health and an authenticated sync round trip", { time
   } finally {
     server.kill();
     if (!exited) await new Promise((resolve) => server.once("exit", resolve));
+    rmSync(persist, { recursive: true, force: true });
   }
 });

@@ -1,6 +1,6 @@
 import { toInstant } from "../../shared/api.ts";
 import type { Side } from "../../shared/api.ts";
-import { tables } from "../../shared/tables.ts";
+import { tableNames, tables } from "../../shared/tables.ts";
 import type { Patch, Row, TableName } from "../../shared/tables.ts";
 import { validateChange, validateMutation } from "../../shared/validate.ts";
 import type { Api } from "./api.ts";
@@ -17,6 +17,7 @@ export type Snapshot = {
   rejected: Pending[];
   link: Link;
   storage: "ok" | "failed";
+  notice: { discarded: number } | null;
 };
 
 export type Written = { ok: true; id: string } | { ok: false; errors: string[]; storage?: true };
@@ -38,6 +39,10 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   let view = base;
   let outbox: Pending[] = [];
   let rev = 0;
+  let epoch: string | null = null;
+  let generation: string | null = null;
+  let verified = false;
+  let notice: Snapshot["notice"] = null;
   let me: Side | null = null;
   let link: Link = "online";
   let storage: Snapshot["storage"] = "ok";
@@ -46,7 +51,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   let nextSeq = 1;
   let running: Promise<void> | null = null;
   let again = false;
-  let snapshot: Snapshot = { ready: false, me, rows: live(base), pending: 0, rejected: [], link, storage };
+  let snapshot: Snapshot = { ready: false, me, rows: live(base), pending: 0, rejected: [], link, storage, notice };
   const listeners = new Set<() => void>();
 
   const emit = () => {
@@ -60,6 +65,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       rejected: outbox.filter((entry) => entry.rejected),
       link,
       storage,
+      notice,
     };
     for (const listener of listeners) listener();
   };
@@ -69,9 +75,10 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     emit();
   };
 
-  const persist = async (write: Write) => {
+  const persisting = async <T>(run: () => Promise<T>): Promise<T> => {
+    let result: T;
     try {
-      await persistence.write(write);
+      result = await run();
     } catch {
       storage = "failed";
       emit();
@@ -81,15 +88,82 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       storage = "ok";
       emit();
     }
+    return result;
+  };
+
+  const persist = (write: Write) => persisting(() => persistence.write(write));
+
+  const holdsServerData = () => rev > 0 || tableNames.some((table) => base[table].size > 0);
+
+  const reconcile = async (served: { epoch: string; rev: number; me?: Side }, landed = 0): Promise<"same" | "reset"> => {
+    const differs = epoch === null ? holdsServerData() : epoch !== served.epoch;
+    if (!differs && served.rev >= rev) {
+      if (epoch === null) {
+        await persist({ meta: { epoch: served.epoch } });
+        epoch = served.epoch;
+      }
+      return "same";
+    }
+    const discarded = outbox.length - landed;
+    const lost = holdsServerData() || discarded > 0;
+    const next = served.me ?? me;
+    const renewed = await persisting(() => persistence.reset(generation, { epoch: served.epoch, rev: 0, me: next }));
+    if (renewed !== null) {
+      generation = renewed;
+      base = toMaps({ items: [], budget_entries: [], settings: [] });
+      outbox = [];
+      rev = 0;
+      me = next;
+      epoch = served.epoch;
+      notice = lost ? { discarded } : null;
+    } else {
+      const saved = await persisting(() => persistence.load());
+      const gone = outbox.filter((entry) => !saved.outbox.some((kept) => kept.seq === entry.seq)).length - landed;
+      base = toMaps(saved.rows);
+      outbox = saved.outbox.sort((a, b) => a.seq - b.seq);
+      nextSeq = Math.max(nextSeq, outbox.reduce((top, entry) => Math.max(top, entry.seq), 0) + 1);
+      rev = saved.meta.rev;
+      me = saved.meta.me ?? me;
+      epoch = saved.meta.epoch;
+      generation = saved.meta.generation;
+      notice = lost ? { discarded: Math.max(gone, 0) } : null;
+    }
+    emit();
+    return "reset";
+  };
+
+  const catchUp = async (): Promise<boolean> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await api.pull(rev);
+      if (res.kind !== "ok") {
+        failed(res.kind);
+        return false;
+      }
+      if ((await reconcile(res.body)) === "reset") continue;
+      const rows = newer(base, res.body.changes);
+      const next = Math.max(rev, res.body.rev);
+      await persist({ rows, meta: { rev: next, me: res.body.me } });
+      absorb(base, rows);
+      rev = next;
+      me = res.body.me;
+      verified = true;
+      link = "online";
+      emit();
+      return true;
+    }
+    failed("offline");
+    return false;
   };
 
   const cycle = async () => {
+    if (!verified && outbox.some((entry) => !entry.rejected) && !(await catchUp())) return;
     for (;;) {
       const queue = outbox.filter((entry) => !entry.rejected);
       if (queue.length === 0) break;
       const batch = takeBatch(queue);
       const res = await api.push(batch.map(wire));
       if (res.kind === "ok") {
+        if ((await reconcile(res.body, batch.length)) === "reset") continue;
         const rows = newer(base, res.body.rows);
         await persist({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
         absorb(base, rows);
@@ -108,16 +182,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
         return failed(res.kind);
       }
     }
-    const res = await api.pull(rev);
-    if (res.kind !== "ok") return failed(res.kind);
-    const rows = newer(base, res.body.changes);
-    const next = Math.max(rev, res.body.rev);
-    await persist({ rows, meta: { rev: next, me: res.body.me } });
-    absorb(base, rows);
-    rev = next;
-    me = res.body.me;
-    link = "online";
-    emit();
+    await catchUp();
   };
 
   const sync = (): Promise<void> => {
@@ -146,6 +211,8 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     nextSeq = outbox.reduce((top, entry) => Math.max(top, entry.seq), 0) + 1;
     rev = saved.meta.rev;
     me = saved.meta.me;
+    epoch = saved.meta.epoch;
+    generation = saved.meta.generation;
     loaded = true;
     emit();
     await sync().finally(() => {
@@ -214,6 +281,11 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     return { ok: true, id: String(seq) };
   };
 
+  const dismissNotice = () => {
+    notice = null;
+    emit();
+  };
+
   return {
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -227,6 +299,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     remove,
     setSetting,
     discard,
+    dismissNotice,
   };
 };
 

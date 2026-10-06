@@ -91,7 +91,6 @@ export const tables = {
     key: "id",
     columns: {
       id: required("TEXT", "id"),
-      project_id: optional("TEXT", "id"),
       kind: required("TEXT", "text"),
       parent_id: optional("TEXT", "id"),
       title: required("TEXT", "text"),
@@ -111,27 +110,21 @@ export const tables = {
     common: ["id", "kind", "title", "currency", "data", "sort", ...syncNames],
     by: "kind",
     variants: {
-      project: {
-        columns: ["status"],
-        required: ["status"],
-        status: ["active", "archived"],
-        data: {},
-      },
       task: {
-        columns: ["project_id", "status", "due_on", "done_on", "who", "group_key", "amount", "qty", "note"],
-        required: ["project_id", "status"],
+        columns: ["status", "due_on", "done_on", "who", "group_key", "amount", "qty", "note"],
+        required: ["status"],
         status: ["todo", "done"],
         data: { start_on: "date", decision: "bool", rules: "longtext" },
       },
       vendor: {
-        columns: ["project_id", "status", "group_key", "amount"],
-        required: ["project_id", "status"],
+        columns: ["status", "group_key", "amount"],
+        required: ["status"],
         status: ["option", "confirmed", "cancelled"],
         data: { phone: "phone", pic: "text", contract_url: "url", facts: "longtext" },
       },
       guest: {
-        columns: ["project_id", "status", "who", "group_key", "qty"],
-        required: ["project_id", "status"],
+        columns: ["status", "who", "group_key", "qty"],
+        required: ["status"],
         status: ["todo", "sent", "confirmed", "declined"],
         who: ["a", "b"],
         data: {
@@ -147,7 +140,6 @@ export const tables = {
     key: "id",
     columns: {
       id: required("TEXT", "id"),
-      project_id: optional("TEXT", "id"),
       entry_type: required("TEXT", "text"),
       budget_id: optional("TEXT", "id"),
       vendor_id: optional("TEXT", "id"),
@@ -168,13 +160,13 @@ export const tables = {
     by: "entry_type",
     variants: {
       planned: {
-        columns: ["project_id", "group_key", "amount", "vendor_id"],
-        required: ["project_id", "group_key"],
+        columns: ["group_key", "amount", "vendor_id"],
+        required: ["group_key"],
         data: {},
       },
       payment: {
-        columns: ["project_id", "budget_id", "status", "amount", "due_on", "done_on", "who"],
-        required: ["project_id", "budget_id", "status", "amount"],
+        columns: ["budget_id", "status", "amount", "due_on", "done_on", "who"],
+        required: ["budget_id", "status", "amount"],
         status: ["due", "paid"],
         doneOnStatus: "paid",
         data: { proof_url: "url" },

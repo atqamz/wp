@@ -3,7 +3,6 @@ import type { FormEvent } from "react";
 import { parseField } from "../domain/field.ts";
 import { bySort } from "../domain/order.ts";
 import { useBusy } from "../hooks/use-busy.ts";
-import { useProject } from "../hooks/use-plan.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
 import { ItemForm } from "../ui/item-form.tsx";
@@ -14,7 +13,6 @@ import { Gone } from "./generic-item.tsx";
 
 export function BudgetLine({ id }: { id: string }) {
   const entries = useTable("budget_entries");
-  const project = useProject();
   const [errors, setErrors] = useState<string[]>([]);
   const { busy, once } = useBusy();
   const line = entries.find((entry) => entry.id === id && entry.entry_type === "planned");
@@ -26,13 +24,12 @@ export function BudgetLine({ id }: { id: string }) {
     const form = event.currentTarget;
     const data = new FormData(form);
     const amount = parseField("int", String(data.get("amount") ?? ""));
-    if (!amount.ok || amount.value === null || !project) return setErrors([text.invalid.int]);
+    if (!amount.ok || amount.value === null) return setErrors([text.invalid.int]);
     return once(async () => {
       const result = await actions.create("budget_entries", {
         entry_type: "payment",
         title: String(data.get("title") ?? "").trim() || line.title,
         budget_id: line.id,
-        project_id: project.id,
         status: "due",
         amount: amount.value as number,
         currency: line.currency,

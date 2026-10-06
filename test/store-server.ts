@@ -22,7 +22,6 @@ export type Seen = {
 };
 
 const references = [
-  ["project_id", "items", "kind", "project"],
   ["vendor_id", "items", "kind", "vendor"],
   ["budget_id", "budget_entries", "entry_type", "planned"],
 ] as const;
@@ -45,8 +44,13 @@ const blank = (table: TableName, patch: Dict): Dict =>
     ]),
   );
 
+let epochs = 0;
+
+const newEpoch = () => String(++epochs).padStart(32, "0");
+
 export const createServer = () => {
   let rev = 0;
+  let epoch = newEpoch();
   let state: State = Object.fromEntries(tableNames.map((table) => [table, new Map()])) as State;
   const seen: Seen[] = [];
   const control = { down: false, session: "ok" as Session, fail: [] as number[] };
@@ -59,8 +63,6 @@ export const createServer = () => {
       const target = draft[targetTable].get(row[column] as string);
       if (!target || target.deleted_at !== null || target[kindColumn] !== kind) {
         errors.push(`${column}: must point at a live ${kind}`);
-      } else if (column !== "project_id" && target.project_id !== row.project_id) {
-        errors.push(`${column}: must belong to the same project`);
       } else if (column === "budget_id" && target.currency !== row.currency) {
         errors.push("currency: must equal the planned row's currency");
       }
@@ -94,7 +96,6 @@ export const createServer = () => {
     }
     if (!row) return { status: 404, errors: ["row_id: no such row"] };
     if (mutation.op === "delete") {
-      if (table === "items" && row.kind === "project") return { status: 409, errors: ["row_id: a project is archived, never deleted"] };
       if (row.deleted_at === null) write({ ...row, deleted_at: at });
       return null;
     }
@@ -152,14 +153,14 @@ export const createServer = () => {
     }
     state = draft;
     if (wrote.size > 0) rev += 1;
-    return json(200, { rev, rows: rowsOf(mutations) });
+    return json(200, { rev, epoch, rows: rowsOf(mutations) });
   };
 
   const get = (side: Side, url: URL, headers: Headers, init: RequestInit) => {
     const since = url.searchParams.get("since") ?? "0";
     if (!/^\d+$/.test(since) || !Number.isSafeInteger(Number(since))) return refuse(400, ["since: must be a non-negative integer"]);
     seen.push({ method: "GET", mutations: 0, bytes: 0, since: Number(since), ...meta(headers, init) });
-    return json(200, { rev, me: side, changes: changesSince(Number(since)) });
+    return json(200, { rev, epoch, me: side, changes: changesSince(Number(since)) });
   };
 
   const meta = (headers: Headers, init: RequestInit) => ({
@@ -200,6 +201,21 @@ export const createServer = () => {
     control,
     seen,
     row: (table: TableName, id: string) => state[table].get(id),
+    wipe: () => {
+      state = Object.fromEntries(tableNames.map((table) => [table, new Map()])) as State;
+      rev = 0;
+      epoch = newEpoch();
+    },
+    rewind: (to: number) => {
+      for (const table of tableNames) for (const [key, row] of state[table]) if ((row.rev as number) > to) state[table].delete(key);
+      rev = to;
+    },
+    get epoch() {
+      return epoch;
+    },
+    set epoch(value: string) {
+      epoch = value;
+    },
     get rev() {
       return rev;
     },

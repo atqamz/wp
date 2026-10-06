@@ -49,7 +49,7 @@ export const createApi = (fetcher: Fetch): Api => ({
     const res = await call(fetcher, `${SYNC_URL}?since=${since}`, { method: "GET" });
     if (res.kind !== "response") return res;
     const { body } = res;
-    return res.status === 200 && isDict(body) && Number.isInteger(body.rev) && isDict(body.changes)
+    return res.status === 200 && isDict(body) && Number.isInteger(body.rev) && typeof body.epoch === "string" && isDict(body.changes)
       ? { kind: "ok", body: body as unknown as SyncResponse }
       : { kind: "offline" };
   },
@@ -61,7 +61,7 @@ export const createApi = (fetcher: Fetch): Api => ({
     });
     if (res.kind !== "response") return res;
     const { body } = res;
-    if (res.status === 200 && isDict(body) && Number.isInteger(body.rev) && isDict(body.rows)) {
+    if (res.status === 200 && isDict(body) && Number.isInteger(body.rev) && typeof body.epoch === "string" && isDict(body.rows)) {
       return { kind: "ok", body: body as unknown as SyncResult };
     }
     if (res.status >= 400 && isDict(body) && Array.isArray(body.errors)) {

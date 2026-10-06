@@ -50,7 +50,7 @@ test("reading settings keeps the stored zone untouched", () => {
   }
 });
 
-test("formatting never depends on the project zone", () => {
+test("formatting never depends on the saved zone", () => {
   assert.equal(formatDate("2026-10-06"), "6 Oct 2026");
   assert.match(formatDay("2026-10-06"), /^Tue,? 6 Oct$/);
 });

@@ -1,8 +1,9 @@
 CREATE TABLE sync_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  rev INTEGER NOT NULL
+  rev INTEGER NOT NULL,
+  epoch TEXT NOT NULL
 );
-INSERT INTO sync_state (id, rev) VALUES (1, 0);
+INSERT INTO sync_state (id, rev, epoch) VALUES (1, 0, lower(hex(randomblob(16))));
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
@@ -16,7 +17,6 @@ CREATE TABLE settings (
 
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   kind TEXT NOT NULL,
   parent_id TEXT REFERENCES items (id),
   title TEXT NOT NULL,
@@ -43,7 +43,6 @@ CREATE INDEX items_parent ON items (parent_id);
 
 CREATE TABLE budget_entries (
   id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES items (id),
   entry_type TEXT NOT NULL CHECK (entry_type IN ('planned', 'payment')),
   budget_id TEXT REFERENCES budget_entries (id),
   vendor_id TEXT REFERENCES items (id),

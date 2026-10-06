@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { todayIn } from "../domain/dates.ts";
-import { bySort } from "../domain/order.ts";
+import { sideName } from "../domain/names.ts";
 import { readSettings } from "../domain/settings.ts";
 import { text } from "../ui/text.ts";
 import { useSnapshot, useTable } from "./use-store.ts";
@@ -8,11 +8,6 @@ import { useSnapshot, useTable } from "./use-store.ts";
 export const useSettings = () => {
   const rows = useTable("settings");
   return useMemo(() => readSettings(rows), [rows]);
-};
-
-export const useProject = () => {
-  const items = useTable("items");
-  return useMemo(() => items.filter((item) => item.kind === "project" && item.status === "active").sort(bySort)[0], [items]);
 };
 
 export const useToday = () => {
@@ -34,7 +29,6 @@ export const useStamp = () => {
 export const usePartner = () => {
   const { partnerA, partnerB } = useSettings();
   const { me } = useSnapshot();
-  const label = (side: string | null) =>
-    side === "a" ? (partnerA ?? text.partnerA) : side === "b" ? (partnerB ?? text.partnerB) : side === "both" ? text.both : text.unassigned;
+  const label = (side: string | null) => sideName(side, me, { a: partnerA, b: partnerB }, text);
   return { me, label };
 };

@@ -7,7 +7,7 @@ export function Connect() {
   const { busy, once } = useBusy();
   const expired = link === "expired";
   return (
-    <main className="first-run">
+    <main className="connect">
       <h1>{expired ? text.sync.login : text.connect.title}</h1>
       <p role="status">{expired ? text.sync.expiredBody : text.connect.body}</p>
       <div className="form-actions">

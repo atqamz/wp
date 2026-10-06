@@ -102,7 +102,7 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
-.project {
+.app-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -220,7 +220,7 @@ main {
   text-align: center;
 }
 
-.first-run {
+.connect {
   max-width: 28rem;
   padding-top: 20vh;
   padding-bottom: 2rem;

@@ -51,7 +51,7 @@ export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
         type: fieldType(name, field),
         value: valueOf(row, field),
         required: isRequired(name, field),
-        blank: field === "who" ? text.unassigned : text.notSet,
+        blank: field === "who" ? text.nobody : text.notSet,
         hint: field === "amount" ? text.amountHint : undefined,
         options: (events ?? options)?.map((value) => ({
           value,

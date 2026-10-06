@@ -13,7 +13,7 @@ npm run dev
 npm run check
 ```
 
-`npm run dev` serves the SPA and `/api/health` with a local D1. `npm run preview` serves the production build.
+`npm run dev` serves the SPA and `/api/health` with a local D1. `npm run preview` serves the production build. The local D1 state lives in `.wrangler`. `npm run dev` does not apply the migration: on a fresh `.wrangler`, run `npx wrangler d1 migrations apply wp --local --env dev` once, otherwise `/api/sync` returns 500. After a change to `migrations/0001_init.sql` (it is the initial schema and is edited in place) delete `.wrangler` and apply the migration again.
 
 ## Bootstrap
 

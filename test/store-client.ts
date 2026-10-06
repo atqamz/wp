@@ -10,7 +10,7 @@ export const client = (server: Server, side: Side, persistence = memoryPersisten
   store: createStore({ persistence, api: createApi(server.as(side)) }),
 });
 
-export const task = (project: string, title: string) => ({ kind: "task", title, status: "todo", project_id: project });
+export const task = (title: string) => ({ kind: "task", title, status: "todo" });
 
 export const titles = (rows: { title: string }[]) => rows.map((row) => row.title).sort();
 

@@ -17,6 +17,7 @@ export type Changes = { [T in TableName]: Row<T>[] };
 
 export type SyncResponse = {
   rev: number;
+  epoch: string;
   me: Side;
   changes: Changes;
 };
@@ -27,6 +28,7 @@ export type SyncRequest = {
 
 export type SyncResult = {
   rev: number;
+  epoch: string;
   rows: Changes;
 };
 
