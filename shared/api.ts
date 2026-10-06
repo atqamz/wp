@@ -38,6 +38,8 @@ export type Rejection = {
 
 export const MAX_MUTATIONS = 20;
 
+export const MAX_BODY_BYTES = 1048576;
+
 export const rowKey = <T extends TableName>(table: T, row: Row<T>): string =>
   (row as Record<string, string>)[tables[table].key];
 

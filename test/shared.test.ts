@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tables, tableNames } from "../shared/tables.ts";
 import type { Patch, Row, TableName } from "../shared/tables.ts";
-import { MAX_MUTATIONS, applyPatch, rowKey, toInstant } from "../shared/api.ts";
+import { MAX_BODY_BYTES, MAX_MUTATIONS, applyPatch, rowKey, toInstant } from "../shared/api.ts";
 import { validateChange, validateCreate, validateMutation, validatePatch, validateRow } from "../shared/validate.ts";
 
 const migration = readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
@@ -310,8 +310,8 @@ test("instants are RFC 3339 UTC with Z", () => {
     null,
   ])
     rejects("items", { ...task, created_at: bad }, /created_at/);
-  rejects("items", { ...task, deleted_at: "2026-10-06" }, /deleted_at: must be an RFC 3339/);
-  assert.deepEqual(validateCreate("items", { ...task, deleted_at: instant }), []);
+  assert.ok(validateRow("items", stored({ ...task, deleted_at: "2026-10-06" })).some((e) => /deleted_at: must be an RFC 3339/.test(e)));
+  assert.deepEqual(validateCreate("items", { ...task, deleted_at: null }), []);
 });
 
 test("dates are YYYY-MM-DD", () => {
@@ -447,7 +447,7 @@ test("settings are keyed by a lowercase key", () => {
   for (const key of ["Ceremony", "has space", "", "1abc", 5, "a".repeat(65)]) rejects("settings", { ...setting, key }, /key/);
   rejects("settings", { ...setting, value: "" }, /value/);
   rejects("settings", { ...setting, value: 5 }, /value/);
-  assert.deepEqual(validateCreate("settings", { ...setting, deleted_at: instant }), []);
+  assert.deepEqual(validateCreate("settings", { ...setting, deleted_at: null }), []);
 });
 
 test("sort is a finite number", () => {
@@ -651,6 +651,34 @@ test("deleted_at can only be cleared in a patch", () => {
   ])
     for (const value of [instant, "2026-10-06", "", 5, true])
       patchRejects(table, variant, { deleted_at: value }, /deleted_at: can only be cleared with null in a patch/);
+});
+
+test("a row cannot be created already deleted", () => {
+  const rows: [string, Obj][] = [
+    ["items", task],
+    ["items", project],
+    ["items", vendor],
+    ["items", guest],
+    ["budget_entries", planned],
+    ["budget_entries", payment],
+    ["settings", setting],
+  ];
+  for (const [table, row] of rows) {
+    for (const value of [instant, "2026-10-06", "", 5, true]) {
+      assert.ok(validateCreate(table, { ...row, deleted_at: value }).some((e) => /^deleted_at: /.test(e)), `${table} ${String(value)}`);
+      const errors = validateMutation({
+        id: uuid(700),
+        table,
+        op: "create",
+        row_id: row[table === "settings" ? "key" : "id"],
+        patch: { ...row, deleted_at: value },
+      });
+      assert.ok(errors.some((e) => /^patch.deleted_at: /.test(e)), `${table} ${String(value)}`);
+    }
+    rejects(table, { ...row, deleted_at: instant }, /deleted_at: cannot be set when creating a row/);
+    assert.deepEqual(validateCreate(table, { ...row, deleted_at: null }), []);
+    assert.deepEqual(validateRow(table, stored({ ...row, deleted_at: instant })), []);
+  }
 });
 
 test("created_at cannot be patched", () => {
@@ -918,8 +946,9 @@ test("default-ignorable characters alone are blank, visible emoji stay accepted"
   }
 });
 
-test("the batch cap and rejection shape are fixed", () => {
+test("the batch caps are fixed", () => {
   assert.equal(MAX_MUTATIONS, 20);
+  assert.equal(MAX_BODY_BYTES, 1048576);
 });
 
 test("never throws on bad input and returns errors", () => {

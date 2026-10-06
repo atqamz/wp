@@ -185,6 +185,8 @@ const checkColumns = (table: Table, input: Plain, mode: Mode, errors: string[]) 
       errors.push(`${name}: cannot be changed`);
     } else if (mode === "patch" && column.clearOnly && value !== null && value !== undefined) {
       errors.push(`${name}: can only be cleared with null in a patch`);
+    } else if (mode === "create" && column.clearOnly && value !== null && value !== undefined) {
+      errors.push(`${name}: cannot be set when creating a row`);
     } else if (value === null) {
       if (column.notNull) errors.push(`${name}: must not be null`);
     } else if (value !== undefined) {
