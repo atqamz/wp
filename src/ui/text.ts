@@ -20,6 +20,8 @@ export const text = {
   notSet: "Not set",
   nobody: "Nobody yet",
   both: "Both",
+  you: "You",
+  them: "Them",
   takeIt: "I'll take it",
   call: "Call",
   whatsapp: "WhatsApp",

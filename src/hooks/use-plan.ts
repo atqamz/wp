@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { todayIn } from "../domain/dates.ts";
+import { sideName } from "../domain/names.ts";
 import { readSettings } from "../domain/settings.ts";
 import { text } from "../ui/text.ts";
 import { useSnapshot, useTable } from "./use-store.ts";
@@ -28,7 +29,6 @@ export const useStamp = () => {
 export const usePartner = () => {
   const { partnerA, partnerB } = useSettings();
   const { me } = useSnapshot();
-  const label = (side: string | null) =>
-    side === "a" ? (partnerA ?? "") : side === "b" ? (partnerB ?? "") : side === "both" ? text.both : text.nobody;
+  const label = (side: string | null) => sideName(side, me, { a: partnerA, b: partnerB }, text);
   return { me, label };
 };
