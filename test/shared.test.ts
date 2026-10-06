@@ -891,12 +891,27 @@ test("validateChange checks the stored row, the table and the shapes", () => {
     }
 });
 
+test("settings are never deleted", () => {
+  const key = { id: uuid(610), table: "settings", row_id: "ceremony_date" };
+  for (const patch of [{}, { value: "2027-07-01" }, { key: "ceremony_date" }, null])
+    assert.ok(validateMutation({ ...key, op: "delete", patch }).some((e) => /^op: settings are never deleted/.test(e)), JSON.stringify(patch));
+  assert.deepEqual(
+    validateMutation({ ...key, op: "create", patch: { key: "ceremony_date", value: "2027-06-01", ...stamps } }),
+    [],
+  );
+  assert.deepEqual(validateMutation({ ...key, op: "update", patch: { value: "2027-07-01" } }), []);
+  assert.deepEqual(validateMutation({ ...key, op: "update", patch: { deleted_at: null } }), []);
+  for (const table of ["items", "budget_entries"])
+    assert.deepEqual(validateMutation({ id: uuid(611), table, op: "delete", row_id: uuid(5), patch: {} }), []);
+  assert.deepEqual(validateMutation({ ...key, op: "settings", patch: {} }).filter((e) => /settings are never deleted/.test(e)), []);
+});
+
 test("a delete mutation carries an empty patch", () => {
   const del = (patch: unknown) => ({ id: uuid(600), table: "items", op: "delete", row_id: task.id, patch });
   assert.deepEqual(validateMutation(del({})), []);
   for (const patch of [{ title: "x" }, { rev: 5 }, { deleted_at: instant }, { data: {} }, { status: "done" }])
     assert.ok(validateMutation(del(patch)).some((e) => /^patch: must be empty for delete/.test(e)), JSON.stringify(patch));
-  assert.ok(validateMutation({ ...del({}), table: "settings", row_id: "ceremony_date" }).length === 0);
+  assert.ok(validateMutation({ ...del({}), table: "settings", row_id: "ceremony_date" }).some((e) => /^op: settings are never deleted/.test(e)));
   assert.deepEqual(validateMutation({ ...del({ title: "x" }), op: "update" }), []);
 });
 

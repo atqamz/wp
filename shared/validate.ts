@@ -266,6 +266,7 @@ export const validateMutation = (mutation: unknown): string[] => {
   const table = lookup<Table>(tables, mutation.table);
   if (table === undefined) errors.push(`table: unknown table ${show(mutation.table)}`);
   if (!ops.includes(mutation.op as string)) errors.push(`op: must be one of ${ops.join(", ")}`);
+  else if (mutation.op === "delete" && mutation.table === "settings") errors.push("op: settings are never deleted");
   if (table !== undefined) {
     const badRow = problem(table.columns[table.key].type, mutation.row_id);
     if (badRow) errors.push(`row_id: ${badRow}`);
