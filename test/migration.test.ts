@@ -81,6 +81,10 @@ test("budget_entries accepts a planned row and its payments", () => {
   insert(db, "budget_entries", paymentRow({ id: "p2", status: "paid", done_on: "2026-10-06" }));
 });
 
+test("budget_entries accepts a planned row without an amount", () => {
+  insert(migrated(), "budget_entries", plannedRow({ amount: null }));
+});
+
 const badEntries: Record<string, Row> = {
   "planned without group_key": plannedRow({ id: "b2", group_key: null }),
   "planned with budget_id": plannedRow({ id: "b2", budget_id: "b1" }),
@@ -88,6 +92,8 @@ const badEntries: Record<string, Row> = {
   "planned with due_on": plannedRow({ id: "b2", due_on: "2026-10-06" }),
   "planned with done_on": plannedRow({ id: "b2", done_on: "2026-10-06" }),
   "negative amount": plannedRow({ id: "b2", amount: -1 }),
+  "payment without amount": paymentRow({ amount: null }),
+  "negative payment amount": paymentRow({ amount: -1 }),
   "payment without budget_id": paymentRow({ budget_id: null }),
   "payment with vendor_id": paymentRow({ vendor_id: "i1" }),
   "payment without status": paymentRow({ status: null }),
