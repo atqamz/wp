@@ -30,13 +30,89 @@ test("phone: wa.me link has no plus", () => {
   assert.equal(whatsappUrl("+628123456789"), "https://wa.me/628123456789");
 });
 
-test("rupiah input drops separators and refuses the rest", () => {
-  assert.equal(parseRupiah("5.000.000"), 5_000_000);
-  assert.equal(parseRupiah("Rp 1,500,000"), 1_500_000);
-  assert.equal(parseRupiah("0"), 0);
-  assert.equal(parseRupiah(""), null);
-  assert.equal(parseRupiah("12a"), null);
-  assert.equal(parseRupiah("-5"), null);
+test("rupiah: plain digits and thousands groups in either convention", () => {
+  const accepted: [string, number][] = [
+    ["0", 0],
+    ["5", 5],
+    ["500", 500],
+    ["1500000", 1_500_000],
+    ["1.000", 1000],
+    ["1,000", 1000],
+    ["12.500", 12_500],
+    ["999.999", 999_999],
+    ["1.500.000", 1_500_000],
+    ["1,500,000", 1_500_000],
+    ["25.000.000", 25_000_000],
+    ["999.999.999.999.999", 999_999_999_999_999],
+    ["  5.000.000  ", 5_000_000],
+    ["Rp 5.000.000", 5_000_000],
+    ["Rp1,500,000", 1_500_000],
+    ["rp 1500000", 1_500_000],
+  ];
+  for (const [input, expected] of accepted) assert.equal(parseRupiah(input), expected, input);
+});
+
+test("rupiah: a fractional part is accepted only when it is all zeros", () => {
+  const accepted: [string, number][] = [
+    ["1.500.000,00", 1_500_000],
+    ["1,500,000.00", 1_500_000],
+    ["1.500.000,0", 1_500_000],
+    ["1,500,000.0", 1_500_000],
+    ["1500000,00", 1_500_000],
+    ["1500000.00", 1_500_000],
+    ["10.00", 10],
+    ["10,0", 10],
+    ["0,00", 0],
+  ];
+  for (const [input, expected] of accepted) assert.equal(parseRupiah(input), expected, input);
+});
+
+test("rupiah: everything else is refused, never read as another number", () => {
+  const refused = [
+    "",
+    "   ",
+    "Rp",
+    "abc",
+    "12a",
+    "-5",
+    "+5",
+    "1500000.50",
+    "1500000,50",
+    "1.500.000,50",
+    "1,500,000.50",
+    "1,5",
+    "1.5",
+    "0,5",
+    "1.500,000",
+    "1,500.000",
+    "1.500.000.00",
+    "1,500,000,00",
+    "1.500,000,00",
+    "1.50.000",
+    "1.5000",
+    "1500.000",
+    "1,5000,000",
+    "12.34.567",
+    "1 500 000",
+    "1.500.000 ,00",
+    "1.500.000,000",
+    "1,500,000.000",
+    ".500",
+    ",500",
+    "1.",
+    "1,",
+    "1..500",
+    "1.500..000",
+    "1.500.000,",
+    "Rp-5",
+    "5 Rp",
+    "1e6",
+    "0x10",
+    "٣٠٠",
+    "1000000000000000",
+    "1.000.000.000.000.000",
+  ];
+  for (const input of refused) assert.equal(parseRupiah(input), null, JSON.stringify(input));
 });
 
 test("sorting follows the fractional sort, then created_at, then id", () => {
@@ -80,7 +156,8 @@ test("today follows the project time zone, not the machine", () => {
 });
 
 test("settings default the zone and leave the rest empty", () => {
-  assert.deepEqual(readSettings([]), { ceremonyDate: null, timezone: DEFAULT_ZONE, partnerA: null, partnerB: null });
+  assert.equal(DEFAULT_ZONE, "Asia/Jakarta");
+  assert.deepEqual(readSettings([]), { ceremonyDate: null, timezone: "Asia/Jakarta", partnerA: null, partnerB: null });
   const row = (key: string, value: string) => ({ key, value, rev: 1, created_at: "", updated_at: "", updated_by: null, deleted_at: null });
   assert.deepEqual(
     readSettings([row("ceremony_date", "2027-01-01"), row("timezone", "Asia/Makassar"), row("partner_a_label", "Sam")]),
