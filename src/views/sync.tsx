@@ -1,12 +1,11 @@
 import { tables } from "../../shared/tables.ts";
+import { changedValues } from "../domain/changes.ts";
 import { usePartner } from "../hooks/use-plan.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
 import type { Pending } from "../hooks/use-store.ts";
 import { formatDate, formatMoney } from "../ui/format.ts";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
-
-const hidden = ["id", "key", "kind", "entry_type", "project_id", "created_at", "updated_at"];
 
 export function Sync() {
   const { link, pending, rejected, storage, rows } = useSnapshot();
@@ -32,14 +31,7 @@ export function Sync() {
               : String(value);
 
   const changesOf = (entry: Pending) =>
-    Object.entries(entry.patch)
-      .flatMap(([field, value]) =>
-        field === "data" && typeof value === "object" && value !== null
-          ? Object.entries(value).map(([key, inner]) => [`data.${key}`, inner] as const)
-          : [[field, value] as const],
-      )
-      .filter(([field]) => !hidden.includes(field))
-      .map(([field, value]) => `${(text.field.common as Record<string, string>)[field] ?? field}: ${shown(field, value)}`);
+    changedValues(entry.patch).map(([field, value]) => `${(text.field.common as Record<string, string>)[field] ?? field}: ${shown(field, value)}`);
 
   return (
     <>

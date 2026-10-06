@@ -1,5 +1,5 @@
 import type { BudgetEntryRow, ItemRow } from "../../shared/tables.ts";
-import { addDays } from "./dates.ts";
+import { addDays, isOverdue } from "./dates.ts";
 import { bySort, compare } from "./order.ts";
 
 export const WEEK_DAYS = 7;
@@ -28,7 +28,7 @@ export const thisWeek = (items: readonly ItemRow[], entries: readonly BudgetEntr
       .map((row) => ({ type: "payment" as const, row })),
   ].sort(byDue);
   return {
-    overdue: dated.filter((entry) => entry.row.due_on! < today),
+    overdue: dated.filter((entry) => isOverdue(entry.row.due_on, today)),
     soon: dated.filter((entry) => entry.row.due_on! >= today && entry.row.due_on! <= horizon),
     undated: open.filter((item) => item.due_on === null).sort(bySort),
   };

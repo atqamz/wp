@@ -1,18 +1,17 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { exclusive } from "../domain/once.ts";
 
 export const useBusy = () => {
-  const running = useRef(false);
+  const [exclusively] = useState(exclusive);
   const [busy, setBusy] = useState(false);
-  const once = async (work: () => Promise<void>) => {
-    if (running.current) return;
-    running.current = true;
-    setBusy(true);
-    try {
-      await work();
-    } finally {
-      running.current = false;
-      setBusy(false);
-    }
-  };
+  const once = (work: () => Promise<void>) =>
+    exclusively(async () => {
+      setBusy(true);
+      try {
+        await work();
+      } finally {
+        setBusy(false);
+      }
+    });
   return { busy, once };
 };

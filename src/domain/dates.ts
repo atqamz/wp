@@ -8,6 +8,8 @@ export const daysBetween = (from: string, to: string) => (utc(to) - utc(from)) /
 
 export const daysUntil = (date: string | null, today: string) => (date === null ? null : daysBetween(today, date));
 
+export const isOverdue = (due: string | null, today: string) => due !== null && due < today;
+
 export const todayIn = (now: Date, zone: string) => {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })

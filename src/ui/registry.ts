@@ -75,6 +75,9 @@ export const fieldOptions = (name: ViewName, field: string): readonly string[] |
 
 export const isRequired = (name: ViewName, field: string) => variantOf(name).required.includes(field);
 
+export const exportQuery = (name: ViewName) =>
+  `format=csv&table=${views[name].table}&${tables[views[name].table].by}=${views[name].variant}`;
+
 export const firstStatus = (name: ViewName) => variantOf(name).status?.[0] ?? null;
 
 export const statusRank = (name: ViewName, status: string | null) => variantOf(name).status?.indexOf(status ?? "") ?? 0;

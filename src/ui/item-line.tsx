@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ItemRow } from "../../shared/tables.ts";
+import { isOverdue } from "../domain/dates.ts";
 import { whatsappUrl } from "../domain/phone.ts";
 import { usePartner, useStamp, useToday } from "../hooks/use-plan.ts";
 import { actions } from "../hooks/use-store.ts";
@@ -24,7 +25,7 @@ export function ItemLine({ name, row }: { name: ViewName; row: ItemRow }) {
 
   const toggle = () =>
     run(actions.update("items", row.id, done ? { status: firstStatus(name), done_on: null } : { status: view.done, done_on: stamp() }));
-  const late = row.due_on !== null && row.due_on < today && !done;
+  const late = isOverdue(row.due_on, today) && !done;
 
   const piece = (field: string) => {
     const value = field.startsWith("data.") ? row.data?.[field.slice(5)] : row[field as keyof ItemRow];

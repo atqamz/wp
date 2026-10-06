@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { tables } from "../../shared/tables.ts";
 import { DEFAULT_ZONE, settingKeys } from "../domain/settings.ts";
 import { useProject, useSettings } from "../hooks/use-plan.ts";
 import { useBusy } from "../hooks/use-busy.ts";
@@ -8,7 +7,7 @@ import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
 import { Field } from "../ui/field.tsx";
 import type { Control } from "../ui/field.tsx";
-import { views } from "../ui/registry.ts";
+import { exportQuery, views } from "../ui/registry.ts";
 import type { ViewName } from "../ui/registry.ts";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
@@ -17,7 +16,7 @@ const exports = [
   { label: text.settings.exportAll, query: "format=json" },
   ...(Object.keys(views) as ViewName[]).map((name) => ({
     label: text.export[name],
-    query: `format=csv&table=${views[name].table}&${tables[views[name].table].by}=${views[name].variant}`,
+    query: exportQuery(name),
   })),
 ];
 

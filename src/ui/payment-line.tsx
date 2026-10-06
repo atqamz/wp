@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { BudgetEntryRow } from "../../shared/tables.ts";
+import { isOverdue } from "../domain/dates.ts";
 import { usePartner, useStamp, useToday } from "../hooks/use-plan.ts";
 import { actions } from "../hooks/use-store.ts";
 import { failureOf } from "./failure.ts";
@@ -12,7 +13,7 @@ export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
   const { label } = usePartner();
   const [failure, setFailure] = useState<string[]>([]);
   const paid = payment.status === "paid";
-  const late = !paid && payment.due_on !== null && payment.due_on < today;
+  const late = !paid && isOverdue(payment.due_on, today);
   const when = paid
     ? payment.done_on
       ? `${text.paidOn} ${formatDate(payment.done_on)}`

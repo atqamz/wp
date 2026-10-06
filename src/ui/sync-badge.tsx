@@ -1,20 +1,10 @@
+import { badgeFor } from "../domain/status.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { text } from "./text.ts";
 
 export function SyncBadge() {
   const { link, pending, rejected, storage } = useSnapshot();
-  const state =
-    storage === "failed"
-      ? "storage"
-      : link === "expired"
-        ? "login"
-        : rejected.length > 0
-          ? "rejected"
-          : link === "offline"
-            ? "offline"
-            : pending > 0
-              ? "pending"
-              : "synced";
+  const state = badgeFor({ storage, link, pending, rejected: rejected.length });
   const labels = {
     storage: text.sync.storage,
     login: text.sync.login,

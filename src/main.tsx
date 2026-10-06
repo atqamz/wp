@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useProject } from "./hooks/use-plan.ts";
 import { useRoute } from "./router.ts";
@@ -58,8 +59,10 @@ function App() {
     document.title = heading ? `${heading} · ${text.appName}` : text.appName;
   });
 
-  if (!ready) return <p className="splash" role="status">{text.loading}</p>;
-  if (!project) return me === null ? <Connect /> : <FirstRun />;
+  const screen = screenFor(ready, me !== null, project !== undefined);
+  if (screen === "loading") return <p className="splash" role="status">{text.loading}</p>;
+  if (screen === "connect") return <Connect />;
+  if (screen === "first-run") return <FirstRun />;
   return (
     <Shell title={project.title} section={section === "payments" ? "budget" : section}>
       <Page section={section} id={id} />
