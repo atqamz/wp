@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { zoneSupported } from "../domain/dates.ts";
 import { DEFAULT_ZONE, settingKeys } from "../domain/settings.ts";
 import { useProject, useSettings } from "../hooks/use-plan.ts";
 import { useBusy } from "../hooks/use-busy.ts";
@@ -79,6 +80,11 @@ export function Settings() {
         {controls.map((control) => (
           <Field key={control.name} control={control} />
         ))}
+        {!zoneSupported(settings.timezone) && (
+          <p className="error" role="status">
+            {text.settings.zoneUnsupported}
+          </p>
+        )}
         {failure.length > 0 && (
           <p className="error" role="alert">
             {failure.join(" ")}
