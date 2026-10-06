@@ -93,11 +93,14 @@ const setting = { key: "ceremony_date", value: "2027-06-01", ...stamps };
 
 const items = { project, task, vendor, guest };
 
-const sqlRow = (row: Obj) => ({
-  rev: 1,
-  ...row,
-  ...(typeof row.data === "object" && row.data !== null ? { data: JSON.stringify(row.data) } : {}),
-});
+const sqlRow = (row: Obj) =>
+  Object.fromEntries(
+    Object.entries({
+      rev: 1,
+      ...row,
+      ...(typeof row.data === "object" && row.data !== null ? { data: JSON.stringify(row.data) } : {}),
+    }).filter(([, value]) => value !== undefined),
+  );
 
 const insert = (db: DatabaseSync, table: string, row: Obj) => {
   const stored = sqlRow(row);
