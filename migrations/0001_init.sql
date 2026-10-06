@@ -50,7 +50,7 @@ CREATE TABLE budget_entries (
   title TEXT NOT NULL,
   group_key TEXT,
   status TEXT CHECK (status IS NULL OR status IN ('due', 'paid')),
-  amount INTEGER NOT NULL CHECK (amount >= 0),
+  amount INTEGER CHECK (amount IS NULL OR amount >= 0),
   currency TEXT NOT NULL DEFAULT 'IDR' CHECK (length(currency) = 3),
   due_on TEXT CHECK (due_on IS NULL OR due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   done_on TEXT CHECK (done_on IS NULL OR done_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
@@ -66,7 +66,7 @@ CREATE TABLE budget_entries (
   CHECK (
     (entry_type = 'planned' AND budget_id IS NULL AND group_key IS NOT NULL AND status IS NULL AND due_on IS NULL AND done_on IS NULL)
     OR
-    (entry_type = 'payment' AND budget_id IS NOT NULL AND vendor_id IS NULL AND status IS NOT NULL AND (done_on IS NULL OR status = 'paid'))
+    (entry_type = 'payment' AND budget_id IS NOT NULL AND vendor_id IS NULL AND status IS NOT NULL AND amount IS NOT NULL AND (done_on IS NULL OR status = 'paid'))
   )
 );
 CREATE INDEX budget_entries_rev ON budget_entries (rev);
