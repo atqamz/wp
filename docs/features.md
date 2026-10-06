@@ -9,6 +9,7 @@ Discussion material, not a final decision. Research as of 6 October 2026. A comp
 - **Effort:** `S` = about one working day (one list configuration and one screen, no new platform component). `M` = two to four days. `L` = more than a week, or needs a new platform component.
 - **Platform need** (only a note so it fits the stack in `docs/infra.md`; this document makes no stack recommendation): `client` = runs in the browser without a server; `D1` = relational database; `R2` = file storage; `cron` = scheduled task; `push` = native notifications; `email` = sending email; `realtime` = live sync between phones; `static` = static files are enough.
 - **Evidence:** inline links. `[UNVERIFIED]` = could not be confirmed from a source that opened successfully (only a search snippet, a doubtful secondary source, or a page that failed to load). `(tested locally)` = the author's experiment on Node v26.10.0 / ICU 78.3, not a quote.
+- **Decided** = an answer from the couple, recorded on 2026-10-06 in §8.4 and carried through the sections. Where a section says "decided #n", it means that row of the Decided table.
 - **The scores in §7** are the author's judgement, not data. The formula is written there so it can be challenged.
 
 **Method and limits.**
@@ -23,7 +24,7 @@ Discussion material, not a final decision. Research as of 6 October 2026. A comp
 2. **The strongest lessons from the behavioural research:** capture has to be fast, two people are equal, default items are unassigned, nudges are rare and specific, no scores or streaks, and data can be taken away (export).
 3. **Suggested core:** one generic `items` model (plus a separate table for the budget and its payments) + a "This week" screen + tasks from a template, a budget with a payment schedule, a vendor book, and a guest list. JSON/CSV export from day one.
 4. **Household (after the wedding):** worth building small: recurring bills and renewals (vehicle tax, *STNK* (vehicle registration), *BPJS* (national health insurance), insurance), savings goals, an *amplop* ledger and family occasions. Better left to other apps: shopping lists, a shared calendar, a vault of document scans, a *KPR* (home mortgage) calculator, trip itineraries.
-5. **Reminders:** the "This week" screen and an "Add to calendar" button (`.ics`) first. Push isn't needed yet.
+5. **Reminders:** the "This week" screen and an "Add to calendar" button (`.ics`, for Google Calendar) first, then a WhatsApp share and a Gmail digest, the channels the couple actually look at (decided #6). Push isn't needed yet.
 6. **Sensitive documents:** don't store scans of the *KTP*/*KK* (national ID card/family card) or *NIK* (national ID number) in the app. Store the ready status, the date, and the location of the document.
 7. **Money:** store whole rupiah as an integer plus a currency code. This deliberately departs from ISO 4217 (§5.7, §6).
 
@@ -33,10 +34,11 @@ Discussion material, not a final decision. Research as of 6 October 2026. A comp
 
 ### 1.1 Who, on what device, at what moment
 
-**Users:** two equal adults (Partner A and Partner B), one phone each, access only through two Google accounts. Extra readers (parents, *WO* (wedding organizer)) are only considered later as a read-only link (W19).
+**Users:** two equal adults (Partner A and Partner B), one phone each, access only through two Google accounts. Everything is visible to both (decided #4). Extra readers (parents, *WO* (wedding organizer)) get nothing for now; a read-only link (W19) stays a later option only (decided #5).
 
 **Devices:**
 - Android is about 79% and iOS about 21% of Indonesia's mobile web traffic in September 2026 ([StatCounter](https://gs.statcounter.com/os-market-share/mobile/indonesia): Android 79.16%, iOS 20.79%). That is web traffic, not phone ownership. The app has to be comfortable on Android Chrome and on iOS Safari as an installed PWA.
+- One partner uses Android and the other an iPhone (decided #2). Both are first-class: no feature may work on one platform only. On iOS, installing to the Home Screen is required for push ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)) and for long-lived storage (§5.6). That needs one short hint, shown only when the app runs in an iOS browser tab, not a tour (principle 6). How the app detects an installed state (`display-mode: standalone` or `navigator.standalone`) was not checked: `[UNVERIFIED]`.
 - The StatCounter page for the desktop vs mobile ratio in Indonesia shows desktop at 55.83% ([source](https://gs.statcounter.com/platform-market-share/desktop-mobile-tablet/indonesia)), which contradicts the mobile-first picture and can't be reconciled. That figure is ignored. The mobile-first decision comes from the habits of you two.
 - Connectivity: 230 million internet users, 80.5% penetration ([DataReportal Digital 2026: Indonesia](https://datareportal.com/reports/digital-2026-indonesia), October 2025 data).
 
@@ -76,9 +78,9 @@ What was **not** found (don't treat as fact): a study comparing "assign vs claim
 
 1. **Capture is the product.** One input on the first screen, one tap to save, no required fields. (Evidence 1, 4)
 2. **Two equal people.** Both can add, change, complete. No admin. (Evidence 6; [Frampton et al., CHI 2026](https://orca.cardiff.ac.uk/id/eprint/185455): most family management tools are oriented to a single user, `[UNVERIFIED]` because it's only from a search summary)
-3. **Default items are unassigned.** Anyone can "take" one with one tap. No assignment notification. Inference from evidence 6 and 8. The Carlson 2025 study saying per-task sharing feels fairer is `[UNVERIFIED]` (unpublished, reported by health media) and isn't used as a basis.
-4. **Show state, not behaviour.** "Paid by Partner B, Tuesday" is fine. "Partner B hasn't opened this" is not. (Evidence 7)
-5. **Nudges that are rare, specific, and tied to events.** Priority: the "This week" screen, then the "Add to calendar" button, then one weekly digest. Sharing to WhatsApp is triggered by the user, not sent automatically. (Evidence 5, 9)
+3. **Default items are unassigned.** Anyone can "take" one with one tap. No assignment notification. Agreed as the default (decided #3). Inference from evidence 6 and 8. The Carlson 2025 study saying per-task sharing feels fairer is `[UNVERIFIED]` (unpublished, reported by health media) and isn't used as a basis.
+4. **Show state, not behaviour.** "Paid by Partner B, Tuesday" is fine. "Partner B hasn't opened this" is not. Everything is visible to both partners; there are no private items (decided #4). (Evidence 7)
+5. **Nudges that are rare, specific, and tied to events.** Priority: the "This week" screen, then the "Add to calendar" button, then one weekly digest. Sharing to WhatsApp is triggered by the user, not sent automatically. The channels follow what the couple look at: WhatsApp, Gmail, Google Calendar and Google Keep (decided #6; §5.1, §6.3). (Evidence 5, 9)
 6. **No onboarding.** Task templates are already filled in and can be deleted. (Evidence 10)
 7. **Own little, interoperate for the rest.** Calendar, shopping list, vault: hand them off, connect through `.ics`, links, CSV. (Evidence 2, 3)
 8. **Undo everywhere.** Soft delete and a "recently deleted" screen, because two people edit the same data. ([NN/g 10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/): users often perform actions by mistake and need a clear way out; [Apple HIG undo](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/undo-and-redo.json))
@@ -242,9 +244,12 @@ Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim
 
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
-| W5 | **Conditional KUA checklist.** The list of steps and documents from §3.8, deadlines counted back from H. Extra documents show up depending on conditions (age, *akad* outside the sub-district, divorced/widowed, military/police, foreign nationals). Items whose rules differ between KUAs are marked "ask the KUA" with a notes column | Dense-temporary: two full months of activity, with deadlines that have real consequences | M | `task` from a template with rules; ready status (bool), date, note. **No NIK number, no scans** | D1 + static template file |
+| W5 | **Conditional KUA checklist.** The list of steps and documents from §3.8, deadlines counted back from H. Extra documents show up depending on conditions (age, the *akad* location selected in W27, divorced/widowed, military/police, foreign nationals). Items whose rules differ between KUAs are marked "ask the KUA" with a notes column | Dense-temporary: two full months of activity, with deadlines that have real consequences | M | `task` from a template with rules (reading the W27 `settings` keys); ready status (bool), date, note. **No NIK number, no scans** | D1 + static template file |
 | W6 | **Working-day calendar** to compute "10 HK before the *akad*". The list of national holidays and collective leave can be edited. Buffer warning: 10 HK is the legal minimum, not a realistic schedule | the definition of "working day" in the PMA and the treatment of collective leave were not found (§3.8). Holidays are set through the joint decree of 3 ministers (SKB) every year ([SKB 2026, Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026)) | S | `settings`: list of holiday dates (seeded yearly, filled in by hand) | static + client |
-| W7 | **Prenuptial agreement route (optional).** Four tasks: decide, find a notary, sign, tell the KUA so it's recorded in the Deed and the *Buku Nikah* (marriage book) | The Constitutional Court allows an agreement to be made before, at, or during the marriage ([Decision 69/PUU-XIII/2015](https://www.mkri.id/public/content/persidangan/putusan/69_PUU-XIII_2015.pdf)); for Muslims it is made before a notary and recorded by the KUA ([PMA 30/2024 Articles 39-40](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf)). Not legal advice. Only if you two are really thinking about it | S | `task` (4 items) | D1 |
+| W7 | **Prenuptial agreement route (optional).** Four tasks: decide, find a notary, sign, tell the KUA so it's recorded in the Deed and the *Buku Nikah* (marriage book) | The Constitutional Court allows an agreement to be made before, at, or during the marriage ([Decision 69/PUU-XIII/2015](https://www.mkri.id/public/content/persidangan/putusan/69_PUU-XIII_2015.pdf)); for Muslims it is made before a notary and recorded by the KUA ([PMA 30/2024 Articles 39-40](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf)). Not legal advice. In scope (decided #11); each of the four tasks can be hidden if the couple decide against it | S | `task` (4 items) | D1 |
+| W27 | **Selectable *akad* location.** Two selectors, both starting as "not decided": **venue** = at the KUA or outside the KUA; **place** = the home sub-district of Partner A, of Partner B, or elsewhere (*numpang nikah*, marrying at a KUA away from home). A yes/no "we live in the same sub-district" is asked once. The selection drives (1) which items W5 shows (§3.8 step 3: the recommendation letter), (2) a seeded `planned` budget row for the registration fee in W13, and (3) the fee text (§3.8 step 10). While undecided, W5 shows each branch as "pending decision" and the fee row has no amount. The selection can be changed any time; the dependent items follow without losing ticks already made | Dense-temporary with a deadline: §3.8 step 1 says to decide early, and a wrong assumption either hides a required letter or misses the fee. The couple have not decided (decided #1), so the app must not assume | S | `settings`: `akad_venue` (`kua`/`outside`/empty), `akad_place` (`a_home`/`b_home`/`elsewhere`/empty), `same_subdistrict` (bool/empty). The fee row is a `budget_entries` `planned` row. Rule per selection: see the note below the table | client + D1 |
+
+**W27 rules** (from §3.8; the fee is an editable seed). Fee: Rp0 for an *akad* at the KUA in working hours, Rp600,000 outside the KUA or outside working hours (§3.8 step 10); *numpang nikah* at a KUA does not change the fee rule as read there, an inference from the same step `[UNVERIFIED]`. Other costs of an *akad* outside the KUA (venue, and travel or lodging for *numpang nikah*) are not estimable from a source and stay empty for the couple to fill. Recommendation letter: PMA Article 17(2) requires a letter from the KUA of each partner's residence when the *akad* is held outside the domicile of the groom-to-be and bride-to-be, and Article 17(3) says one letter is enough when both live in the same sub-district (text read from the [PDF copy](https://desakarangwuni.gunungkidulkab.go.id/assets/files/dokumen/PERMENAG-30-2024.pdf)). So: place = elsewhere gives "letter from each residence's KUA, or one if `same_subdistrict`"; place = the home sub-district of one partner and the partners live apart is **ambiguous in the text** (does the other partner's KUA still issue a letter?), so W5 shows "ask the KUA" for it; both partners in the same sub-district and the *akad* there needs no letter.
 
 ### 3.3 Phase 2: *Lamaran* (formal engagement visit), *seserahan*, traditional ceremonies
 
@@ -261,18 +266,20 @@ Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim
 |---|---|---|---|---|---|
 | W11 | **Vendor book.** Category, status (option/confirmed/cancelled), contact, PIC, taps to call and WhatsApp, key contract facts (extra charges outside the contract, cancellation rules, emergency contact) | Vendor meetings and the wedding day. WO fraud rarely leads anywhere ([Kontan](https://nasional.kontan.co.id/news/ylki-soroti-lemahnya-perlindungan-konsumen-dalam-kasus-wedding-organizer-bermasalah)), so contracts and contacts must be easy to find. Mandatory questions to a WO: extra charges outside the contract, a backup plan ([Popbela](https://www.popbela.com/relationship/married/pertanyaan-wedding-organizer-00-vmqqn-l796gq)) | S | `vendor`: name, `group_key` (category), `status`, E.164 phone, PIC, `amount` (quoted price), contract link, note | D1 |
 | W12 | **Quote comparison per category.** Several option vendors side by side, price first | Price is the entry point: 70.13% of Bridestory vendor leads come from viewing or asking for a price ([Bridestory](https://business.bridestory.com/id/blog/bridestory-business-insight-januari-juni-2026)); budget is the hardest thing for 64% of respondents ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689acb7c92057/budgeting-the-hardest-part-of-wedding-planning)) | S | A view over `vendor` (grouped by `group_key`) | client |
-| W13 | **Budget and payments.** Budget items per event (planned vs spent), payment rows (down payment, instalments, final settlement) with a due date and a payment date, remainder, "late" mark, a "next 7 days" list. Bridestory 2017 survey result: only 49.1% kept to the budget, so the gap between plan and actual needs to be visible | Weekly. Vendor payments are real money and real deadlines. The original sheet has no due date (brainstorm §1.4) | M | `budget_entries` rows of type `planned` (title, `group_key` = event, planned `amount`, optional `vendor_id`) and `payment` (`budget_id` = the planned row, `status`, `amount`, `due_on`, `done_on`, `who` = payer) | D1 |
-| W14 | **Wedding fund.** Target, deposits per person or source (Partner A, Partner B, parents, others), progress, "need to save Rp X per month" = (target minus collected) divided by months left | Weekly to monthly. 45% of Jakpat respondents fund from personal savings and 40% from joint savings ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), so recording per source is meaningful. The money actually sits in the account/Kantong (pocket); the app only records | S | `saving` (target, deadline) and `contribution` (`parent_id`, `amount`, `done_on`, `who`) items | D1 |
+| W13 | **Budget and payments.** Budget items per event (planned vs spent), payment rows (down payment, instalments, final settlement) with a due date and a payment date, remainder, "late" mark, a "next 7 days" list. Bridestory 2017 survey result: only 49.1% kept to the budget, so the gap between plan and actual needs to be visible | Weekly. Vendor payments are real money and real deadlines. The original sheet has no due date (brainstorm §1.4). The *akad* registration fee row is seeded from the W27 selection | M | `budget_entries` rows of type `planned` (title, `group_key` = event, planned `amount`, optional `vendor_id`) and `payment` (`budget_id` = the planned row, `status`, `amount`, `due_on`, `done_on`, `who` = payer) | D1 |
+| W14 | **Wedding fund.** Target, deposits per person or source (Partner A, Partner B, parents, others), progress, "need to save Rp X per month" = (target minus collected) divided by months left | Weekly to monthly. 45% of Jakpat respondents fund from personal savings and 40% from joint savings ([Katadata](https://databoks.katadata.co.id/en/demographics/statistics/689bf39a83b02/ideal-wedding-budget-according-to-indonesian-youth)), so recording per source is meaningful. Each partner holds money in several banks and one investment app, partly outside wp (decided #10), so the app only records contributions by hand and never reads a balance or names an account | S | `saving` (target, deadline) and `contribution` (`parent_id`, `amount`, `done_on`, `who`, `data.source` as free text) items | D1 |
 | W15 | **Payment proof as a link** to Drive/Photos, not an upload. Upload to `R2` only later (see W15b in §7) | The trail for WO fraud and disputes. A link is cheap; upload needs R2 (§5.3) | S | `payment.data.link` | D1 |
 
 ### 3.5 Phase 4: Guests and invitations
 
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
-| W16 | **One-table guest list.** Side (Partner A/B), category, name, number of people (pax), phone number, invitation status, note. Totals per side and category. **An adjustable catering portion multiplier** (the 2x or 2.5x rule differs between sources: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). CSV import and export | Weekly in the invitation phase; the total drives the catering budget, which can be 40-60% of the reception budget ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)) | M | `guest`: name, `who` (side), `group_key` (category), `qty` (pax), `data.phone`, `status`, note | D1 + client (CSV) |
-| W17 | **Invitation tracker** with a "send via WhatsApp" button per guest (`wa.me/<number>?text=...`, [official format](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/)) and a sent marker | Weekly while sending; the message is sent manually by the user, not automatically | S | `guest.status` ("not yet/sent/confirmed/not coming") | client |
-| W18 | **Import RSVP/check-in results from a digital invitation service**, through CSV/Excel. Many platforms offer export, e.g. invi.id ([page](https://invi.id)) | Only if you two use an external invitation service (§8: not built ourselves) | M | Matching names to `guest` | client |
-| W19 | **Read-only link** for parents or the WO: rundown, guest total, vendor contacts. A random token per link, revocable | Couples want to involve people outside themselves ([Massimi et al.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)). A privacy risk, so it's postponed and kept narrow | M | Token table (hash), scope per link | D1 + public endpoint |
+| W16 | **One-table guest list.** Side (Partner A/B), category, name, number of people (pax), phone number, invitation status, note. Totals per side and category. **An adjustable catering portion multiplier** (the 2x or 2.5x rule differs between sources: [Antara](https://www.antaranews.com/berita/4224291/cara-hitung-biaya-katering-resepsi-pernikahan), [Mojok](https://mojok.co/terminal/makanan-catering-adalah-tolok-ukur-kesuksesan-hajatanmu-jangan-disepelekan/)). CSV import and export | Weekly in the invitation phase; the total drives the catering budget, which can be 40-60% of the reception budget ([Detik, 2020](https://finance.detik.com/perencanaan-keuangan/d-4892336/hitung-hitung-biaya-kawinan-apa-sih-yang-bikin-boros)). Digital invitation services and print are both supported (decided #8), so each guest carries an invitation channel (digital, print or both) that can be filtered and exported for a print vendor. No postal address field for now (open Q5 in §8.4) | M | `guest`: name, `who` (side), `group_key` (category), `qty` (pax), `data.phone` (whether guest numbers are stored at all is open, Q2 in §8.4), `data.channel`, `status`, note | D1 + client (CSV) |
+| W17 | **Invitation tracker** with a "send via WhatsApp" button per guest (`wa.me/<number>?text=...`, [official format](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/)) and a sent marker | Weekly while sending; the message is sent manually by the user, not automatically. For print invitations the same status is set by hand ("sent" = handed over or posted). If guest phone numbers are not stored (open Q2), the button opens WhatsApp's chooser (`wa.me/?text=`) and the user picks the contact | S | `guest.status` ("not yet/sent/confirmed/not coming") | client |
+| W18 | **RSVP CSV import.** Results from a digital invitation service (or a form) come in as a CSV file. Flow: pick the file; the client reads it (UTF-8 with or without BOM; delimiter `,` or `;` detected); map columns (name, phone, status, confirmed pax, note; the mapping is remembered); **preview** matched, new and conflicting rows; apply. Match by normalised phone (E.164) when both sides have one, else by case-folded name within the same side. Sets `status` and `data.rsvp_qty`; never deletes a guest and never overwrites a note. Unmatched rows become new guests flagged "from import". Every row created or changed carries `data.import_batch`, so one import can be undone, and importing the same file twice changes nothing. Excel files are saved as CSV first (no spreadsheet library). Many services offer an export, e.g. invi.id ([page](https://invi.id)); the columns of the service the couple choose are not known yet (open Q5), hence the column mapping | Dense-temporary: the RSVP weeks, when re-typing every answer is the alternative. Decided #8. Confirmed pax (`rsvp_qty`) feeds the catering total in W16 next to the invited pax | M | `guest.status`, `guest.data.rsvp_qty`, `guest.data.import_batch`. Shares the CSV reader with X7 (§5.5) | client |
+
+Whether Excel in an Indonesian regional setting saves CSV with `;` as the delimiter was not verified: `[UNVERIFIED]`; the detection covers both.
+| W19 | **Read-only link** for parents or the WO: rundown, guest total, vendor contacts. A random token per link, revocable | Couples want to involve people outside themselves ([Massimi et al.](https://www.microsoft.com/en-us/research/wp-content/uploads/2020/03/Real-but-Glossy.pdf)). A privacy risk, so it's postponed and kept narrow. **Later option only** (decided #5): not built now | M | Token table (hash), scope per link | D1 + public endpoint |
 
 ### 3.6 Phase 5: Wedding day
 
@@ -288,7 +295,7 @@ Applies to Muslim couples who marry through the KUA. The civil route (non-Muslim
 | ID | Feature | Value (trigger) | Effort | Data | Platform |
 |---|---|---|---|---|---|
 | W24 | **Post-wedding admin checklist.** New KK, status change on the *KTP-el* (electronic ID card), BPJS (add spouse), tax status, bank/insurance/passport/STNK. Separated into **mandatory vs optional vs unclear** (§3.9) | Dense-temporary; continues into household | S | `task` from a template | D1 + static |
-| W25 | ***Amplop* ledger, incoming.** Who gave, how much, at which event, notes. When invited to a *kondangan* later, see what they once gave (continues to H12) | High-value redemption. The practice is documented as reciprocal ([Goodnews from Indonesia](https://www.goodnewsfromindonesia.id/2021/11/24/fenomena-sosial-dan-eksistensi-tradisi-buwuhan-dalam-hajatan), [Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)), and no dedicated tool was found. **Demand not yet validated** | S | `gift`: giver name, `group_key` = event, `amount`, `done_on`, direction (incoming/outgoing) in `data`, note | D1 |
+| W25 | ***Amplop* ledger, incoming.** Who gave, how much, at which event, notes. When invited to a *kondangan* later, see what they once gave (continues to H12) | High-value redemption. The practice is documented as reciprocal ([Goodnews from Indonesia](https://www.goodnewsfromindonesia.id/2021/11/24/fenomena-sosial-dan-eksistensi-tradisi-buwuhan-dalam-hajatan), [Hipwee](https://www.hipwee.com/feature/7-filosofi-di-balik-tradisi-ngamplop-di-indonesia-biar-nggak-pusing-lagi-kalau-mau-kondangan/)), and no dedicated tool was found. **Demand not yet validated; not a priority now** (decided #9), kept as an option for later | S | `gift`: giver name, `group_key` = event, `amount`, `done_on`, direction (incoming/outgoing) in `data`, note | D1 |
 | W26 | **Closing out.** Remaining vendor bills, thank-you list, archive export (JSON + CSV + `.ics`) | Ends the project neatly and keeps a copy outside the app | S | A view over `payment`, `guest` | client |
 
 ### 3.8 Detail: the KUA process (basis of W5 and W6)
@@ -297,9 +304,9 @@ Legal basis: Minister of Religious Affairs Regulation (PMA) 30/2024 on Marriage 
 
 | Step | When | Documents/items | Source | Status |
 |---|---|---|---|---|
-| 1. Choose the KUA and the *akad* date; decide whether at the KUA or outside | Early. The author's suggestion: three months or more before H (not a rule) | – | PMA Article 16 | Rule verified; timing is a suggestion |
+| 1. Choose the KUA and the *akad* date; decide whether at the KUA or outside (the selectable fields of W27; undecided for now) | Early. The author's suggestion: three months or more before H (not a rule) | – | PMA Article 16 | Rule verified; timing is a suggestion |
 | 2. Marriage cover letter from the *kelurahan*/*desa* (village office) | Before registering | Article 4(1)(a). The form codes N1-N4 are a local name, the PMA doesn't mention the codes | PMA; [SIMKAH](https://simkah4.kemenag.go.id/) mentions "N1-N4" | Verified. The RT/RW (neighbourhood heads) step is `[UNVERIFIED]` |
-| 3. Marriage recommendation letter, if the *akad* is outside the home sub-district | Before registering at the KUA of the *akad* | Articles 4(1)(e), 17. One recommendation from the KUA of each residence; if both are in the same sub-district, one is enough | PMA | Verified; lead time `[UNVERIFIED]` |
+| 3. Marriage recommendation letter, if the *akad* is outside the home sub-district | Before registering at the KUA of the *akad* | Articles 4(1)(e), 17. One recommendation from the KUA of each residence; if both are in the same sub-district, one is enough. Which case applies follows the W27 selection; the case of an *akad* in one partner's own sub-district is ambiguous in Article 17(2) (rules under W27) | PMA | Verified; lead time `[UNVERIFIED]`; ask the KUA for the ambiguous case |
 | 4. Health certificate from a health facility | Before registering. The Ministry of Health suggests an examination about 3 months before ([Ayo Sehat, 2018](https://ayosehat.kemkes.go.id/pentingnya-pemeriksaan-kesehatan-pra-nikah)) | Permenkes 2/2025 (Minister of Health Regulation) Article 28 ([PDF](https://jdih.kemkes.go.id/storage/documents/pdfs/2025permenkes002.pdf)). TT immunisation isn't mentioned in the current article; whether the KUA asks for a TT card `[UNVERIFIED]` | PMA 4(1)(f), Permenkes | Verified |
 | 5. Register the intent to marry at the KUA or online through SIMKAH | At the latest **10 HK before the *akad***. Less than that: a sub-district head's dispensation letter or a stamped statement | Article 3 | PMA | Verified (full text) |
 | 6. Come to the KUA after registering online | The SIMKAH page says at the latest 15 HK; the PMA text doesn't contain that rule | – | [SIMKAH](https://simkah4.kemenag.go.id/), [Kompas, 5 May 2026](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya) | **Contradictory**, ask the KUA |
@@ -317,7 +324,7 @@ Legal basis: Minister of Religious Affairs Regulation (PMA) 30/2024 on Marriage 
 
 **SIMKAH:** the official online registration site is `simkah4.kemenag.go.id` (system name: Marriage Management Information System). Flow: create an account with email and OTP, choose "Register Marriage", fill in the data, upload documents, print the proof ([Kontan, 29 May 2023](https://nasional.kontan.co.id/news/cara-daftar-nikah-online-di-simkah4kemenaggoid-hubungi-nomor-ini-jika-terkendala), may have changed). Channel for complaints about unofficial charges: `simdumas.kemenag.go.id` ([Kompas](https://cahaya.kompas.com/aktual/26E05112754390/cara-daftar-nikah-di-kua-2026-alur-online-offline-dan-biaya-resminya)).
 
-**Design implications (the author's suggestion, not fact):** keep "ask the KUA" as an item with a notes column, not a hard rule; conditional documents as simple rules in the template; all dates derived from H and editable; don't store document numbers or scans.
+**Design implications (the author's suggestion, not fact):** keep "ask the KUA" as an item with a notes column, not a hard rule; conditional documents as simple rules in the template, reading the W27 selection and treating "not decided" as "show both branches"; all dates derived from H and editable; don't store document numbers or scans.
 
 ### 3.9 Detail: admin after the wedding (basis of W24)
 
@@ -372,9 +379,9 @@ The question answered for each category: is it worth building in a private two-p
 - Zeta (a couple finance app): Acorns announced an asset acquisition on 24 June 2025 ([Acorns](https://acorns.com/learn/acorns-zeta-acquisition/)); the closing date of 9 May 2025 is only from a competitor blog `[UNVERIFIED]` ([Pocket Clear](https://pocketclear.app/blog/zeta-app-alternative-couples.html)).
 - Goodbudget: manual entry and envelopes ([CNBC Select](https://www.cnbc.com/select/goodbudget-app-review/)).
 - Epstein et al. (UbiComp 2015): financial tools last longer than activity tools, but manual upkeep is the main killer (§1.2 #4).
-- **Suggestion:** start from "actual total this month per category" and "who paid what" for big shared expenses, not recording every coffee. Prepare CSV import/export. Don't chase bank sync.
+- **Suggestion:** start from "actual total this month per category" and "who paid what" for big shared expenses, not recording every coffee. Prepare CSV import/export. Don't chase bank sync; with several banks per partner (decided #10) it would be even less worth it.
 
-**H2 Savings goal.** Bank Jago "Kantong Bersama" (shared pocket): invite another Jago user into one Kantong (pocket) with a goal; access roles "Can View, Can Use, or Can View and Use"; both people must have a Jago account ([Jago product summary](https://assets.jago.com/web-assets/public/riplay-umum-kantong-jago-new-logo.pdf)). At the end of December 2025 there were 40 million Kantong and Kantong Bersama grew 87% in a year ([BCA Sekuritas, 30 January 2026](https://bcasekuritas.co.id/en/latest-news/news/bank-jago-catat-adopsi-fitur-kantong-aplikasi-banking-capai-40-juta)). blu by BCA Digital has bluGether; Republika calls it saving "without having to open a joint account", Selular calls it a joint account, so its legal form is contradictory between sources ([Republika](https://ekonomi.republika.co.id/berita/tin053349/blu-by-bca-digital-menabung-kini-jadi-aktivitas-kolaboratif), [Selular, February 2026](https://selular.id/2026/02/blu-by-bca-digital-dorong-couple-budgeting-lewat-blusaving-dan-blugether/)). **Suggestion:** the app records progress (name, target, deadline, contributions, "need Rp X per month"). The money stays in the bank.
+**H2 Savings goal.** Bank Jago "Kantong Bersama" (shared pocket): invite another Jago user into one Kantong (pocket) with a goal; access roles "Can View, Can Use, or Can View and Use"; both people must have a Jago account ([Jago product summary](https://assets.jago.com/web-assets/public/riplay-umum-kantong-jago-new-logo.pdf)). At the end of December 2025 there were 40 million Kantong and Kantong Bersama grew 87% in a year ([BCA Sekuritas, 30 January 2026](https://bcasekuritas.co.id/en/latest-news/news/bank-jago-catat-adopsi-fitur-kantong-aplikasi-banking-capai-40-juta)). blu by BCA Digital has bluGether; Republika calls it saving "without having to open a joint account", Selular calls it a joint account, so its legal form is contradictory between sources ([Republika](https://ekonomi.republika.co.id/berita/tin053349/blu-by-bca-digital-menabung-kini-jadi-aktivitas-kolaboratif), [Selular, February 2026](https://selular.id/2026/02/blu-by-bca-digital-dorong-couple-budgeting-lewat-blusaving-dan-blugether/)). **Suggestion:** the app records progress (name, target, deadline, contributions, "need Rp X per month"). The money stays in the banks and the investment app the partners already use; wp records progress by hand and never reads balances (decided #10).
 
 **H3-H4 Bills and renewals.** Honeydue reviewers like reminders compared with a shared note (§2.4). Payment is dominated by official apps with large user bases: PLN Mobile (4.8 from 178,385 ratings on the Indonesian App Store), Mobile JKN (4.78 from 388,838) ([PLN Mobile](https://apps.apple.com/id/app/pln-mobile/id1299581030), [Mobile JKN](https://apps.apple.com/id/app/mobile-jkn/id1237601115), snapshot 6 October 2026). Standalone bill-reminder apps on the Indonesian App Store have 0-1 ratings ([search](https://itunes.apple.com/search?term=tagihan+pengingat+jatuh+tempo&entity=software&country=id)): that could mean no demand or no distribution. The SIGNAL app (Samsat Digital Nasional, the national digital vehicle registration service) has 1.78 stars from 10,317 reviews ([search](https://itunes.apple.com/search?term=pajak+kendaraan+samsat&entity=software&country=id)). The STNK validity is five years ([Wikipedia](https://id.wikipedia.org/wiki/Surat_Tanda_Nomor_Kendaraan), secondary). **Suggestion:** a recurring table (name, amount, period or due date, who pays, "paid this period", next due). Don't detect subscriptions from transactions (needs bank aggregation).
 
@@ -412,19 +419,19 @@ The question answered for each category: is it worth building in a private two-p
 
 ### 5.1 Reminders and notifications
 
-A ladder from the cheapest. Climb a rung only if the previous one proved insufficient.
+A ladder from the cheapest. Climb a rung only if the previous one proved insufficient. The couple look at WhatsApp, Gmail, Google Calendar and Google Keep (decided #6); the verdicts below follow that. Order of use: (1) the "This week" screen, (2) `.ics` for Google Calendar, (3) a user-triggered WhatsApp share, (4) a weekly Gmail digest, (5) Google Keep only through the phone's share sheet. Telegram and push drop to the bottom because the couple do not look at them.
 
 | # | Channel | Infrastructure | Platform facts | Verdict |
 |---|---|---|---|---|
 | 1 | The "This week" screen (W3) | None | – | **Start here.** The weekly session becomes the anchor (§1.2 #5) |
-| 2 | "Add to calendar" button per item (`.ics` generated on the client, with a `VALARM` alarm) | None on the server | `VEVENT`/`VTODO` and `VALARM` are defined in [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). The phone's calendar handles the reminder | **Second.** The cheapest replacement for push (brainstorm, backlog 1) |
+| 2 | "Add to calendar" button per item (`.ics` generated on the client, with a `VALARM` alarm) | None on the server | `VEVENT`/`VTODO` and `VALARM` are defined in [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). The phone's calendar handles the reminder | **Second.** The cheapest replacement for push (brainstorm, backlog 1). Matches Google Calendar, a channel in use. The same on Android and iPhone because Google Calendar syncs per Google account |
 | 3 | Subscribed `.ics` feed | Read-only endpoint | Google only accepts URL subscriptions through a computer browser; the refresh interval isn't published ([Google](https://support.google.com/calendar/answer/37100?hl=en)). Apple Calendar on Mac has an Auto-refresh menu ([Apple](https://support.apple.com/en-au/guide/calendar/icl1022/16.0/mac/26)); subscribed calendars are read-only | Later (§6). Don't promise instant sync |
-| 4 | Share to WhatsApp (button, user-triggered) | None | The `wa.me/<number>?text=` format from the [WhatsApp FAQ](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/). The text is filled in the chat; whether it is sent automatically is not confirmed (the FAQ is truncated): `[UNVERIFIED]`, test on a phone | Good for sharing the rundown and summaries, not for automatic reminders |
-| 5 | Telegram bot from cron | Cron + secret | Bot messages are free; in a single chat avoid more than one message per second ([Telegram FAQ](https://core.telegram.org/bots/faq)). The user has to start a chat with the bot (inference; not checked in a document) | Easy, but only if you two actually use Telegram |
-| 6 | Email digest | Cron + email | Sending to verified destination addresses is free on the free account on all plans; sending to arbitrary addresses is Paid only; Email Service is still Beta ([Email Routing](https://developers.cloudflare.com/email-routing/), [Email Service pricing](https://developers.cloudflare.com/email-service/platform/pricing/)). Whether the domain must be on Cloudflare: `[UNVERIFIED]` | A cheap option for a weekly digest |
-| 7 | Web Push | Cron + VAPID + payload encryption | On iOS only for web apps added to the Home Screen, and permission is requested through a user interaction ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). VAPID: [RFC 8292](https://www.rfc-editor.org/rfc/rfc8292.html); encryption: [RFC 8291](https://www.rfc-editor.org/rfc/rfc8291.html); the primitives are in Workers WebCrypto ([docs](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)) | Later, only if 1 to 6 fall short. Effort M |
+| 4 | Share to WhatsApp (button, user-triggered) | None | The `wa.me/<number>?text=` format from the [WhatsApp FAQ](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/). The text is filled in the chat; whether it is sent automatically is not confirmed (the FAQ is truncated): `[UNVERIFIED]`, test on a phone | A channel in use. Good for sharing the rundown and summaries, not for automatic reminders. W3 gets a "share this week as text" button, which also lets either partner send it to Google Keep through the share sheet (not tested; Keep as a share target on both phones `[UNVERIFIED]`) |
+| 5 | Telegram bot from cron | Cron + secret | Bot messages are free; in a single chat avoid more than one message per second ([Telegram FAQ](https://core.telegram.org/bots/faq)). The user has to start a chat with the bot (inference; not checked in a document) | Not a channel the couple use (decided #6): dropped from the plan |
+| 6 | Email digest | Cron + email | Sending to verified destination addresses is free on the free account on all plans; sending to arbitrary addresses is Paid only; Email Service is still Beta ([Email Routing](https://developers.cloudflare.com/email-routing/), [Email Service pricing](https://developers.cloudflare.com/email-service/platform/pricing/)). Whether the domain must be on Cloudflare: `[UNVERIFIED]` | A cheap option for a weekly digest, and Gmail is a channel in use (decided #6): the first digest channel. Both partners' addresses must be verified destinations. Whether those addresses are Gmail was not stated; the digest goes to the sign-in addresses either way |
+| 7 | Web Push | Cron + VAPID + payload encryption | On iOS only for web apps added to the Home Screen, and permission is requested through a user interaction ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). VAPID: [RFC 8292](https://www.rfc-editor.org/rfc/rfc8292.html); encryption: [RFC 8291](https://www.rfc-editor.org/rfc/rfc8291.html); the primitives are in Workers WebCrypto ([docs](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)) | Later, only if 1 to 6 fall short. Effort M. On the iPhone it works only after installing to the Home Screen, on Android also from the browser, so the two partners would get different behaviour |
 
-**Cron limits on the free plan:** 5 Cron Triggers per account (counted together with other Workers in the same account), CPU 10 ms per run, runs in UTC ([limits](https://developers.cloudflare.com/workers/platform/limits/), [cron](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). One weekly cron is enough for the digest; Sunday 20:00 WIB (Western Indonesia Time) = 13:00 UTC.
+**Cron limits on the free plan:** 5 Cron Triggers per account (counted together with other Workers in the same account), CPU 10 ms per run, runs in UTC ([limits](https://developers.cloudflare.com/workers/platform/limits/), [cron](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). One weekly cron is enough for the digest. The day and time follow the weekly session, which is not decided yet (open Q1 in §8.4); as an example, Sunday 20:00 WIB (Western Indonesia Time) = 13:00 UTC.
 
 **The nudge rule** (§1.3): at most one specific reminder tied to an event. Don't send a notification that only says "open the app". Apple HIG warns that users turn off all notifications if they are too frequent ([HIG](https://developer.apple.com/design/human-interface-guidelines/notifications)).
 
@@ -469,7 +476,7 @@ A model users already trust: Google Takeout can be scheduled every two months fo
 ### 5.5 Import
 
 - **One-time from the old spreadsheet:** a script that reads the ODS and produces SQL; the data and its output are kept outside the public repo (brainstorm §7). This is not a product feature.
-- **Generic CSV import:** one column mapping → `items` for the guest list (Joy and Zola offer something similar: [Joy](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list), [Zola](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-)) and, later, expenses. Normalise phone numbers to `+62...` (numbers are stored as numbers in the old sheet: brainstorm §1.8). Deduplicate by ID or a composite key. Effort S to M.
+- **Generic CSV import:** one column mapping → `items` for the guest list (Joy and Zola offer something similar: [Joy](https://withjoy.com/help/en/articles/8309207-importing-and-exporting-your-guest-list), [Zola](https://www.zola.com/faq/360038289992-How-do-I-add-guests-from-a-spreadsheet-to-my-guest-list-)) and, later, expenses. The RSVP import (W18) is its first user. Normalise phone numbers to `+62...` (numbers are stored as numbers in the old sheet: brainstorm §1.8). Deduplicate by ID or a composite key. Effort S to M.
 - **Bank statements:** BCA provides e-statements through myBCA, myBCA web, and KlikBCA ([BCA, 18 December 2025](https://www.bca.co.id/id/informasi/news-and-features/2025/12/18/09/09/Akses-Mutasi-Rekening-Kini-Lebih-Praktis-dan-Mudah)). The format for individual customers isn't stated, and other banks weren't checked: `[UNVERIFIED]`. Don't build a parser before there are real sample files.
 - **Import from Splitwise, YNAB, Money Manager:** CSV export documentation wasn't found: `[UNVERIFIED]`. Splitwise and YNAB have APIs ([Splitwise](https://dev.splitwise.com/), [YNAB](https://api.ynab.com/)) but that is integration, not import. Not built.
 
@@ -481,7 +488,7 @@ The sync and offline design is in brainstorm §5 (a shell with a Service Worker,
 |---|---|
 | Rundown (W20), vendor book (W11), KUA checklist (W5), "This week" (W3), guest list (W16) | Quick capture: tasks (W2), payments ticked (W13), bills ticked (H3), the *amplop* ledger during the event (W25) |
 
-iOS facts that affect the design (verified in the brainstorm, not here): Home Screen web app data isn't deleted by the 7-day ITP rule ([WebKit](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)); Background Sync isn't supported in Safari and Firefox ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)), so the outbox is only sent while the app is open. The total effort is on the platform side, not in the features.
+iOS facts that affect the design (verified in the brainstorm, not here): Home Screen web app data isn't deleted by the 7-day ITP rule ([WebKit](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)); Background Sync isn't supported in Safari and Firefox ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API)), so the outbox is only sent while the app is open. Both phones must work equally (decided #2): the iPhone partner has to install the app to the Home Screen, because that is what keeps storage from being cleared by the 7-day rule and what enables push; the Android partner is unaffected. The total effort is on the platform side, not in the features.
 
 ### 5.7 Language, dates, money, and Hijri
 
@@ -490,7 +497,7 @@ The UI is English; this section only covers how Indonesian-context values are wr
 | Topic | Result / rule | Notes |
 |---|---|---|
 | UI language | English only. Every UI string is English, kept in one TypeScript file (no i18n library, no second language). Indonesian terms that have no English equivalent (*KUA*, *seserahan*, *amplop*, *akad*) stay as proper nouns, with a gloss on first use | The operator's decision. This is separate from the `Intl` locale below, which controls only how numbers and dates are written |
-| Rupiah | `new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR"}).format(600000)` produces `Rp 600.000` with a non-breaking space; no decimals | The compact format rounds (`59 jt` for 58,500,000), don't use it for money |
+| Rupiah (the only currency for now, decided #10) | `new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR"}).format(600000)` produces `Rp 600.000` with a non-breaking space; no decimals | The compact format rounds (`59 jt` for 58,500,000), don't use it for money |
 | ISO conflict | The ISO 4217 list (SIX, published 17 September 2026) lists IDR with **minor unit 2** ([list-one.xml](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)). MDN: currency formatting uses the ISO digits by default ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat)). But the local test shows 0 decimals for IDR in `id-ID` | Don't guess the cause. The storage decision is in §6 |
 | Date | `id-ID`: `6 Okt 2026` (medium), `6 Oktober 2026` (long), `Selasa, 06 Oktober 2026` (full), `06/10/2026`. `en-ID` (tested locally): `6 Oct 2026` (medium), `Tuesday, 6 October 2026` (full) | Official writing is usually day-month name-year or dd/mm/yyyy; the official rule wasn't found: `[UNVERIFIED]`. With an English UI, use `en-ID` so month and day names are English while the day-month-year order stays |
 | Time | `12.00` with a period as the separator (`id-ID` and `en-ID`) | |
@@ -516,7 +523,7 @@ A public repo and two people's data. Two layers: what is stored, and how to prot
 | Class | Contents | Verdict |
 |---|---|---|
 | Green | Dates, document ready status, vendor names and business contacts, prices, payment schedule, notes | Store |
-| Yellow | Guest and vendor phone numbers (needed for tap-to-call), guest names, amounts of *amplop* and savings | Store, but not in the repo and not in test data |
+| Yellow | Vendor phone numbers (needed for tap-to-call), guest phone numbers (only if stored: open Q2 in §8.4), guest names, amounts of *amplop* and savings | Store, but not in the repo and not in test data |
 | Red | NIK, scans of KTP/KK/passport/*Buku Nikah*, health examination or Elsimil results, children's data, personal bank account numbers and PINs | **Don't store in the app.** Use a boolean "ready", a date, a physical location |
 
 Note: the KK contains data of family members including children, and health examination results count as "specific" (the author's reading).
@@ -533,7 +540,7 @@ Note: the KK contains data of family members including children, and health exam
 
 Rule of thumb: encryption and re-auth are different layers. The WebAuthn gate decides who opens the UI; only client-side encryption decides who reads the stored bytes. A Cloudflare Access session (if used at the entry layer) can be set between 15 minutes and one month, default 24 hours ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)).
 
-**"Private to me" items** (gift surprises, honeymoon): a study shows couples share data but expect privacy for certain kinds of content ([Jacobs et al., GROUP 2016](https://dl.eusset.eu/items/5aee07df-e566-4a00-99da-15cb6e0b986d/full), abstract). Adding it touches sync and export: private rows must be filtered on the server, not on the client. Only built if requested (§8).
+**Visibility between partners: decided, everything is visible to both (decided #4).** There are no "private to me" items (X6 is not built). A study shows couples share data but expect privacy for certain kinds of content ([Jacobs et al., GROUP 2016](https://dl.eusset.eu/items/5aee07df-e566-4a00-99da-15cb6e0b986d/full), abstract), so the consequence is stated: a surprise (a gift, a honeymoon plan) must be kept outside wp, or written without detail. In return the design is simpler: no visibility column, no server-side row filtering, and an export that holds everything. If one partner later asks for private items, the cost is a visibility column, server-side filtering for sync, export and the `.ics` feed, which is why it is not built "just in case" (§8.1).
 
 ---
 
@@ -547,7 +554,7 @@ No integration is built. What is decided now is only what's expensive to change 
 |---|---|---|---|---|
 | 1 | **ID** | Created on the client, opaque text. Use `crypto.randomUUID()` (UUID v4) | An item has an ID before the first sync; resending doesn't duplicate rows; re-imports can be deduplicated. RFC 9562 recommends UUIDv7 over v1/v6 because v4 has poor index locality, but at thousands of rows it isn't noticeable; because the ID is opaque, a new format may be mixed in later. Secret tokens (the `.ics` feed) must be random: v4 or random bytes | [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html), [MDN randomUUID](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID) (v4 only) |
 | 2 | **Time** | Instant: RFC 3339 UTC with `Z`. Date only: `YYYY-MM-DD`. Local time: a pair (local time, IANA zone name) only where local meaning matters | Matches `DTSTAMP`, `LAST-MODIFIED`, and other export formats | [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html), [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html) |
-| 3 | **Money** | Whole-rupiah integer + a currency code per row (default `IDR`), never float | The whole UI uses whole rupiah. Departs from ISO 4217 which gives IDR minor unit 2: ISO-based integrations (e.g. payment APIs that use minor units) need a ×100 conversion. The alternative: store `amount_minor` ×100 (ISO-faithful, the same shape as the Stripe API: [Stripe](https://docs.stripe.com/currencies)); more complicated for a single-currency household. Whichever is chosen, write it in the export schema | [ISO 4217 (SIX)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml); the safe integer limit 2^53-1 is far above the need ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)) |
+| 3 | **Money** | Whole-rupiah integer + a currency code per row (default `IDR`), never float | The whole UI uses whole rupiah. Departs from ISO 4217 which gives IDR minor unit 2: ISO-based integrations (e.g. payment APIs that use minor units) need a ×100 conversion. The alternative: store `amount_minor` ×100 (ISO-faithful, the same shape as the Stripe API: [Stripe](https://docs.stripe.com/currencies)); more complicated for a single-currency household. IDR is the only currency for now (decided #10), so the code is a constant in practice: it stays in the schema because the operator already decided it and it is one column, but no feature converts or sums across currencies. Whichever is chosen, write it in the export schema | [ISO 4217 (SIX)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml); the safe integer limit 2^53-1 is far above the need ([MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)) |
 | 4 | **Phone** | `+<country code><digits>` (E.164). Drop the `+` only when building the `wa.me` link | The same format for `tel:`, `wa.me`, vCard | [ITU E.164](https://www.itu.int/rec/T-REC-E.164/en); the 15-digit limit couldn't be confirmed from a primary source: `[UNVERIFIED]` |
 | 5 | **Change feed** | Per row: an ever-increasing `rev`, `updated_at`, `updated_by`, `deleted_at` (tombstone), like the brainstorm sync design. That is already a change feed that any consumer can pull (`WHERE rev > ?`). An **append-only `events` table** (a shape aligned with CloudEvents: `id`, `source`, `type`, `time`, `subject`, `data`) has its shape decided now, and is created when the first consumer appears | History before there's a consumer has low value (YAGNI). The outbox pattern: write the message in the same transaction as the data change; consumers must be idempotent by tracking IDs | [CloudEvents](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md), [outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html) |
 | 6 | **Export format** | `export.json` holds `format_version` and `$schema` (JSON Schema 2020-12); one CSV per item kind and one for `budget_entries`, with the same column names as the JSON; `calendar.ics`; `contacts.vcf`. Build JSON and CSV first (S) | JSON is lossless; CSV is convenient. RFC 4180: CSV uses CRLF and double quotes for fields containing commas, quotes, or newlines | [JSON Schema](https://json-schema.org/specification), [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) |
@@ -569,6 +576,8 @@ Not added now: an `external_refs` column or an integrations table. Adding a colu
 
 Scale: **cheap**, **medium**, **hard**, **not feasible** (for a private two-person app on the free plan).
 
+**Ranking for the channels the couple look at (decided #6):** 1. Google Calendar `.ics` (cheap; X2 first, X3 later); 2. WhatsApp click-to-chat (cheap, user-triggered); 3. Email digest to Gmail (cheap); 4. Google Keep: no integration, only the share sheet (see the Keep row); 5. Google Sheets CSV view (cheap, not a stated channel). Telegram, Web Push, Notion and the Google APIs are ranked below because no answer points to them.
+
 | Integration | Gives | How | Obstacle | Verdict | Source |
 |---|---|---|---|---|---|
 | Google Calendar: `.ics` subscription | Deadlines show up in both phones' calendars, read-only | A `text/calendar` feed at a secret URL | Google refuses subscriptions from the mobile app; refresh isn't published (§5.1) | **Cheap** | [Google](https://support.google.com/calendar/answer/37100?hl=en) |
@@ -578,12 +587,13 @@ Scale: **cheap**, **medium**, **hard**, **not feasible** (for a private two-pers
 | Google Photos | Attaching selected photos | Picker API | The Library API only has app-created items since 31 March 2025 (§5.3) | Medium (picking), **not feasible** (browsing the library) | [Google](https://developers.google.com/photos/support/updates) |
 | Google Drive | Backup target | Drive API with `drive.file` | OAuth token management | Medium | [Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth) |
 | Notion | Mirror notes or tasks | REST + internal token | Pages must be shared manually with the integration; a limit of 180 requests per minute on non-Business plans | Medium | [Notion](https://developers.notion.com/reference/request-limits) |
-| Telegram | Free notifications to two phones | `sendMessage` via HTTPS from cron | Both must use Telegram; the token is secret | **Cheap** | [Telegram](https://core.telegram.org/bots/faq) |
+| Telegram | Free notifications to two phones | `sendMessage` via HTTPS from cron | Both must use Telegram, which is not among the channels the couple look at (decided #6); the token is secret | **Cheap**, but no audience: not planned | [Telegram](https://core.telegram.org/bots/faq) |
 | WhatsApp: click-to-chat link | Opens a chat with filled-in text | `wa.me` | Only opens the chat | **Cheap** | [WhatsApp](https://faq.whatsapp.com/general/chats/how-to-use-click-to-chat/) |
 | WhatsApp Business Platform | Automatic messages | Cloud API | Per-message pricing since 1 July 2025, a number already used on WhatsApp must be removed first, opt-in is mandatory, needs a business portfolio and templates | **Hard**, not realistic for personal use | [Pricing](https://developers.facebook.com/docs/whatsapp/pricing/), [numbers](https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers), [policy](https://whatsappbusiness.com/id/policy/). A "business only" clause: `[UNVERIFIED]` |
 | Email from a Worker | A digest to two addresses | `send_email` | The destination address must be verified; Email Service is Beta | **Cheap** | [Email Service](https://developers.cloudflare.com/email-service/platform/pricing/) |
 | Web Push | Native notifications | Push API + VAPID | On iOS only from the Home Screen; the Worker has to do the encryption | Medium | [WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/) |
-| Web Share Target | Share to the app from WhatsApp, etc. | `share_target` in the manifest | Chrome 76+ Android and 89+ desktop and must be installed; WebKit bug 194593 is still open | **Cheap** on Android, **not feasible** on iOS | [Chrome](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target), [WebKit bug](https://bugs.webkit.org/show_bug.cgi?id=194593) |
+| Google Keep | Notes and lists the couple look at | No API for personal accounts: the Keep API is for Google Workspace admins and admin-enabled apps ([Google](https://workspaceupdates.googleblog.com/2021/05/keep-audit-logs-and-api.html)) | Not available to personal Google accounts; whether the couple use Workspace accounts is not known. The phone's share sheet is the only path (W3 "share as text") | **Not feasible** as an integration; share sheet only |
+| Web Share Target | Share to the app from WhatsApp, etc. | `share_target` in the manifest | Chrome 76+ Android and 89+ desktop and must be installed; WebKit bug 194593 is still open | **Cheap** on Android, **not feasible** on iOS. With one Android and one iPhone (decided #2), no feature may depend on it | [Chrome](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target), [WebKit bug](https://bugs.webkit.org/show_bug.cgi?id=194593) |
 | Indonesian bank data | Automatic transaction import | SNAP, an aggregator, or statement files | Consumer access to SNAP isn't apparent; Plaid doesn't list Indonesia (§4) | **Not feasible** automatically; manual file import medium to hard | [ASPI](https://apidevportal.aspi-indonesia.or.id/), [Plaid](https://plaid.com/docs/institutions/) |
 | QRIS | No personal data | – | A payment QR code standard, not a feed of the payer's transactions (inference; the BI page returned 404 so `[UNVERIFIED]`) | **Not feasible** | [EMVCo](https://www.emvco.com/emv-technologies/qrcodes/) |
 | National holidays | Working-day calculation | A yearly seed from the SKB | No official API | **Cheap** (manual seed) | [Setneg](https://setneg.go.id/baca/index/inilah_skb_3_menteri_libur_nasional_dan_cuti_bersama_2026) |
@@ -630,7 +640,7 @@ Each feature is scored by the author with three numbers. This is a judgement, no
 - **R (risk) 1-3:** 1 low; 2 medium (rules can go stale, money accuracy, risk of quitting); 3 high (privacy, platform dependence, big risk of quitting).
 - **Score = 2V − E − R.** Maximum 8.
 - **Tier:** score ≥ 6 = **Tier 1** (build first); 4-5 = **Tier 2**; 1-3 = **Tier 3** (postpone, build if requested); ≤ 0 = **Hand off or not built**.
-- **Exception because of deadlines:** features with a wedding-day deadline (W5, W6, W20) are scheduled by the calendar, not by score.
+- **Exception because of deadlines:** features with a wedding-day deadline (W5, W6, W20, W27) are scheduled by the calendar, not by score.
 
 | ID | Feature | V | E | R | Score | Tier |
 |---|---|---|---|---|---|---|
@@ -649,8 +659,9 @@ Each feature is scored by the author with three numbers. This is a judgement, no
 | X2 | "Add to calendar" button (`.ics`) | 4 | S | 1 | 6 | 1 |
 | H2 | Savings goal (reuse W14) | 4 | S | 1 | 6 | 1 (after the wedding) |
 | H4 | Document and vehicle renewals | 4 | S | 1 | 6 | 1 (after the wedding) |
-| W25 | *Amplop* ledger, incoming | 4 | S | 2 | 5 | 2 (validate first) |
+| W18 | RSVP CSV import | 4 | M | 1 | 5 | 2 |
 | W4 | Agreement notes | 3 | S | 1 | 4 | 2 |
+| W27 | Selectable *akad* location | 4 | S | 1 | 6 | 1, **time-bound** (together with W5) |
 | W5 | Conditional KUA checklist | 4 | M | 2 | 4 | 2, **time-bound** |
 | W9 | *Seserahan* | 3 | S | 1 | 4 | 2 |
 | W15 | Payment proof as a link | 3 | S | 1 | 4 | 2 |
@@ -662,23 +673,22 @@ Each feature is scored by the author with three numbers. This is a judgement, no
 | H9 | Document index (no scans) | 3 | S | 1 | 4 | 2 |
 | H10 | Renovation as a project (reuse) | 3 | S | 1 | 4 | 2 (if there's a renovation) |
 | W6 | Working-day calendar | 3 | S | 2 | 3 | 3, **time-bound** (together with W5) |
+| W25 | *Amplop* ledger, incoming | 3 | S | 2 | 3 | 3 (not a priority now, decided #9; validate first) |
 | H7 | Recurring chores | 3 | S | 2 | 3 | 3 |
 | H12 | People and occasions (birthdays, outgoing *kondangan*) | 3 | S | 2 | 3 | 3 (validate first) |
 | X7 | Generic CSV import | 3 | M | 1 | 3 | 3 |
-| W7 | Prenuptial route | 2 | S | 1 | 2 | 3 |
+| W7 | Prenuptial route | 2 | S | 1 | 2 | 3 (in scope, decided #11) |
 | W22 | Song list | 2 | S | 1 | 2 | 3 |
 | W23 | Night-before checklist | 2 | S | 1 | 2 | 3 |
 | H11 | Travel as a project | 2 | S | 1 | 2 | 3 |
 | H13 | "Us" timeline | 2 | S | 1 | 2 | 3 |
 | X3 | Subscribed `.ics` feed | 3 | M | 2 | 2 | 3 |
 | X5 | Weekly digest (email/Telegram/push) | 3 | M | 2 | 2 | 3 |
-| W18 | Import RSVP from an invitation service | 2 | M | 1 | 1 | 3 |
 | H1 | Shared expenses | 3 | M | 3 | 1 | 3 (high risk of quitting) |
 | W15b | Upload payment proof to R2 | 3 | L | 3 | 0 | Hand off (use a link) |
 | H9b | Document scan vault | 3 | L | 3 | 0 | Hand off |
 | H8 | Own calendar UI | 2 | L | 2 | −1 | Hand off |
-| X6 | "Private to me" items | 2 | M | 3 | −1 | Postpone; only if requested |
-| W19 | Read-only link for family/WO | 2 | M | 3 | −1 | Postpone; only if requested |
+| W19 | Read-only link for family/WO | 2 | M | 3 | −1 | Later option only (decided #5) |
 | H5 | Own shopping list | 2 | L | 3 | −2 | Hand off |
 
 Cross-cutting (`X`) features that appear in the table, with their effort and platform:
@@ -690,8 +700,8 @@ Cross-cutting (`X`) features that appear in the table, with their effort and pla
 | X3 | Subscribed `.ics` feed | M | D1 + read-only endpoint | §5.1, §6.1 |
 | X4 | Client-side search | S | client | §5.2 |
 | X5 | Weekly digest | M | cron + email, Telegram, or push | §5.1 |
-| X6 | "Private to me" items | M | D1 (server-side filtering) | §5.8 |
-| X7 | Generic CSV import | M | client | §5.5 |
+| X6 | "Private to me" items | – | Not built (decided #4) | §5.8, §8.1 |
+| X7 | Generic CSV import | M | client (its reader is built first for W18) | §5.5 |
 
 ### 7.2 The smallest data model for wedding and household
 
@@ -720,21 +730,21 @@ Cross-cutting (`X`) features that appear in the table, with their effort and pla
 | `title`, `status`, `group_key`, `note` | The name; a status from the `kind`'s own list; the group (category, phase, event, moment); free text |
 | `due_on`, `done_on` | Dates only (`YYYY-MM-DD`), see §6.1 decision 2 |
 | `amount`, `currency`, `qty` | Whole rupiah and a currency code (default `IDR`), see §6.1 decision 3; a count (pax) |
-| `who` | `a`, `b` or `both`. The Worker derives `a` and `b` from the verified Access email (an ordered pair in a Worker secret, `docs/infra.md` §6.4), so no email is stored in D1; the display names are in `settings` and never go into the repo |
+| `who` | `a`, `b` or `both`. The Worker derives `a` and `b` from the verified Access email (an ordered pair in a Worker secret, `docs/infra.md` §6.4), so no email is stored in D1; the display names are in `settings` and never go into the repo. `who` is about doing and paying, never about visibility: every row is visible to both (decided #4), so there is no visibility column |
 | `data` | JSON for what the `kind` needs beyond the columns (phone, PIC, links, start and end time) |
 | `sort` | A fractional index (`REAL`) for manual order |
 | `rev`, `created_at`, `updated_at`, `updated_by`, `deleted_at` | Sync and audit: the server counter, RFC 3339 instants, who changed it, the tombstone (§6.1 decision 5) |
 
-A project (wedding, renovation, trip) is a row with `kind = project`, and `project_id` points to it, so there's no `projects` table. `settings` is a small key/value table with the same sync columns (keys in brainstorm §7.3). `sync_state` is a one-row revision counter.
+A project (wedding, renovation, trip) is a row with `kind = project`, and `project_id` points to it, so there's no `projects` table. `settings` is a small key/value table with the same sync columns (keys in brainstorm §7.3; W27 adds `akad_venue`, `akad_place` and `same_subdistrict`, which brainstorm §7.3 does not list yet). `sync_state` is a one-row revision counter.
 
 **The `kind` registry** (one object in code, `shared/tables.ts`, used by the client and the Worker for validation, building list screens, and totals):
 
 | `kind` | Used by | Meaningful columns | Contents of `data` |
 |---|---|---|---|
 | `project` | all | `title`, `status` (active/archived) | – |
-| `task` | W2, W5, W7, W23, W24, H7 | `status` (todo/done), `due_on`, `done_on`, `who`, `group_key` (phase; `kua` for the KUA checklist), `amount`, `qty`, `note` | `start_on`, decision flag, template rules |
+| `task` | W2, W5, W7, W23, W24, H7 | `status` (todo/done), `due_on`, `done_on`, `who`, `group_key` (phase; `kua` for the KUA checklist), `amount`, `qty`, `note` | `start_on`, decision flag, template rules (W5 rules read the W27 keys in `settings`) |
 | `vendor` | W11, W12 | `group_key` (category), `status` (option/confirmed/cancelled), `amount` (quote) | `phone` (E.164), `pic`, contract link, key facts |
-| `guest` | W16, W17 | `who` (side: `a` or `b`), `group_key` (category), `qty` (pax), `status` (todo/sent/confirmed/declined) | `phone` |
+| `guest` | W16, W17, W18 | `who` (side: `a` or `b`), `group_key` (category), `qty` (pax), `status` (todo/sent/confirmed/declined) | `phone` (optional), `channel` (digital/print/both), `rsvp_qty`, `import_batch` (W18) |
 | `bridal_gift` | W9 | `group_key` (category), `amount` (price), `status` (todo/in_progress/done), `who` | `url` (purchase link) |
 | `rundown` | W20 | `group_key` (event: `engagement` or `wedding`), `due_on` (date), `status` (todo/done), `done_on`, `sort` | `start_time`, `end_time` (local time, zone in `settings`), `pic`, `highlights` |
 | `song` | W22 | `group_key` (moment), `sort` | `singer` |
@@ -750,7 +760,7 @@ A project (wedding, renovation, trip) is a row with `kind = project`, and `proje
 
 | `entry_type` | Used by | Meaningful columns | Contents of `data` |
 |---|---|---|---|
-| `planned` | W13, H10 | `title`, `group_key` (event: `engagement`, `ceremony`, `reception`, or an area of a household project), `amount` (planned), `vendor_id` (optional vendor item) | – |
+| `planned` | W13, H10, W27 | `title`, `group_key` (event: `engagement`, `ceremony`, `reception`, or an area of a household project), `amount` (planned), `vendor_id` (optional vendor item). W27 keeps one seeded row for the *akad* registration fee, amount empty while the location is undecided | – |
 | `payment` | W13 | `budget_id` (the planned row), `status` (due/paid), `amount`, `due_on`, `done_on`, `who` (payer) | proof link |
 
 Remaining amounts, totals per event and "late" marks are calculated, never stored.
@@ -781,11 +791,11 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 |---|---|---|---|
 | M0: spike | first week | Login, sync, one `kind` end to end (see `docs/infra.md` §8.2) | Two phones see the same data, with an offline edit |
 | M1: core | H-11 months | Items 1-7 above, plus the one-time import from the old spreadsheet | You two use the "This week" screen three weeks in a row (measure: both sides touch that week's list) |
-| M2: administration and vendors | done before H-6 months | W5 and W6 (KUA checklist, working days), W8, W9, W12, W4, the W24 template, search (X4) | The KUA checklist is filled in and reviewed in the weekly session |
-| M3: wedding day | done before H-3 months | W20 (offline rundown), W21, W17, W22, W23; the monthly backup routine | Wedding-day rehearsal at H-2 weeks: the rundown opens in airplane mode |
-| M4: after the event | H to H+3 months | W25, W26, W24 active; the export archive | All vendor payments settled and an export copy exists outside Cloudflare |
+| M2: administration and vendors | done before H-6 months | W27, W5 and W6 (*akad* location selector, KUA checklist, working days), W8, W9, W12, W4, the W24 template, search (X4) | The KUA checklist is filled in and reviewed in the weekly session |
+| M3: wedding day | done before H-3 months | W20 (offline rundown), W21, W17, W18 (RSVP CSV import, with its CSV reader), W22, W23; the monthly backup routine | Wedding-day rehearsal at H-2 weeks: the rundown opens in airplane mode |
+| M4: after the event | H to H+3 months | W26, W24 active; the export archive | All vendor payments settled and an export copy exists outside Cloudflare |
 | M5: household v1 | after M4 | H3, H4, H2, then H12 if validated; H7, H1, H10 if requested | Real bills and renewals are in the app and show up in "This week" |
-| Later | undated | X3 subscribed feed, X5 digest, W19 family link, X7 generic CSV import | Only if there's a real reason |
+| Later | undated | W25 *amplop* ledger (not a priority now, decided #9), X3 subscribed feed, X5 digest (Gmail first), W19 family link (later option only, decided #5), X7 generic CSV import beyond RSVPs | Only if there's a real reason |
 
 **Not a deliverable:** UI and view components, the framework choice and IaC. They are not researched here; the decisions are in `docs/infra.md` §3 and §5 (React + TypeScript + Vite, wrangler only).
 
@@ -794,12 +804,12 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 | Risk | Mitigation |
 |---|---|
 | The app is abandoned in the third to eighth week (§1.2 #11) | A small core; the weekly session as a cue; useful without a daily habit; measure "both sides touch this week" |
-| One partner feels like the manager (§1.2 #8) | Default unassigned; no assignment notifications; Partner B also picks the features |
+| One partner feels like the manager (§1.2 #8) | Default unassigned and agreed (decided #3); no assignment notifications; the partner who did not choose the app also takes part in choosing features (decided #3) |
 | Too much gets built | Tiers and the not-built list (§8); every feature passes the §1.4 test |
 | KUA rules change or differ between offices | Templates carry a verification date; "ask the KUA" items with a notes column; no hard rules |
 | Data lost or locked | Export from M1; a copy outside Cloudflare; Time Travel is only 7 days |
 | Personal data leaking through the public repo | The green/yellow/red policy (§5.8); fake test data; no NIK and no scans |
-| iOS quirks (Home Screen, no Background Sync) | Test on an iPhone from M0; don't depend on push |
+| iOS quirks (Home Screen, no Background Sync) with one Android and one iPhone (decided #2) | Test on an iPhone installed to the Home Screen and on Android from M0; both first-class; don't depend on push or Web Share Target |
 
 ---
 
@@ -809,7 +819,7 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 
 | Not built | Reason | Reconsider if |
 |---|---|---|
-| A public site, RSVP, or digital invitation | Already served by many platforms (§2.3); a public page exposes guest data and has to be guarded against enumeration (brainstorm §4). One article suggests sending printed invitations to elderly guests ([Good News from Indonesia](https://www.goodnewsfromindonesia.id/2022/11/22/mengenal-apa-itu-undangan-digital-trending-di-media-sosial)) | You two decide not to use any service |
+| A public site, RSVP, or digital invitation | Digital services and print are both supported through W16-W18 (decided #8): wp tracks and imports, it does not send. Already served by many platforms (§2.3); a public page exposes guest data and has to be guarded against enumeration (brainstorm §4). One article suggests sending printed invitations to elderly guests ([Good News from Indonesia](https://www.goodnewsfromindonesia.id/2022/11/22/mengenal-apa-itu-undangan-digital-trending-di-media-sosial)) | A service the couple use shuts down or has no usable export |
 | A vendor marketplace or recommendations | A vendor-advertising business model; the fake-lead allegation on The Knot's side (§2.1) | No |
 | A registry or gift wishlist | The *ngamplop* (giving gift envelopes) and *buwuhan* (traditional wedding contribution) traditions (§2.5); wishlists are handled by Giftster/Giftful/GoWish | No |
 | A seating chart | Fails the weekly test; single use | A reception with numbered tables and many guests |
@@ -817,6 +827,9 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 | Chat inside the app | WhatsApp already exists | No |
 | Points, streaks, rankings | Reminders hinder habit and positive reinforcement isn't effective ([Stawarz et al.](https://research-information.bris.ac.uk/en/publications/beyond-self-tracking-and-reminders-designing-smartphone-apps-that/)); chore apps feel like parenting your partner ([MIT TR](https://www.technologyreview.com/2022/05/10/1051954/chore-apps/)) | No |
 | Assigning with notifications; a "partner hasn't opened it" view | See §1.3 #3 and #4 | No |
+| "Private to me" items (X6) | Decided: everything is visible to both (decided #4); no visibility column, no server-side filtering (§5.8) | Either partner asks later |
+| Read-only link for parents or the WO (W19) | Not for now (decided #5); a privacy risk | Either of you asks |
+| Currencies other than rupiah | IDR only for now (decided #10); the currency code column stays but nothing converts | A foreign-currency cost must be tracked |
 | Automatic bank sync; subscription detection | Not feasible in Indonesia (§4, §6.3) | A proven consumer aggregator appears |
 | Own shopping list and calendar UI | Handed off (H5, H8) | The app in use shuts down |
 | A vault for KTP/KK/passport scans | The riskiest data; Bitwarden already exists (§4.2 H9) | There's a real need and you two are ready to bear client-side encryption and recovery keys |
@@ -835,7 +848,7 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 1. **Data model** (§7.2). **Decided by the operator:** one generic `items` table plus a separate `budget_entries` table only for the budget and its payments. This keeps small household features cheap.
 2. **Core scope** (§7.3). **Decided by the operator:** model + "This week" + tasks + budget/payments + vendors + guests + export. Everything else waits.
 3. **Money representation** (§6.1 #3). **Decided by the operator:** whole rupiah as an integer plus a currency code (the ×100 alternative to match ISO 4217 was dropped). It is written in the export schema before the first data.
-4. **Reminder strategy** (§5.1). Recommendation: the "This week" screen + `.ics` per item first; one weekly digest later; push only if proven necessary.
+4. **Reminder strategy** (§5.1). Recommendation, matched to the channels the couple look at (decided #6): the "This week" screen + `.ics` per item (Google Calendar) first; a WhatsApp share of the week; one weekly Gmail digest later; push only if proven necessary.
 5. **Sensitive document policy** (§5.8). Recommendation: no NIK and no scans; a document index only; scans in Bitwarden or Drive.
 
 ### 8.3 Questions for the operator
@@ -848,19 +861,31 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 
 ### 8.4 Questions for you two
 
-1. The *akad* at the KUA or outside, and in the home sub-district of one of you or elsewhere (*numpang nikah*, marrying at a KUA away from home)? (Rp0 or Rp600,000; a recommendation needed or not.)
-2. Android or iPhone for each of you? (Push, installing to the Home Screen.)
-3. Who holds what right now? Do you agree with the default "unassigned, take with one tap"? Does Partner B also pick the features? A partner who didn't choose the app is a quitting risk (§1.2 #8).
-4. Do you need "private to me" items (gift surprises, honeymoon), or can everything be visible?
-5. Do parents or the WO need read-only access, and to what?
-6. Which reminder channel do you actually look at every day: WhatsApp, email, the phone calendar?
-7. The day and time of the weekly session, and do you want to make it a fixed ritual? (An event-based cue: §1.2 #5.)
-8. Invitations: which digital service, or print? Do you need a CSV import of RSVP results?
-9. *Amplop* and *kondangan*: is recording incoming and outgoing *amplop* really a need? How often do you attend *kondangan*, and is there an *arisan* you run? (Demand not yet validated: W25, H12.)
-10. After the wedding, which comes first: bills and vehicle tax, savings goals, shared expenses, or something else? Which part is already sorted in the bank app (Kantong, bluGether)?
-11. Do you need a currency other than rupiah (honeymoon)?
-12. Prenuptial agreement: relevant for you, or skip W7?
-13. Do you need to record guests' phone numbers in the app (the consequence is they fall in the yellow class in §5.8)?
+**Decided** (the couple's answers, recorded 2026-10-06):
+
+| # | Decision | Date | Sections affected |
+|---|---|---|---|
+| 1 | The *akad* location is not decided. It is a selectable field (at the KUA or outside it; the home sub-district of Partner A, of Partner B, or elsewhere), and the checklist and the cost estimate follow the selection (new feature W27) | 2026-10-06 | §3.2 (W5, W27), §3.4 (W13), §3.8, §7.1, §7.2, §7.3, Appendix A |
+| 2 | One partner uses Android, the other an iPhone. Both are first-class; on iOS, installing to the Home Screen is required for push and long-lived storage | 2026-10-06 | §1.1, §5.1, §5.6, §6.3, §7.4 |
+| 3 | Items are unassigned by default, taken with one tap. The partner who did not choose the app also takes part in choosing features | 2026-10-06 | §1.3, §7.4 |
+| 4 | Everything is visible to both partners; no "private to me" items (X6 not built) | 2026-10-06 | §1.1, §1.3, §5.8, §7.1, §7.2, §8.1 |
+| 5 | No read-only access for parents or the wedding organiser for now; W19 stays a later option only | 2026-10-06 | §1.1, §3.5 (W19), §7.1, §7.3, §8.1 |
+| 6 | The reminder channels the couple look at are WhatsApp, Gmail, Google Calendar and Google Keep | 2026-10-06 | Summary, §1.3, §5.1, §6.3, §8.2 |
+| 7 | The day and time of the weekly session are not decided (its status as a fixed ritual is open: Q1). The cron time is an example only | 2026-10-06 | §5.1 |
+| 8 | Invitations: both digital services and print are supported, plus a CSV import of RSVP results (W18) | 2026-10-06 | §3.5 (W16, W17, W18), §5.5, §7.1, §7.2, §7.3, §8.1 |
+| 9 | The *amplop* and *kondangan* ledger is not a priority now; kept open for later (W25 moved to Tier 3 and "Later") | 2026-10-06 | §3.7 (W25), §7.1, §7.3 |
+| 10 | Each partner uses several banks and one investment app; savings and investment tracking lives partly outside wp. Currency is IDR only for now | 2026-10-06 | §3.4 (W14), §4.2 (H1, H2), §5.7, §6.1, §8.1 |
+| 11 | The prenuptial agreement stays in scope (W7) | 2026-10-06 | §3.2 (W7), §7.1 |
+| 12 | Whether guests' phone numbers are stored in the app stays open for later (Q2); until then the features work with and without them | 2026-10-06 | §3.5 (W16, W17, W18), §5.8 |
+
+**Still open:**
+
+1. **Weekly session:** the day and time, and whether it is a fixed ritual. (An event-based cue: §1.2 #5. Decides the digest time in §5.1.)
+2. **Guests' phone numbers in the app:** stored or not. (If stored they fall in the yellow class in §5.8. If not, W17 opens WhatsApp's chooser and W18 matches by name.)
+3. ***Amplop* and *kondangan*:** is recording incoming and outgoing *amplop* really a need? How often do you attend *kondangan*, and is there an *arisan* you run? (Demand not yet validated: W25, H12.)
+4. **After the wedding, which comes first:** bills and vehicle tax, savings goals, shared expenses, or something else? (Decides the order inside M5. Decision #10 only says that part of the money lives outside wp.)
+5. **Invitations in detail:** which digital service, and do you want a postal-address field for print invitations? (The service decides the CSV columns of W18, which maps columns so it works with any service; an address is personal data and would join the yellow class in §5.8.)
+6. **The *akad* location itself:** venue and place are still to be chosen in W27. (It has to be settled before the KUA registration window in §3.8, and it fixes the fee and the letters.)
 
 ---
 
@@ -877,5 +902,6 @@ The reason: those are the five things that drive the weekly session (§1.2), all
 - **The PDP Law (UU PDP):** the article text was read from a third-party site; the implementing regulation and the supervisory body weren't found; no official guidance on storing NIK; the interpretation of the household exception is the author's reading, not legal advice.
 - **Indonesian money apps:** member limits and export of Jago/blu; Finansialku; Sribuu; other banks; Indonesian bank support in Wallet.
 - **Integration:** the `.ics` refresh interval of Google; whether Google honours `REFRESH-INTERVAL`; whether R2 needs a payment method; whether verified email needs a domain; the WhatsApp "business only" clause; Firefox `share_target` support; WebAuthn `prf` support per browser; export documentation for Splitwise/YNAB/Money Manager; the classification of Calendar scopes; QRIS on the BI page.
+- **Decisions of 2026-10-06:** the reading of PMA Article 17 for an *akad* in one partner's own sub-district; whether *numpang nikah* at a KUA changes the fee; whether Excel in an Indonesian regional setting writes `;`; how to detect an installed iOS web app; Google Keep as a share target on both phones; whether the couple's Google accounts are Workspace accounts (decides if the Keep API applies); the columns exported by the invitation service the couple will choose.
 - **Review quotes** were read through a summarising fetch tool; the quotes and figures this document leans on were rechecked on the source pages, and the rest are marked according to their level of verification.
 - **Review and rating figures** are a snapshot of 6 October 2026 and change every day.
