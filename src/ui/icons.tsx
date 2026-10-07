@@ -40,6 +40,47 @@ const paths = {
       <path d="M9.3 8.6c.2 2.9 2.6 5.5 5.6 5.9l1-1.4-1.9-1-.9.8a5 5 0 0 1-2.2-2.2l.8-.9-1-1.9z" />
     </>
   ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+  edit: (
+    <>
+      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" />
+      <path d="m14.5 7.5 3 3" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" />
+    </>
+  ),
+  device: (
+    <>
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M11 18h2" />
+    </>
+  ),
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />,
+  calendar: (
+    <>
+      <rect x="4" y="5.5" width="16" height="14.5" rx="2" />
+      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+    </>
+  ),
+  flag: <path d="M6 21V4M6 5h11l-2 4 2 4H6" />,
+  shop: <path d="m4 9 1.5-5h13L20 9M4 9v11h16V9M4 9h16M9.5 20v-5h5v5" />,
+  task: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </>
+  ),
+  download: <path d="M12 4v11M7.5 11 12 15.5l4.5-4.5M5 20h14" />,
+  door: <path d="M14 4H6v16h8M10 12h10M17 8l3 4-3 4" />,
+  up: <path d="m6 15 6-6 6 6" />,
+  down: <path d="m6 9 6 6 6-6" />,
+  trash: <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />,
+  reset: <path d="M4 12a8 8 0 1 1 2.6 5.9M4 20v-5h5" />,
   settings: (
     <>
       <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />

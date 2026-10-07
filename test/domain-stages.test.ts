@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { STAGES, routeOf } from "../src/domain/stages.ts";
+import { MONTH_MAX, STAGES_MAX, stageProblems } from "../shared/validate.ts";
+import { STAGES, addStage, canAddStage, monthStart, moveStage, parseStages, removeStage, routeOf } from "../src/domain/stages.ts";
 import { item } from "./domain-rows.ts";
 
 const ceremony = "2027-11-13";
@@ -76,4 +77,82 @@ test("tasks count under a stage by key or by name, any case, and only tasks", ()
   assert.deepEqual(by("bookings"), [2, 1]);
   assert.deepEqual(by("kua"), [1, 1]);
   assert.deepEqual(by("foundations"), [0, 0]);
+});
+
+test("the default list passes the contract check", () => {
+  assert.deepEqual(stageProblems(STAGES), []);
+});
+
+test("a stored list replaces the default and a bad or missing one falls back to it", () => {
+  const custom = [{ key: "all", name: "All of it", from: -6, to: 0 }];
+  assert.deepEqual(parseStages(JSON.stringify(custom)), custom);
+  for (const value of [null, "", "nope", "[]", JSON.stringify([{ key: "a", name: "A", from: 0, to: -1 }])]) assert.equal(parseStages(value), STAGES);
+});
+
+test("a custom list drives the route and the day stage is the one holding the ceremony month", () => {
+  const route = routeOf(ceremony, "2027-10-15", [item({ group_key: "prep" })], [
+    { key: "prep", name: "Prepare", from: -3, to: -2 },
+    { key: "wrap", name: "The last stretch", from: -1, to: 0 },
+    { key: "after", name: "After", from: 1, to: 2 },
+  ]);
+  assert.deepEqual(route.map((station) => [station.key, station.state, station.day]), [
+    ["prep", "past", false],
+    ["wrap", "now", true],
+    ["after", "next", false],
+  ]);
+  assert.equal(route[0].total, 1);
+  assert.deepEqual([route[2].start, route[2].end], ["2027-12-01", "2028-01-31"]);
+});
+
+test("a list with a gap keeps the gap and the first later stage is next", () => {
+  const route = routeOf(ceremony, "2027-05-01", [], [
+    { key: "a", name: "A", from: -10, to: -9 },
+    { key: "b", name: "B", from: -3, to: -2 },
+    { key: "c", name: "C", from: 0, to: 0 },
+  ]);
+  assert.deepEqual(route.map((station) => station.state), ["past", "next", "later"]);
+});
+
+test("adding a stage appends one month after the last and keeps keys and names unique", () => {
+  const added = addStage(STAGES);
+  assert.deepEqual(added.at(-1), { key: "stage_1", name: "New stage", from: 1, to: 1 });
+  assert.deepEqual(stageProblems(added), []);
+  const twice = addStage(addStage(STAGES));
+  assert.deepEqual(twice.slice(-2).map((stage) => [stage.key, stage.name, stage.from]), [["stage_1", "New stage", 1], ["stage_2", "New stage 2", 2]]);
+  assert.deepEqual(stageProblems(twice), []);
+  const clash = addStage([{ key: "stage_1", name: "new stage", from: -2, to: -1 }]);
+  assert.deepEqual([clash[1].key, clash[1].name], ["stage_2", "New stage 2"]);
+});
+
+test("a stage cannot be added past the last month or past the cap", () => {
+  const full = Array.from({ length: STAGES_MAX }, (_, i) => ({ key: `s${i}`, name: `S${i}`, from: i - 20, to: i - 20 }));
+  const ends = [{ key: "z", name: "Z", from: -2, to: MONTH_MAX }];
+  assert.equal(canAddStage(STAGES), true);
+  assert.equal(canAddStage(full), false);
+  assert.equal(canAddStage(ends), false);
+  assert.deepEqual(addStage(full), full);
+  assert.deepEqual(addStage(ends), ends);
+});
+
+test("removing keeps at least one stage", () => {
+  assert.deepEqual(removeStage(STAGES, 0).map((stage) => stage.key), STAGES.slice(1).map((stage) => stage.key));
+  const one = [STAGES[0]];
+  assert.deepEqual(removeStage(one, 0), one);
+});
+
+test("moving a stage swaps its name with the neighbour and leaves the month ranges in place", () => {
+  const moved = moveStage(STAGES, 1, -1);
+  assert.deepEqual(moved.slice(0, 2).map((stage) => [stage.key, stage.from, stage.to]), [["bookings", -17, -14], ["foundations", -13, -11]]);
+  assert.deepEqual(stageProblems(moved), []);
+  assert.deepEqual(moveStage(STAGES, 0, -1), [...STAGES]);
+  assert.deepEqual(moveStage(STAGES, STAGES.length - 1, 1), [...STAGES]);
+  assert.deepEqual(moveStage(moveStage(STAGES, 2, 1), 3, -1), [...STAGES]);
+});
+
+test("a month offset gives the first day of that month, across a year end", () => {
+  assert.equal(monthStart("2027-11-13", 0), "2027-11-01");
+  assert.equal(monthStart("2027-11-13", -17), "2026-06-01");
+  assert.equal(monthStart("2027-02-01", -2), "2026-12-01");
+  assert.equal(monthStart("2027-11-13", 2), "2028-01-01");
+  assert.equal(monthStart("2027-11-13", 12), "2028-11-01");
 });

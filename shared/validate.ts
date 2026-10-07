@@ -13,6 +13,7 @@ const DATA_MAX = 20000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[a-z][a-z0-9_]{0,63}$/;
+const STAGE_KEY = /^[a-z][a-z0-9_]{0,31}$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const PHONE = /^\+[1-9]\d{6,14}$/;
 const DATE = /^(\d{4})-(\d\d)-(\d\d)$/;
@@ -22,6 +23,19 @@ const DECIMAL = /^(0|[1-9]\d{0,5})(\.\d{1,4})?$/;
 const URL_SHAPE = /^https?:\/\/[^\s\p{Cc}\p{Cf}\p{Cs}/?#][^\s\p{Cc}\p{Cf}\p{Cs}]*$/iu;
 const UNWANTED = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}]/u;
 const VISIBLE = /[^\p{Z}\p{C}\p{Default_Ignorable_Code_Point}\s⠀]/u;
+
+export type Stage = { key: string; name: string; from: number; to: number };
+
+export type StageProblem = {
+  index: number | null;
+  field: "key" | "name" | "from" | "to";
+  code: "shape" | "count" | "key" | "key_twice" | "name" | "name_twice" | "range" | "bounds" | "overlap";
+};
+
+export const STAGES_MAX = 12;
+export const STAGE_NAME_MAX = 40;
+export const MONTH_MIN = -36;
+export const MONTH_MAX = 12;
 
 const show = (v: unknown) => (typeof v === "string" ? JSON.stringify(v) : typeof v);
 
@@ -75,6 +89,47 @@ const isDates = (v: unknown) => {
   }
 };
 
+const STAGE_FIELDS = ["key", "name", "from", "to"];
+
+const monthOk = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= MONTH_MIN && (v as number) <= MONTH_MAX;
+
+export const stageProblems = (list: unknown): StageProblem[] => {
+  if (!Array.isArray(list) || list.length < 1 || list.length > STAGES_MAX) return [{ index: null, field: "name", code: "count" }];
+  const problems: StageProblem[] = [];
+  const keys = new Set<string>();
+  const names = new Set<string>();
+  let previous: number | null = null;
+  for (const [index, stage] of list.entries()) {
+    if (!isPlain(stage) || Object.keys(stage).length !== STAGE_FIELDS.length || !STAGE_FIELDS.every((field) => Object.hasOwn(stage, field))) {
+      problems.push({ index, field: "name", code: "shape" });
+      continue;
+    }
+    const { key, name, from, to } = stage;
+    if (typeof key !== "string" || !STAGE_KEY.test(key)) problems.push({ index, field: "key", code: "key" });
+    else if (keys.has(key)) problems.push({ index, field: "key", code: "key_twice" });
+    else keys.add(key);
+    if (typeof name !== "string" || name !== name.trim() || !isText(name, STAGE_NAME_MAX, false)) problems.push({ index, field: "name", code: "name" });
+    else if (names.has(name.toLowerCase())) problems.push({ index, field: "name", code: "name_twice" });
+    else names.add(name.toLowerCase());
+    if (!monthOk(from)) problems.push({ index, field: "from", code: "bounds" });
+    if (!monthOk(to)) problems.push({ index, field: "to", code: "bounds" });
+    if (!monthOk(from) || !monthOk(to)) continue;
+    if (from > to) problems.push({ index, field: "to", code: "range" });
+    else if (previous !== null && from <= previous) problems.push({ index, field: "from", code: "overlap" });
+    previous = to;
+  }
+  return problems;
+};
+
+const isStages = (v: unknown) => {
+  if (typeof v !== "string") return false;
+  try {
+    return stageProblems(JSON.parse(v)).length === 0;
+  } catch {
+    return false;
+  }
+};
+
 const expected: Record<string, string> = {
   id: "a lowercase UUID",
   key: "a lowercase key such as ceremony_date",
@@ -93,6 +148,7 @@ const expected: Record<string, string> = {
   zone: "an IANA time zone such as Asia/Jakarta",
   decimal: "a positive decimal number such as 1.5",
   dates: "a JSON array of YYYY-MM-DD dates",
+  stages: `a JSON array of 1 to ${STAGES_MAX} stages, each with a unique key, a unique name of up to ${STAGE_NAME_MAX} characters and a month range from ${MONTH_MIN} to ${MONTH_MAX} that starts after the stage before`,
 };
 
 const problem = (type: Type, v: unknown): string | null => {
@@ -114,6 +170,7 @@ const problem = (type: Type, v: unknown): string | null => {
     : type === "zone" ? isZone(v)
     : type === "decimal" ? typeof v === "string" && DECIMAL.test(v) && Number(v) > 0
     : type === "dates" ? isDates(v)
+    : type === "stages" ? isStages(v)
     : isPlain(v);
   return ok ? null : `must be ${expected[type as string]}`;
 };

@@ -182,8 +182,9 @@ a {
   left: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: var(--s2) var(--safe-r) var(--safe-b) var(--safe-l);
+  grid-template-columns: 1fr 1fr 4.5rem 1fr;
+  align-items: center;
+  padding: var(--s2) var(--safe-r) calc(var(--safe-b) + var(--s1)) var(--safe-l);
   background: var(--surface);
   border-top: 1px solid var(--line);
 }
@@ -224,6 +225,23 @@ a {
   margin-left: -2.5px;
   border-radius: 50%;
   background: var(--ink);
+}
+
+.tab-add {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 6px 16px -6px color-mix(in oklch, var(--shade) 50%, transparent);
+}
+
+.tab-add svg {
+  width: 1.625rem;
+  height: 1.625rem;
+  stroke-width: 2.4;
 }
 
 .rail {
@@ -310,6 +328,12 @@ main.recovery {
     flex: 1;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .rail-add {
+    justify-content: flex-start;
+    margin-bottom: var(--s4);
+    padding: 0 var(--s3);
   }
 
   .rail a {

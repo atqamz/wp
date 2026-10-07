@@ -17,3 +17,8 @@ export const isCurrent = (item: Item, section: string) => {
   const screen = screenOf(section);
   return screen !== null && item.screens.includes(screen);
 };
+
+export const navEntries = (kind: "tabs" | "rail"): (Item | "add")[] => {
+  const list = navItems(kind);
+  return kind === "rail" ? ["add", ...list] : [...list.slice(0, 2), "add", ...list.slice(2)];
+};

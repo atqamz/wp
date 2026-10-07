@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isCurrent, navItems } from "../src/ui/nav.ts";
+import { isCurrent, navEntries, navItems } from "../src/ui/nav.ts";
 import { screenOf, screens } from "../src/ui/routes.ts";
 import type { Screen } from "../src/ui/routes.ts";
 import { text } from "../src/ui/text.ts";
@@ -58,5 +58,19 @@ test("Sync and routes that do not exist highlight nothing and open nothing", () 
   for (const section of ["nowhere", "constructor", "__proto__", "toString", "Money", "money/x"]) {
     assert.equal(screenOf(section), null, section);
     assert.deepEqual(current(section), [], section);
+  }
+});
+
+const order = (kind: "tabs" | "rail") => navEntries(kind).map((entry) => (entry === "add" ? "add" : entry.section));
+
+test("the Add button sits in the middle of the phone tab bar and first in the sidebar, in tab order", () => {
+  assert.deepEqual(order("tabs"), ["", "money", "add", "people"]);
+  assert.deepEqual(order("rail"), ["add", "", "money", "people", "settings"]);
+});
+
+test("Add is a button that is reachable on every main screen, and no destination is lost", () => {
+  for (const kind of ["tabs", "rail"] as const) {
+    assert.equal(navEntries(kind).filter((entry) => entry === "add").length, 1);
+    assert.deepEqual(navEntries(kind).filter((entry) => entry !== "add"), navItems(kind));
   }
 });

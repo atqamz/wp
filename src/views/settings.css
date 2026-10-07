@@ -1,0 +1,171 @@
+.set {
+  max-width: 40rem;
+}
+
+.set > h2:first-child {
+  margin-top: var(--s3);
+}
+
+.setl {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-group);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+
+.setl > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--row-min);
+  padding: var(--s2) var(--s1) var(--s2) var(--s4);
+}
+
+.setl > li + li {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+
+.setl .v {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 550;
+}
+
+.setl small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+  font-weight: 400;
+}
+
+.setl small.k {
+  margin: 0 0 2px;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+}
+
+.setl-two {
+  --av: 2.75rem;
+  --av-text: 0.875rem;
+}
+
+.setl > li.set-edit {
+  display: block;
+  padding: var(--s4);
+}
+
+.set-form {
+  max-width: none;
+  margin-top: 0;
+}
+
+.set-n {
+  margin: var(--s3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+}
+
+.set-block {
+  margin-top: var(--s5);
+}
+
+.stages {
+  margin-top: var(--s7);
+}
+
+.stages summary {
+  display: flex;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--row-min);
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r-group);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.stages summary::after {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: var(--s1);
+  border: solid var(--ink-2);
+  border-width: 0 2px 2px 0;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.stages[open] summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.stages summary small {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+  font-weight: 400;
+}
+
+.stages[open] summary {
+  margin-bottom: var(--s3);
+}
+
+.stage-list {
+  display: grid;
+  gap: var(--s3);
+  margin: var(--s4) 0 var(--s4);
+  padding: 0;
+  list-style: none;
+}
+
+.stage {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--s4);
+  border: 0;
+  border-radius: var(--r-group);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.stage legend {
+  max-width: 100%;
+  padding: 0 var(--s1);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.months {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--s3);
+}
+
+.stage-tools {
+  display: flex;
+  gap: var(--s1);
+}
+
+.stage-state {
+  align-self: center;
+}
+
+.out {
+  margin-top: var(--s6);
+}
+
+.out svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}

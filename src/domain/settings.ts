@@ -1,4 +1,6 @@
 import type { SettingRow } from "../../shared/tables.ts";
+import { parseStages } from "./stages.ts";
+import type { Stage } from "./stages.ts";
 
 export const DEFAULT_ZONE = "Asia/Jakarta";
 
@@ -7,6 +9,8 @@ export const settingKeys = {
   timezone: "timezone",
   partnerA: "partner_a_label",
   partnerB: "partner_b_label",
+  stages: "stages",
+  hijriOffset: "hijri_offset_days",
 } as const;
 
 export type Settings = {
@@ -14,6 +18,8 @@ export type Settings = {
   timezone: string;
   partnerA: string | null;
   partnerB: string | null;
+  stages: readonly Stage[];
+  hijriOffset: number;
 };
 
 export const readSettings = (rows: readonly SettingRow[]): Settings => {
@@ -23,5 +29,7 @@ export const readSettings = (rows: readonly SettingRow[]): Settings => {
     timezone: values.get(settingKeys.timezone) ?? DEFAULT_ZONE,
     partnerA: values.get(settingKeys.partnerA) ?? null,
     partnerB: values.get(settingKeys.partnerB) ?? null,
+    stages: parseStages(values.get(settingKeys.stages) ?? null),
+    hijriOffset: Number(values.get(settingKeys.hijriOffset) ?? 0) || 0,
   };
 };

@@ -9,6 +9,7 @@ import { Recovery } from "./ui/recovery-screen.tsx";
 import { screenOf } from "./ui/routes.ts";
 import { Shell } from "./ui/shell.tsx";
 import { text } from "./ui/text.ts";
+import { applyTheme, readTheme } from "./ui/theme.ts";
 import { Title } from "./ui/title.tsx";
 import { Connect } from "./views/connect.tsx";
 import { Denied, SignIn } from "./views/entry.tsx";
@@ -22,9 +23,11 @@ import { Tasks } from "./views/tasks.tsx";
 import "./tokens.css";
 import "./style.css";
 import "./ui/ui.css";
+import "./ui/sheet.css";
 import "./views/home.css";
 import "./views/money.css";
 import "./views/people.css";
+import "./views/settings.css";
 import "./views/entry.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
@@ -90,6 +93,8 @@ function App() {
     </Shell>
   );
 }
+
+applyTheme(readTheme());
 
 const root = createRoot(document.getElementById("root")!);
 
