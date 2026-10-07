@@ -36,6 +36,8 @@
   --focus: oklch(30% 0.06 268);
   --tint-a: oklch(86% 0.05 250);
   --tint-b: oklch(87% 0.05 350);
+  --scrim: oklch(12% 0.02 268);
+  --shade: oklch(10% 0.02 268);
   --on-tint: oklch(24% 0.04 268);
 
   --font-text: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;

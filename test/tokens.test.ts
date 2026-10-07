@@ -101,7 +101,7 @@ test("every colour token is used by some rule, and every token in a contrast pai
 test("every colour token a rule uses has a contrast pair, except the decorative line", () => {
   const pairs = new Set([...text, ...graphics].flat());
   assert.deepEqual(
-    Object.keys(themes.light).filter((name) => name !== "line" && referenced.has(name) && !pairs.has(name)),
+    Object.keys(themes.light).filter((name) => !["line", "scrim", "shade"].includes(name) && referenced.has(name) && !pairs.has(name)),
     [],
   );
 });
@@ -121,4 +121,16 @@ test("a chosen dark theme has exactly the tokens of the system dark theme, so th
 
 test("the system dark theme steps aside when light is chosen", () => {
   assert.match(css, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{/);
+});
+
+test("no colour is written outside tokens.css, so a theme change reaches every rule; only the Google button, which follows Google's brand rules, keeps its own", () => {
+  const stray = readdirSync(new URL("../src/", import.meta.url), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".css") && entry.name !== "tokens.css" && entry.name !== "entry.css")
+    .flatMap((entry) => [...readFileSync(`${entry.parentPath}/${entry.name}`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/oklch\(|#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\bhwb\(|\blab\(|\blch\(|color\(/g)].map(([match]) => `${entry.name}: ${match}`));
+  assert.deepEqual(stray, []);
+});
+
+test("the scrim and the shadow colour are the same in both themes", () => {
+  assert.deepEqual([themes.light.scrim, themes.light.shade], [themes.dark.scrim, themes.dark.shade]);
+  assert.ok(themes.light.scrim && themes.light.shade);
 });

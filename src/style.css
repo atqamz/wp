@@ -235,7 +235,7 @@ a {
   height: 3.5rem;
   padding: 0;
   border-radius: 50%;
-  box-shadow: 0 6px 16px -6px oklch(10% 0.02 268 / 0.5);
+  box-shadow: 0 6px 16px -6px color-mix(in oklch, var(--shade) 50%, transparent);
 }
 
 .tab-add svg {

@@ -25,7 +25,7 @@ html:has(dialog[open]) {
 }
 
 .add-sheet::backdrop {
-  background: oklch(12% 0.02 268 / 0.5);
+  background: color-mix(in oklch, var(--scrim, CanvasText) 50%, transparent);
 }
 
 .sheet-form {
@@ -264,7 +264,7 @@ html:has(dialog[open]) {
   color: var(--bg);
   font-size: var(--fs-meta);
   font-weight: 550;
-  box-shadow: 0 12px 30px -12px oklch(10% 0.02 268 / 0.5);
+  box-shadow: 0 12px 30px -12px color-mix(in oklch, var(--shade) 50%, transparent);
 }
 
 @media (min-width: 62.5rem) {
