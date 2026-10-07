@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ADDED_WITHIN_MS, LATELY_COUNT, lately } from "../src/domain/lately.ts";
+import { LATELY_COUNT, lately } from "../src/domain/lately.ts";
 import { entry, item, payment } from "./domain-rows.ts";
 
 const edited = { created_at: "2026-10-01T00:00:00Z" };
@@ -78,12 +78,11 @@ test("changes at the same instant sort by id, whatever the input order", () => {
   }
 });
 
-test("added means unsynced, or stored within a minute of creation", () => {
+test("added means unsynced, or never changed since the server stored it", () => {
   const created = "2026-10-05T10:00:00Z";
-  const at = (ms: number) => new Date(Date.parse(created) + ms).toISOString().replace(".000Z", "Z");
   const verb = (fields: Parameters<typeof item>[0]) => lately([item({ updated_by: "a", created_at: created, ...fields })], [])[0].verb;
-  assert.equal(verb({ updated_at: at(0) }), "added");
-  assert.equal(verb({ updated_at: at(ADDED_WITHIN_MS) }), "added");
-  assert.equal(verb({ updated_at: at(ADDED_WITHIN_MS + 1000) }), "changed");
-  assert.equal(verb({ updated_at: at(3_600_000), rev: 0 }), "added");
+  assert.equal(verb({ updated_at: created }), "added");
+  assert.equal(verb({ updated_at: "2026-10-05T10:00:01Z" }), "changed");
+  assert.equal(verb({ updated_at: "2026-10-06T10:00:00Z" }), "changed");
+  assert.equal(verb({ updated_at: "2026-10-06T10:00:00Z", rev: 0 }), "added");
 });

@@ -4,6 +4,8 @@ import { lately } from "../src/domain/lately.ts";
 import { live, overlay, toMaps } from "../src/store/outbox.ts";
 import type { Pending } from "../src/store/persistence.ts";
 import { entry, item } from "./domain-rows.ts";
+import { client, idOf, task } from "./store-client.ts";
+import { createServer } from "./store-server.ts";
 
 const empty = { items: [], budget_entries: [], settings: [] };
 const mutation = (fields: Partial<Pending>): Pending => ({
@@ -67,6 +69,16 @@ test("an unsynced create stays added however long ago it was typed, and a later 
   assert.deepEqual(recent(live(overlay(toMaps(empty), queue, "a"))), ["a ticked Typed on the train"]);
 });
 
+test("an unsynced create edited again offline is still added", () => {
+  const id = "00000000-0000-4000-8000-0000000000c3";
+  const at = "2026-10-07T08:00:00Z";
+  const queue = [
+    mutation({ op: "create", row_id: id, patch: { id, kind: "task", title: "Draft", status: "todo", created_at: at, updated_at: at }, at }),
+    mutation({ row_id: id, patch: { title: "Draft, renamed", updated_at: "2026-10-07T08:30:00Z" }, seq: 2 }),
+  ];
+  assert.deepEqual(recent(live(overlay(toMaps(empty), queue, "a"))), ["a added Draft, renamed"]);
+});
+
 test("an offline payment marked paid is credited to the signed-in person", () => {
   const line = entry({ title: "Venue", amount: 100 });
   const payment = entry({ entry_type: "payment", budget_id: line.id, title: "Down payment", status: "due", amount: 10, updated_by: "b" });
@@ -83,4 +95,23 @@ test("a row deleted offline leaves lately", () => {
   const row = item({ title: "gone", updated_by: "a" });
   const view = live(overlay(toMaps({ ...empty, items: [row] }), [mutation({ op: "delete", row_id: row.id })], "a"));
   assert.deepEqual(recent(view), []);
+});
+
+test("the store credits an offline edit and an offline create to the signed-in side", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-06T10:00:00Z") });
+  const server = createServer();
+  const other = client(server, "b");
+  await other.store.open();
+  idOf(await other.store.create("items", task("Made by the other side")));
+
+  t.mock.timers.setTime(Date.parse("2026-10-06T10:05:00Z"));
+  const mine = client(server, "a");
+  await mine.store.open();
+  server.control.down = true;
+  const [existing] = mine.store.getSnapshot().rows.items;
+  assert.equal(existing.updated_by, "b");
+  idOf(await mine.store.update("items", existing.id, { title: "Renamed offline" }));
+  idOf(await mine.store.create("items", task("Typed offline")));
+
+  assert.deepEqual(recent(mine.store.getSnapshot().rows).sort(), ["a added Typed offline", "a changed Renamed offline"]);
 });
