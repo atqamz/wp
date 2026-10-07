@@ -97,7 +97,7 @@ function Spine({ route, work }: { route: Route; work: ReactNode }) {
           </li>
         ))}
       </ol>
-      {route.stations.every((station) => station.state !== "now") && work}
+      {route.stations.every((station) => station.state !== "now") && <div className="loose">{work}</div>}
     </div>
   );
 }
@@ -185,7 +185,7 @@ export function Home() {
         ) : (
           <div className="spine">
             <h2 className="visually-hidden">{text.week.heading}</h2>
-            {work}
+            <div className="loose">{work}</div>
           </div>
         )}
         {recent.length > 0 && (

@@ -61,16 +61,16 @@
   --s8: 2.5rem;
   --s9: 3.5rem;
   --row-min: 3.75rem;
-  --target-min: 2.75rem;
+  --target-min: 44px;
   --r-control: 0.625rem;
   --r-group: 1rem;
-  --route-w: 0.25rem;
+  --route-w: 4px;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
   --tabs: 4rem;
-  --sidebar: 15rem;
+  --sidebar: min(15rem, 24vw);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-state: 200ms;
 }
