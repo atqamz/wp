@@ -33,6 +33,15 @@ test("controls that are not full rows keep a 44 px target", () => {
   assert.match(rule(".brand"), /min-width:\s*var\(--target-min\)/);
 });
 
+test("a pill is 2rem tall inside a hit area that reaches 44 px, measured from its padding box", () => {
+  const pill = /\.pill\s*\{([^}]*)\}/.exec(all)?.[1] ?? "";
+  const reach = /\.pill::after\s*\{[^}]*inset:\s*calc\(-([\d.]+)rem - ([\d.]+)px\)/.exec(all);
+  const height = Number(/min-height:\s*([\d.]+)rem/.exec(pill)?.[1]) * 16;
+  const border = Number(/border:\s*([\d.]+)px/.exec(pill)?.[1]);
+  assert.equal(Number(reach?.[2]), border);
+  assert.ok(height + 2 * Number(reach?.[1]) * 16 >= 44, `${height} + ${2 * Number(reach?.[1]) * 16}`);
+});
+
 const rule = (selector: string) => new RegExp(`${selector.replace(/[.>*[\]="():]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(all)?.[1] ?? "";
 
 test("the Add sheet locks the page without moving it, rides above the keyboard and respects the safe areas", () => {
