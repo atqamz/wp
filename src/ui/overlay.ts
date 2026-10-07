@@ -1,4 +1,9 @@
 import { useSyncExternalStore } from "react";
+import type { Field, Kind } from "../domain/draft.ts";
+
+export type SheetDraft = { input: string; kindPick: Kind | null; ignore: Field[]; edits: Record<string, string>; ownerPick: string | null };
+
+export const withSeed = (kept: string, seed: string) => [kept.trim(), seed.trim()].filter((part) => part !== "").join(" ");
 
 type State = { adding: boolean; seed: string; session: number; toast: { id: number; message: string } | null };
 
@@ -8,6 +13,7 @@ let state: State = { adding: false, seed: "", session: 0, toast: null };
 let opener: HTMLElement | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let toasts = 0;
+let kept: SheetDraft | null = null;
 const listeners = new Set<() => void>();
 
 const set = (next: Partial<State>) => {
@@ -26,6 +32,10 @@ export const overlay = {
     set({ adding: true, seed, session: state.session + 1 });
   },
   closeAdd: () => set({ adding: false }),
+  keepDraft: (draft: SheetDraft | null) => {
+    kept = draft;
+  },
+  keptDraft: () => kept,
   returnFocus: () => {
     const target = opener?.isConnected ? opener : document.querySelector<HTMLElement>("h1");
     opener = null;

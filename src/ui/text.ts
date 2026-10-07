@@ -360,7 +360,7 @@ export const text = {
       qty: "Enter a number of people, 1 or more.",
     },
     save: { task: "Add task", planned: "Add budget line", payment: "Add payment", guest: "Add guest", vendor: "Add vendor" },
-    hint: "Only the first line is needed. Dates, amounts and names are read from it. Tap a chip to fix one.",
+    hint: "Only the first line is needed. Dates, amounts and names are read from it. Tap a chip to fix one. What you type is kept until you add it.",
     added: (title: string) => `Added: ${title}`,
   },
   capture: {

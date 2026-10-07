@@ -17,7 +17,7 @@ import type { Control } from "./field.tsx";
 import { formatDay, formatMoney } from "./format.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
-import { overlay, useOverlay } from "./overlay.ts";
+import { overlay, useOverlay, withSeed } from "./overlay.ts";
 import { text } from "./text.ts";
 
 type Detail = "amount" | "due" | "line" | "group" | "phone" | "qty";
@@ -54,11 +54,12 @@ function AddForm({ seed }: { seed: string }) {
   const ids = useId();
   const form = useRef<HTMLFormElement>(null);
 
-  const [input, setInput] = useState(seed);
-  const [kindPick, setKindPick] = useState<Kind | null>(null);
-  const [ignore, setIgnore] = useState<ReadonlySet<Parsed>>(new Set());
-  const [edits, setEdits] = useState<Partial<Record<Detail, string>>>({});
-  const [ownerPick, setOwnerPick] = useState<Owner | null>(null);
+  const [start] = useState(overlay.keptDraft);
+  const [input, setInput] = useState(() => withSeed(start?.input ?? "", seed));
+  const [kindPick, setKindPick] = useState<Kind | null>(start?.kindPick ?? null);
+  const [ignore, setIgnore] = useState<ReadonlySet<Parsed>>(new Set(start?.ignore));
+  const [edits, setEdits] = useState<Partial<Record<Detail, string>>>((start?.edits ?? {}) as Partial<Record<Detail, string>>);
+  const [ownerPick, setOwnerPick] = useState<Owner | null>((start?.ownerPick ?? null) as Owner | null);
   const [open, setOpen] = useState<Detail | "owner" | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [failure, setFailure] = useState<string[]>([]);
@@ -251,12 +252,17 @@ function AddForm({ seed }: { seed: string }) {
       const result = await create();
       setFailure(failureOf(result));
       if (!result.ok) return;
+      overlay.keepDraft(null);
       overlay.announce(text.sheet.added(draft.title || (lines.find((line) => line.id === values.line)?.title ?? "")));
       overlay.closeAdd();
     });
   };
 
   const pristine = input === "" && Object.keys(edits).length === 0 && kindPick === null && ownerPick === null;
+
+  useEffect(() => {
+    overlay.keepDraft(pristine ? null : { input, kindPick, ignore: [...ignore], edits: edits as Record<string, string>, ownerPick });
+  }, [pristine, input, kindPick, ignore, edits, ownerPick]);
   const read = draft.title !== "" && draft.title !== input.trim().replace(/\s+/g, " ");
   const chips: { key: Detail | "owner"; icon: IconName; label: string; invalid: boolean }[] = [
     ...DETAILS[kind].map((detail) => ({ key: detail, icon: DETAIL_ICON[detail], label: chipText(detail), invalid: shown[detail] !== undefined })),
