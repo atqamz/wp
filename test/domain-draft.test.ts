@@ -441,6 +441,8 @@ test("phone: groups must use one separator, and a country code may stand before 
   assert.equal(phone("X +62 878-0000-1032"), "+6287800001032");
   assert.equal(phone("X 62 878 0000 1032"), "+6287800001032");
   assert.equal(phone("X 0878 0000-1032"), null);
+  assert.equal(phone("X 0812 3456 78"), null);
+  assert.equal(parseDraft("X 0812 3456 78", context()).title, "X 0812 3456 78");
   assert.equal(parseDraft("X 0878 0000-1032", context()).title, "X 0878 0000-1032");
 });
 
@@ -586,5 +588,19 @@ test("dates: every weekday and month is read in its short and long spelling", ()
     const expected = `${month >= 10 ? "2026" : "2027"}-${String(month).padStart(2, "0")}-15`;
     assert.equal(dueOf(`15 ${word}`), expected, word);
     assert.equal(dueOf(`${word} 15`), expected, word);
+  }
+});
+
+test("the table of fields a kind stores agrees with the chips and the owner group the sheet shows for that kind", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { STORED } = await import("../src/domain/draft.ts");
+  const source = readFileSync(new URL("../src/ui/add-sheet.tsx", import.meta.url), "utf8");
+  const details = /const DETAILS: [^=]*= \{([\s\S]*?)\n\};/.exec(source)?.[1] ?? "";
+  const owners = /const OWNER_KINDS: [^=]*= \[([^\]]*)\]/.exec(source)?.[1] ?? "";
+  const readInText = ["amount", "due", "phone"];
+  for (const kind of KINDS) {
+    const chips = (new RegExp(`${kind}: \\[([^\\]]*)\\]`).exec(details)?.[1] ?? "").split(",").map((word) => word.trim().replace(/"/g, "")).filter((word) => readInText.includes(word));
+    assert.deepEqual([...chips].sort(), STORED[kind].filter((field) => readInText.includes(field)).sort(), `${kind}: chips`);
+    assert.equal(owners.includes(`"${kind}"`), STORED[kind].includes("who"), `${kind}: owner group`);
   }
 });

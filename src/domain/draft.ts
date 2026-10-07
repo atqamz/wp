@@ -190,7 +190,7 @@ const lineOf = (input: string, lines: readonly Line[]): string | null => {
   return hits.sort((a, b) => b.size - a.size)[0]?.id ?? null;
 };
 
-const STORED: Record<Kind, readonly Field[]> = {
+export const STORED: Record<Kind, readonly Field[]> = {
   task: ["amount", "due", "who"],
   planned: ["amount"],
   payment: ["amount", "due", "who"],
