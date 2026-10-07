@@ -56,9 +56,15 @@ export type Station = Stage & { start: string; end: string; state: StageState; d
 
 const day = (month: number, date: number) => new Date(Date.UTC(Math.floor(month / 12), month % 12, date)).toISOString().slice(0, 10);
 
-export const routeOf = (ceremony: string, today: string, tasks: readonly ItemRow[], stages: readonly Stage[] = STAGES): Station[] => {
+const anchorOf = (ceremony: string) => {
   const [year, month] = ceremony.split("-").map(Number);
-  const anchor = year * 12 + month - 1;
+  return year * 12 + month - 1;
+};
+
+export const monthStart = (ceremony: string, offset: number) => day(anchorOf(ceremony) + offset, 1);
+
+export const routeOf = (ceremony: string, today: string, tasks: readonly ItemRow[], stages: readonly Stage[] = STAGES): Station[] => {
+  const anchor = anchorOf(ceremony);
   const own = (stage: Stage) =>
     tasks.filter((task) => {
       const group = task.group_key?.trim().toLowerCase();

@@ -523,6 +523,13 @@ progress::-moz-progress-bar {
   list-style: none;
 }
 
+.links svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: var(--s3);
+}
+
 .links a {
   display: flex;
   align-items: center;

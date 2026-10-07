@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MONTH_MAX, STAGES_MAX, stageProblems } from "../shared/validate.ts";
-import { STAGES, addStage, canAddStage, moveStage, parseStages, removeStage, routeOf } from "../src/domain/stages.ts";
+import { STAGES, addStage, canAddStage, monthStart, moveStage, parseStages, removeStage, routeOf } from "../src/domain/stages.ts";
 import { item } from "./domain-rows.ts";
 
 const ceremony = "2027-11-13";
@@ -147,4 +147,12 @@ test("moving a stage swaps its name with the neighbour and leaves the month rang
   assert.deepEqual(moveStage(STAGES, 0, -1), [...STAGES]);
   assert.deepEqual(moveStage(STAGES, STAGES.length - 1, 1), [...STAGES]);
   assert.deepEqual(moveStage(moveStage(STAGES, 2, 1), 3, -1), [...STAGES]);
+});
+
+test("a month offset gives the first day of that month, across a year end", () => {
+  assert.equal(monthStart("2027-11-13", 0), "2027-11-01");
+  assert.equal(monthStart("2027-11-13", -17), "2026-06-01");
+  assert.equal(monthStart("2027-02-01", -2), "2026-12-01");
+  assert.equal(monthStart("2027-11-13", 2), "2028-01-01");
+  assert.equal(monthStart("2027-11-13", 12), "2028-11-01");
 });

@@ -27,6 +27,7 @@ import "./ui/sheet.css";
 import "./views/home.css";
 import "./views/money.css";
 import "./views/people.css";
+import "./views/settings.css";
 import "./views/entry.css";
 
 function Page({ section, id }: { section: string; id?: string }) {

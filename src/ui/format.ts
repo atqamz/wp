@@ -31,6 +31,8 @@ export const formatLong = (date: string) => long.format(at(date));
 
 export const formatMonths = (start: string, end: string) => months.formatRange(at(start), at(end));
 
+export const formatMonth = (date: string) => months.format(at(date));
+
 export const formatStamp = (instant: string, zone: string) =>
   new Intl.DateTimeFormat(locale, {
     weekday: "short",
