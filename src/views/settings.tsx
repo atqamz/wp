@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { zoneSupported } from "../domain/dates.ts";
-import { HIJRI_OFFSETS, hijriOf } from "../domain/hijri.ts";
+import { hijriChoices, hijriOf } from "../domain/hijri.ts";
 import { DEFAULT_ZONE, settingKeys } from "../domain/settings.ts";
 import { useSettings } from "../hooks/use-plan.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
@@ -96,7 +96,7 @@ export function Settings() {
                 required: true,
                 choice: true,
                 value: String(settings.hijriOffset),
-                options: HIJRI_OFFSETS.map((offset) => ({ value: String(offset), label: text.settings.hijriOffset[String(offset) as "-1" | "0" | "1"] })),
+                options: hijriChoices(settings.hijriOffset).map((offset) => ({ value: String(offset), label: text.settings.hijriOffset[String(offset) as keyof typeof text.settings.hijriOffset] })),
                 hint: hijri === null ? text.settings.hijriUnavailable : text.settings.hijriNote,
                 onChange: chooseOffset,
               }}

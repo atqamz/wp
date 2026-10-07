@@ -265,7 +265,7 @@ export const text = {
     hijriNote: "Umm al-Qura calendar. It can differ by a day from local announcements, so adjust it here if yours does.",
     hijriUnavailable: "This browser cannot show Hijri dates.",
     hijriAdjust: "Adjust the Hijri date",
-    hijriOffset: { "-1": "A day earlier", "0": "As calculated", "1": "A day later" },
+    hijriOffset: { "-2": "Two days earlier", "-1": "A day earlier", "0": "As calculated", "1": "A day later", "2": "Two days later" },
     lookLabel: "Appearance",
     lookNote: "Kept on this device only.",
     theme: { system: "Match this device", light: "Light", dark: "Dark" },
