@@ -89,15 +89,12 @@ test("delete hides the row locally and undo brings it back", async () => {
   assert.deepEqual(titles(store.getSnapshot().rows.items), ["Book a hall"]);
 });
 
-test("settings are created once, then updated", async () => {
+test("settings are created once and a second write to the same key is folded into it", async () => {
   const { store, persistence } = await offline();
   idOf(await store.setSetting("partner_a_label", "Sam"));
   idOf(await store.setSetting("partner_a_label", "Alex"));
   const { outbox } = await persistence.load();
-  assert.deepEqual(outbox.map((entry) => [entry.op, entry.row_id, entry.patch.value]), [
-    ["create", "partner_a_label", "Sam"],
-    ["update", "partner_a_label", "Alex"],
-  ]);
+  assert.deepEqual(outbox.map((entry) => [entry.op, entry.row_id, entry.patch.value]), [["create", "partner_a_label", "Alex"]]);
   assert.equal(store.getSnapshot().rows.settings[0].value, "Alex");
   assert.equal((await store.remove("settings", "partner_a_label")).ok, false);
 });

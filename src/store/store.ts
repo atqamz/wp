@@ -49,6 +49,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
   let loaded = false;
   let attempted = false;
   let nextSeq = 1;
+  let sending: ReadonlySet<number> = new Set();
   let running: Promise<void> | null = null;
   let again = false;
   let snapshot: Snapshot = { ready: false, me, rows: live(base), pending: 0, rejected: [], link, storage, notice };
@@ -161,7 +162,13 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       const queue = outbox.filter((entry) => !entry.rejected);
       if (queue.length === 0) break;
       const batch = takeBatch(queue);
-      const res = await api.push(batch.map(wire));
+      sending = new Set(batch.map((entry) => entry.seq));
+      let res: Awaited<ReturnType<Api["push"]>>;
+      try {
+        res = await api.push(batch.map(wire));
+      } finally {
+        sending = new Set();
+      }
       if (res.kind === "ok") {
         if ((await reconcile(res.body, batch.length)) === "reset") continue;
         const rows = newer(base, res.body.rows);
@@ -221,9 +228,31 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     });
   };
 
+  const fold = async (earlier: Pending, mutation: Omit<Pending, "seq">): Promise<Written> => {
+    const merged: Pending = { ...earlier, patch: { ...earlier.patch, ...mutation.patch }, at: mutation.at };
+    const errors = validateMutation(wire(merged));
+    if (errors.length > 0) return { ok: false, errors };
+    outbox = outbox.map((entry) => (entry === earlier ? merged : entry));
+    emit();
+    try {
+      await persist({ outbox: { put: [merged] } });
+    } catch {
+      outbox = outbox.map((entry) => (entry === merged ? earlier : entry));
+      emit();
+      return unsaved;
+    }
+    if (link !== "expired") void sync();
+    return { ok: true, id: mutation.row_id };
+  };
+
   const enqueue = async (mutation: Omit<Pending, "seq">): Promise<Written> => {
     const errors = validateMutation(wire(mutation));
     if (errors.length > 0) return { ok: false, errors };
+    const earlier =
+      mutation.table === "settings" && mutation.op === "update"
+        ? outbox.find((entry) => entry.table === "settings" && entry.row_id === mutation.row_id && entry.op !== "delete" && !entry.rejected && !sending.has(entry.seq))
+        : undefined;
+    if (earlier) return fold(earlier, mutation);
     const seq = Math.max(nextSeq, Date.now() * 1000 + Math.floor(Math.random() * 1000));
     nextSeq = seq + 1;
     const entry = { ...mutation, seq };
