@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { STORED, draftFor, fallbacks, parseDraft } from "../src/domain/draft.ts";
+import { STORED, blank, draftFor, fallbacks, parseDraft } from "../src/domain/draft.ts";
 import type { Context, Field, Kind } from "../src/domain/draft.ts";
 
 const KINDS: readonly Kind[] = ["task", "planned", "payment", "guest", "vendor"];
@@ -186,6 +186,13 @@ const FIELDS: readonly Field[] = ["amount", "due", "who", "phone"];
 
 const UNIT_OR_MARK = /(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])|\brp\.?\s*\d|\d[.,]\d{3}/iu;
 
+const crossed: string[] = [];
+
+const watch: typeof blank = (state, start, end, mark) => {
+  if (mark === state.gone && state.hold.subarray(start, end).includes(1)) crossed.push(`${start}-${end}`);
+  blank(state, start, end, mark);
+};
+
 const typed = (text: string) => [...text].filter((char) => /[\p{L}\p{N}]/u.test(char)).join("");
 
 test("fuzz with a fixed seed: no amount from digits alone, nothing invented or lost, nothing a kind cannot store, no marker, and no call near a hang", () => {
@@ -204,8 +211,9 @@ test("fuzz with a fixed seed: no amount from digits alone, nothing invented or l
       for (const kind of [...KINDS, null] as const) {
         inputs++;
         const started = performance.now();
-        const { draft, kind: chosen } = draftFor(text, ctx, ignore, kind);
+        const { draft, kind: chosen } = draftFor(text, ctx, ignore, kind, watch);
         const where = `${kind ?? "inferred"} (${chosen}) ignoring ${[...ignore].join(",") || "nothing"}: ${JSON.stringify(text)}`;
+        assert.deepEqual(crossed.splice(0), [], `a read span covers a hidden phone: ${where}`);
         assert.equal(fallbacks.count, before, `the exit check fired, so a parser bug lost typed text: ${where}`);
         assert.ok(included(draft.title, text), `nothing invented: ${where} -> ${JSON.stringify(draft.title)}`);
         assert.ok(!draft.title.includes("") || text.includes(""), `no marker: ${where}`);
