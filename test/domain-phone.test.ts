@@ -354,3 +354,11 @@ test("every lead word before and after every phone form, with a read piece on th
   assert.ok(seen > 30_000);
   assert.equal(fallbacks.count, before, "the exit check never fires on these");
 });
+
+test("a full stop or a comma after a phone stays in the name, and a read piece leaves a space where it stood", () => {
+  const title = (text: string, kind: Kind) => draftFor(text, context, new Set(), kind).draft.title;
+  assert.equal(title("Call 0812 3456 7890.", "vendor"), "Call.");
+  assert.equal(title("Call 0812 3456 7890, then", "vendor"), "Call, then");
+  assert.equal(title("Call 0812 3456 7890.", "task"), "Call 0812 3456 7890.");
+  assert.equal(title("a/5 jt/b", "task"), "a/ /b");
+});
