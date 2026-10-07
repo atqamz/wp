@@ -1,8 +1,9 @@
 const paths = {
-  week: (
+  home: (
     <>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M3 10h18M8 3v4M16 3v4" />
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8" />
     </>
   ),
   tasks: (
@@ -31,6 +32,19 @@ const paths = {
       <path d="M17.5 14.2c2.6.3 4 2.2 4 5.3" />
     </>
   ),
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  late: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7.5v5M12 16h.01" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.2-1.5 1.2-2-1.5L6 20.5z" />
+      <path d="M9 8.5h6M9 12h6" />
+    </>
+  ),
   settings: (
     <>
       <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
@@ -51,7 +65,7 @@ export function Icon({ name }: { name: IconName }) {
       height="24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >

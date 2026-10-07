@@ -17,8 +17,10 @@ import { GenericList } from "./views/generic-list.tsx";
 import { Home } from "./views/home.tsx";
 import { Settings } from "./views/settings.tsx";
 import { Sync } from "./views/sync.tsx";
+import "./tokens.css";
 import "./style.css";
 import "./ui/ui.css";
+import "./views/home.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
   const listed = listViews.find((name) => views[name].route === section);

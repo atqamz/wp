@@ -107,11 +107,11 @@ export function Budget() {
         <section key={group.key} aria-labelledby={`group-${index}`}>
           <h2 id={`group-${index}`}>{text.event[group.key as keyof typeof text.event] ?? group.key}</h2>
           <Summary totals={group} lines={group.lines.length} />
-          <ul className="lines">
+          <ul className="rows">
             {group.lines.map((line) => (
-              <li key={line.row.id} className="line">
-                <div className="line-row">
-                  <a className="line-main" href={`#/budget/${line.row.id}`}>
+              <li key={line.row.id}>
+                <div className="row">
+                  <a className="row-b" href={`#/budget/${line.row.id}`}>
                     <span className="title">{line.row.title}</span>
                     <span className="meta">
                       <span>{line.planned === null ? text.notSet : formatMoney(line.planned)}</span>
@@ -123,7 +123,7 @@ export function Budget() {
                   </a>
                 </div>
                 {line.payments.length > 0 && (
-                  <ul className="lines nested">
+                  <ul className="rows nested">
                     {line.payments.map((payment) => (
                       <PaymentLine key={payment.id} payment={payment} />
                     ))}

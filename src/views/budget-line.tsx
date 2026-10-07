@@ -50,7 +50,7 @@ export function BudgetLine({ id }: { id: string }) {
         {payments.length === 0 ? (
           <p className="empty">{text.empty.payments}</p>
         ) : (
-          <ul className="lines">
+          <ul className="rows">
             {payments.map((payment) => (
               <PaymentLine key={payment.id} payment={payment} />
             ))}

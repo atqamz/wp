@@ -45,7 +45,7 @@ export function GenericList({ name }: { name: ListName }) {
       {rows.length === 0 ? (
         <p className="empty">{text.empty[name]}</p>
       ) : (
-        <ul className="lines">
+        <ul className="rows">
           {rows.map((row) => (
             <ItemLine key={row.id} name={name} row={row} />
           ))}
