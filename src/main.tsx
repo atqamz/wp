@@ -43,6 +43,8 @@ function Page({ section, id }: { section: string; id?: string }) {
       return <Sync />;
     case null:
       return <Title>{text.notFound}</Title>;
+    default:
+      return screen satisfies never;
   }
 }
 
@@ -51,12 +53,16 @@ function App() {
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
   const first = useRef(true);
-  const split = useRef<Element | null>(null);
+  const last = useRef<{ section: string; id?: string; split: Element | null }>({ section, split: null });
 
   useEffect(() => {
     const now = document.querySelector(".split");
-    const selecting = now !== null && now === split.current && now.hasAttribute("data-wide") && id !== undefined;
+    const beside = now !== null && now === last.current.split && now.hasAttribute("data-wide") && section === last.current.section;
+    const selecting = beside && id !== undefined;
+    const closing = beside && id === undefined && last.current.id !== undefined;
+    const row = closing ? now?.querySelector<HTMLElement>(`a[href$="/${CSS.escape(last.current.id!)}"]`) : null;
     if (first.current) first.current = false;
+    else if (closing) (row ?? document.querySelector<HTMLElement>("h1"))?.focus({ preventScroll: !row });
     else if (!selecting) {
       document.querySelector<HTMLElement>("h1")?.focus();
       scrollTo(0, 0);
@@ -64,7 +70,7 @@ function App() {
   }, [route]);
 
   useEffect(() => {
-    split.current = document.querySelector(".split");
+    last.current = { section, id, split: document.querySelector(".split") };
   });
 
   useEffect(() => {

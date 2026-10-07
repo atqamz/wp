@@ -661,7 +661,7 @@ main:has(> .split[data-wide]) {
   margin-inline: auto;
 }
 
-.pane {
+.split[data-wide] > .pane {
   position: sticky;
   top: var(--s4);
   min-width: 0;
@@ -673,7 +673,7 @@ main:has(> .split[data-wide]) {
   box-shadow: 0 0 0 1px var(--line);
 }
 
-.pane .form {
+.split[data-wide] > .pane .form {
   max-width: none;
 }
 
@@ -731,14 +731,14 @@ main:has(> .split[data-wide]) {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-.pane h3,
-.pane h4 {
+.split[data-wide] > .pane h3,
+.split[data-wide] > .pane h4 {
   margin-top: var(--s6);
   margin-bottom: var(--s3);
 }
 
 @media (min-width: 62.5rem) {
-  .pane {
+  .split[data-wide] > .pane {
     top: var(--s6);
     max-height: calc(100dvh - var(--s9));
   }

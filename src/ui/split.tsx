@@ -9,16 +9,8 @@ export function Split({ open, hint, list, detail }: Props) {
   const wide = useRoom(anchor);
   return (
     <div ref={anchor} className="split" data-wide={wide || undefined}>
-      {wide ? (
-        <>
-          <div className="col">{list}</div>
-          <aside className="pane">{open ? detail(true) : <p className="empty">{hint}</p>}</aside>
-        </>
-      ) : open ? (
-        detail(false)
-      ) : (
-        list
-      )}
+      {(wide || !open) && <div className="col">{list}</div>}
+      {(wide || open) && <div className="pane">{open ? detail(wide) : <p className="empty">{hint}</p>}</div>}
     </div>
   );
 }
