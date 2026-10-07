@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { isDenied, withoutDenied } from "./domain/access.ts";
+import { takeDenied } from "./domain/access.ts";
 import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useRoute } from "./router.ts";
@@ -52,7 +52,6 @@ function Page({ section, id }: { section: string; id?: string }) {
 }
 
 function App() {
-  const { ready, me, link } = useSnapshot();
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
   const first = useRef(true);
@@ -81,7 +80,7 @@ function App() {
     document.title = heading ? `${heading} · ${text.appName}` : text.appName;
   });
 
-  const screen = screenFor(ready, me !== null, link === "expired");
+  const screen = screenFor(useSnapshot());
   if (screen === "loading") return <p className="splash" role="status">{text.loading}</p>;
   if (screen === "signin") return <SignIn />;
   if (screen === "connect") return <Connect />;
@@ -94,8 +93,7 @@ function App() {
 
 const root = createRoot(document.getElementById("root")!);
 
-if (isDenied(location.search)) {
-  history.replaceState(history.state, "", withoutDenied(location.href));
+if (takeDenied(location, history)) {
   root.render(
     <StrictMode>
       <Denied />

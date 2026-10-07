@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isDenied, withoutDenied } from "../src/domain/access.ts";
+import { isDenied, takeDenied, withoutDenied } from "../src/domain/access.ts";
 
 test("only access=denied selects the wrong-account screen", () => {
   assert.equal(isDenied("?access=denied"), true);
@@ -18,4 +18,21 @@ test("the denied query is removed and everything else in the address is kept", (
 test("a cleaned address no longer selects the wrong-account screen", () => {
   const href = "https://wp.example.test/?access=denied&x=1";
   assert.equal(isDenied(new URL(withoutDenied(href), href).search), false);
+});
+
+const recorder = () => {
+  const calls: unknown[][] = [];
+  return { calls, state: "kept", replaceState: (...args: unknown[]) => void calls.push(args) };
+};
+
+test("a denied visit cleans the address through replaceState and is reported", () => {
+  const history = recorder();
+  assert.equal(takeDenied({ search: "?access=denied", href: "https://wp.example.test/?access=denied#/budget" }, history), true);
+  assert.deepEqual(history.calls, [["kept", "", "/#/budget"]]);
+});
+
+test("any other visit leaves the address alone and is not reported", () => {
+  const history = recorder();
+  assert.equal(takeDenied({ search: "?x=1", href: "https://wp.example.test/?x=1" }, history), false);
+  assert.deepEqual(history.calls, []);
 });

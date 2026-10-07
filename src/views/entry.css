@@ -17,7 +17,7 @@ main.entry {
 }
 
 .entry-route {
-  flex: 1 1 6rem;
+  flex: 1 1 0;
   width: 100%;
   min-height: 0;
   fill: none;
@@ -25,7 +25,7 @@ main.entry {
 
 @media (min-width: 62.5rem) {
   .entry-route {
-    flex: 0 0 20rem;
+    max-height: 20rem;
   }
 }
 
@@ -54,7 +54,7 @@ main.entry {
 .entry-body {
   width: 100%;
   max-width: 28rem;
-  padding: var(--s6) max(var(--s6), var(--safe-r)) var(--s8) max(var(--s6), var(--safe-l));
+  padding: var(--s6) max(20px, var(--safe-r)) var(--s8) max(20px, var(--safe-l));
 }
 
 .entry-brand {
@@ -68,6 +68,7 @@ main.entry {
 
 .entry-body h1 {
   margin: 0;
+  font-size: min(var(--fs-title), 14vw);
 }
 
 .entry-body p {
