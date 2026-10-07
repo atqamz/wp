@@ -7,6 +7,7 @@ import { parseRupiah } from "../src/domain/money.ts";
 import { bySort, sortBefore } from "../src/domain/order.ts";
 import { normalizePhone, whatsappUrl } from "../src/domain/phone.ts";
 import { DEFAULT_ZONE, readSettings } from "../src/domain/settings.ts";
+import { STAGES } from "../src/domain/stages.ts";
 import { item } from "./domain-rows.ts";
 
 test("phone: 08 and +62 forms normalise to E.164", () => {
@@ -157,11 +158,11 @@ test("today follows the saved time zone, not the machine", () => {
 
 test("settings default the zone and leave the rest empty", () => {
   assert.equal(DEFAULT_ZONE, "Asia/Jakarta");
-  assert.deepEqual(readSettings([]), { ceremonyDate: null, timezone: "Asia/Jakarta", partnerA: null, partnerB: null });
+  assert.deepEqual(readSettings([]), { ceremonyDate: null, timezone: "Asia/Jakarta", partnerA: null, partnerB: null, stages: STAGES, hijriOffset: 0 });
   const row = (key: string, value: string) => ({ key, value, rev: 1, created_at: "", updated_at: "", updated_by: null, deleted_at: null });
   assert.deepEqual(
     readSettings([row("ceremony_date", "2027-01-01"), row("timezone", "Asia/Makassar"), row("partner_a_label", "Sam")]),
-    { ceremonyDate: "2027-01-01", timezone: "Asia/Makassar", partnerA: "Sam", partnerB: null },
+    { ceremonyDate: "2027-01-01", timezone: "Asia/Makassar", partnerA: "Sam", partnerB: null, stages: STAGES, hijriOffset: 0 },
   );
 });
 
