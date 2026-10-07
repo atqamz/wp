@@ -1,26 +1,36 @@
 import type { ReactNode } from "react";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
+import { AddSheet } from "./add-sheet.tsx";
 import { Pair } from "./avatar.tsx";
 import { Icon } from "./icons.tsx";
-import { isCurrent, navItems } from "./nav.ts";
+import { isCurrent, navEntries } from "./nav.ts";
+import { overlay, useOverlay } from "./overlay.ts";
 import { SyncBadge } from "./sync-badge.tsx";
 import { text } from "./text.ts";
 
 function Nav({ className, section }: { className: "tabs" | "rail"; section: string }) {
   return (
     <nav className={className} aria-label={text.nav.label}>
-      {navItems(className).map((item) => (
-        <a key={item.section} href={`#/${item.section}`} aria-current={isCurrent(item, section) ? "page" : undefined}>
-          <Icon name={item.icon} />
-          <span>{item.label}</span>
-        </a>
-      ))}
+      {navEntries(className).map((entry) =>
+        entry === "add" ? (
+          <button key="add" type="button" className={className === "tabs" ? "tab-add" : "rail-add"} aria-label={className === "tabs" ? text.add : undefined} onClick={() => overlay.openAdd()}>
+            <Icon name="plus" />
+            {className === "rail" && <span>{text.add}</span>}
+          </button>
+        ) : (
+          <a key={entry.section} href={`#/${entry.section}`} aria-current={isCurrent(entry, section) ? "page" : undefined}>
+            <Icon name={entry.icon} />
+            <span>{entry.label}</span>
+          </a>
+        ),
+      )}
     </nav>
   );
 }
 
 export function Shell({ section, children }: { section: string; children: ReactNode }) {
   const { notice } = useSnapshot();
+  const { toast } = useOverlay();
   const home = section === "";
   return (
     <div className="shell">
@@ -51,6 +61,10 @@ export function Shell({ section, children }: { section: string; children: ReactN
         <main data-page={home ? "home" : undefined}>{children}</main>
       </div>
       <Nav className="tabs" section={section} />
+      <div className="toast" role="status">
+        {toast && <p key={toast.id}>{toast.message}</p>}
+      </div>
+      <AddSheet />
     </div>
   );
 }

@@ -7,15 +7,16 @@ import { routeOf } from "../domain/stages.ts";
 import type { Station } from "../domain/stages.ts";
 import { thisWeek } from "../domain/week.ts";
 import type { WeekEntry } from "../domain/week.ts";
+import { hijriOf } from "../domain/hijri.ts";
 import { useSettings, useToday, usePartner } from "../hooks/use-plan.ts";
 import { useTable } from "../hooks/use-store.ts";
 import { Avatar } from "../ui/avatar.tsx";
+import { Capture } from "../ui/capture.tsx";
 import { formatDay, formatLong, formatMonths, formatStamp } from "../ui/format.ts";
 import { Icon } from "../ui/icons.tsx";
 import { ItemLine } from "../ui/item-line.tsx";
 import { Money } from "../ui/money.tsx";
 import { PaymentLine } from "../ui/payment-line.tsx";
-import { QuickAdd } from "../ui/quick-add.tsx";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
@@ -42,7 +43,7 @@ function Entries({ id, heading, late, entries }: { id: string; heading: string; 
 type Route = { stations: Station[]; ceremony: string; today: string };
 
 const when = ({ stations, ceremony, today }: Route, index: number) =>
-  index === stations.length - 1 ? formatDay(ceremony, today) : formatMonths(stations[index].start, stations[index].end);
+  stations[index].day && stations[index].from === stations[index].to ? formatDay(ceremony, today) : formatMonths(stations[index].start, stations[index].end);
 
 const progress = (station: Station) =>
   station.total === 0
@@ -59,13 +60,13 @@ function Strip({ route }: { route: Route }) {
   const last = route.stations.length - 1;
   const past = route.stations.filter((station) => station.state === "past").length;
   return (
-    <ol className="strip" aria-label={text.route.label} style={{ "--n": last, "--at": Math.min(past, last) } as CSSProperties}>
+    <ol className="strip" aria-label={text.route.label} style={{ "--n": Math.max(last, 1), "--at": Math.min(past, last) } as CSSProperties}>
       {route.stations.map((station, index) => (
         <li
           key={station.key}
           className="st"
           data-state={station.state}
-          data-day={index === last || undefined}
+          data-day={station.day || undefined}
           style={{ "--i": index } as CSSProperties}
         >
           <span className="mk" aria-hidden="true" />
@@ -78,12 +79,11 @@ function Strip({ route }: { route: Route }) {
 }
 
 function Spine({ route, work }: { route: Route; work: ReactNode }) {
-  const last = route.stations.length - 1;
   return (
     <div className="spine">
       <ol className="stops">
         {route.stations.map((station, index) => (
-          <li key={station.key} className="stop" data-state={station.state} data-day={index === last || undefined}>
+          <li key={station.key} className="stop" data-state={station.state} data-day={station.day || undefined}>
             <span className="mk" aria-hidden="true" />
             <div className="stop-h">
               <h2>{station.name}</h2>
@@ -105,22 +105,23 @@ function Spine({ route, work }: { route: Route; work: ReactNode }) {
 export function Home() {
   const items = useTable("items");
   const entries = useTable("budget_entries");
-  const { ceremonyDate, timezone } = useSettings();
+  const { ceremonyDate, timezone, stages, hijriOffset } = useSettings();
   const { label } = usePartner();
   const today = useToday();
   const week = useMemo(() => thisWeek(items, entries, today), [items, entries, today]);
   const budget = useMemo(() => budgetOf(entries), [entries]);
   const route = useMemo(
-    () => (ceremonyDate === null ? null : { stations: routeOf(ceremonyDate, today, items), ceremony: ceremonyDate, today }),
-    [ceremonyDate, today, items],
+    () => (ceremonyDate === null ? null : { stations: routeOf(ceremonyDate, today, items, stages), ceremony: ceremonyDate, today }),
+    [ceremonyDate, today, items, stages],
   );
   const recent = useMemo(() => lately(items, entries), [items, entries]);
   const days = daysUntil(ceremonyDate, today);
+  const hijri = ceremonyDate === null ? null : hijriOf(ceremonyDate, hijriOffset);
   const empty = week.overdue.length + week.soon.length + week.undated.length === 0;
 
   const work = (
     <>
-      <QuickAdd name="task" />
+      <Capture />
       {empty && <p className="empty">{text.week.empty}</p>}
       <Entries id="week-overdue" heading={text.week.overdue} late entries={week.overdue} />
       <Entries id="week-soon" heading={text.week.soon} entries={week.soon} />
@@ -162,7 +163,12 @@ export function Home() {
               )}
             </Title>
           )}
-          {ceremonyDate && <p className="count-d">{formatLong(ceremonyDate)}</p>}
+          {ceremonyDate && (
+            <p className="count-d">
+              {formatLong(ceremonyDate)}
+              {hijri && <> · {hijri}</>}
+            </p>
+          )}
         </div>
         {budget.groups.length > 0 && (
           <p className="hero-money">

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { todayIn } from "../src/domain/dates.ts";
-import { parseDraft } from "../src/domain/draft.ts";
+import { parseAmount, parseDraft } from "../src/domain/draft.ts";
 import type { Context, Field } from "../src/domain/draft.ts";
 
 const WEDNESDAY = "2026-10-07";
@@ -380,4 +380,21 @@ test("long and odd input is read in a bounded time", () => {
   const started = performance.now();
   for (const text of inputs) parseDraft(text, context({ lines }));
   assert.ok(performance.now() - started < 1500, `${performance.now() - started}`);
+});
+
+test("the amount editor takes any whole amount, plain digits of any length, and the unit forms", () => {
+  const cases: [string, number | null][] = [
+    ["2500", 2_500],
+    ["2.500", 2_500],
+    ["Rp 2.500.000", 2_500_000],
+    ["2,5 jt", 2_500_000],
+    ["  500rb ", 500_000],
+    ["0", 0],
+    ["", null],
+    ["abc", null],
+    ["2,5 jt extra", null],
+    ["12 Oct", null],
+    ["-5", null],
+  ];
+  for (const [text, value] of cases) assert.equal(parseAmount(text), value, text);
 });

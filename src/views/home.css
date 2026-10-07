@@ -135,7 +135,7 @@
   top: 12px;
 }
 
-.stop[data-day]::before {
+.stop[data-day]:last-child::before {
   bottom: auto;
   height: 14px;
 }

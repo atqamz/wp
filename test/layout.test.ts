@@ -33,6 +33,37 @@ test("controls that are not full rows keep a 44 px target", () => {
   assert.match(rule(".brand"), /min-width:\s*var\(--target-min\)/);
 });
 
+const rule = (selector: string) => new RegExp(`${selector.replace(/[.>*[\]="():]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(all)?.[1] ?? "";
+
+test("the Add sheet locks the page without moving it, rides above the keyboard and respects the safe areas", () => {
+  assert.match(rule("html:has(dialog[open])"), /overflow:\s*hidden/);
+  assert.match(rule("html:has(dialog[open])"), /padding-right:\s*var\(--lock-gap,\s*0px\)/);
+  const sheet = rule(".add-sheet");
+  assert.match(sheet, /inset-block:\s*0 var\(--kb,\s*0px\)/);
+  assert.match(sheet, /max-height:\s*calc\(var\(--vv-h,\s*100dvh\) - var\(--safe-t\)/);
+  assert.match(sheet, /overscroll-behavior:\s*contain/);
+  assert.match(rule(".sheet-foot"), /var\(--safe-b\)/);
+  assert.match(rule(".sheet-body"), /overflow-y:\s*auto/);
+  assert.match(read("ui/add-sheet.tsx"), /setProperty\("--lock-gap"/);
+  assert.match(read("ui/add-sheet.tsx"), /removeProperty\("--lock-gap"\)/);
+});
+
+test("the sheet and the dialog use the same breakpoint as the shell and animate only when motion is allowed", () => {
+  const sheetCss = read("ui/sheet.css");
+  assert.match(sheetCss, /@media \(min-width: 62\.5rem\)/);
+  const animated = [...sheetCss.matchAll(/animation(?:-name)?:/g)].length;
+  const guarded = /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*$/.exec(sheetCss)?.[0] ?? "";
+  assert.equal([...guarded.matchAll(/animation(?:-name)?:/g)].length, animated);
+});
+
+test("every control of the Add sheet that is not a full row keeps a 44 px target", () => {
+  assert.match(rule(".chip"), /min-height:\s*var\(--target-min\)/);
+  assert.match(rule(".kinds button"), /min-height:\s*var\(--target-min\)/);
+  assert.match(rule(".choices label"), /min-height:\s*var\(--target-min\)/);
+  assert.match(rule(".tab-add"), /width:\s*3\.5rem/);
+  assert.match(rule(".tab-add"), /height:\s*3\.5rem/);
+});
+
 const sources = readdirSync(new URL("../src/", import.meta.url), { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.endsWith(".tsx"))
   .map((entry) => readFileSync(`${entry.parentPath}/${entry.name}`, "utf8"));

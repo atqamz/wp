@@ -118,6 +118,15 @@ const amountOf = (state: State): number | null => {
   );
 };
 
+export const parseAmount = (input: string): number | null => {
+  const text = input.trim();
+  const plain = parseRupiah(text);
+  if (plain !== null) return plain;
+  const state: State = { rest: text };
+  const read = amountOf(state);
+  return state.rest.trim() === "" ? read : null;
+};
+
 const phoneOf = (state: State): string | null =>
   take(state, /(?<![\p{L}\p{N}_+])(\+?\d{2,5}(?:[ -]\d{2,5}){1,4}|\+?\d{9,15})(?![\p{L}\p{N}_])/gu, (m) => {
     const phone = normalizePhone(m[1]);
