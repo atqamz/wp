@@ -489,6 +489,10 @@
     padding: var(--s7) var(--s8) 0;
   }
 
+  .loose {
+    padding-left: 0;
+  }
+
   .stop {
     display: none;
     padding: 0;
