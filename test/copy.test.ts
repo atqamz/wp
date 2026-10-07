@@ -48,3 +48,17 @@ test("every ownership label, nicknames or fallbacks, is visible and never says P
   }
   for (const word of [text.you, text.them, text.both, text.nobody]) assert.ok(seen.has(word), word);
 });
+
+test("no attribute literal in a source file says Partner either", () => {
+  const files = readdirSync(new URL("../src/", import.meta.url), { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+  const attribute = /\b(?:aria-label|aria-description|title|alt|placeholder)=(?:"([^"]*)"|\{"([^"]*)"\}|\{`([^`]*)`\})/g;
+  for (const file of files) {
+    const source = readFileSync(`${file.parentPath}/${file.name}`, "utf8");
+    for (const [, a, b, c] of source.matchAll(attribute)) assert.doesNotMatch(a ?? b ?? c, /partner/i, file.name);
+  }
+});
+
+test("the countdown unit agrees with the number", () => {
+  assert.deepEqual([text.countdown.to(1), text.countdown.to(2), text.countdown.to(402)], ["day to the akad", "days to the akad", "days to the akad"]);
+  assert.deepEqual([text.countdown.since(1), text.countdown.since(2)], ["day since the akad", "days since the akad"]);
+});
