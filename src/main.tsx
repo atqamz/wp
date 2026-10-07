@@ -5,6 +5,7 @@ import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useRoute } from "./router.ts";
 import { ErrorBoundary } from "./ui/error-boundary.tsx";
 import { Recovery } from "./ui/recovery-screen.tsx";
+import { screenOf } from "./ui/routes.ts";
 import { Shell } from "./ui/shell.tsx";
 import { text } from "./ui/text.ts";
 import { Title } from "./ui/title.tsx";
@@ -24,25 +25,23 @@ import "./views/money.css";
 import "./views/people.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
-  switch (section) {
-    case "":
+  const screen = screenOf(section);
+  switch (screen) {
+    case "home":
       return <Home />;
     case "tasks":
       return id ? <GenericItem key={id} name="task" id={id} /> : <Tasks />;
     case "money":
-    case "budget":
       return <MoneyView id={id} />;
     case "payments":
       return id ? <GenericItem key={id} name="payment" id={id} /> : <MoneyView />;
     case "people":
-    case "guests":
-    case "vendors":
       return <People route={section} id={id} />;
     case "settings":
       return <Settings />;
     case "sync":
       return <Sync />;
-    default:
+    case null:
       return <Title>{text.notFound}</Title>;
   }
 }
