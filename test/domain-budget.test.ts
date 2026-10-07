@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetOf, dueSoon } from "../src/domain/budget.ts";
+import { budgetOf, dueSoon, toPay } from "../src/domain/budget.ts";
 import { entry, payment } from "./domain-rows.ts";
 
 const figures = (totals: ReturnType<typeof budgetOf>) => ({
@@ -150,4 +150,43 @@ test("due soon adds unpaid payments dated up to 30 days ahead, late ones include
 test("due soon ignores payments whose planned line is gone", () => {
   const gone = entry({});
   assert.equal(dueSoon(budgetOf([payment(gone, { amount: 5, due_on: "2026-10-07" })]), "2026-10-06"), 0);
+});
+
+test("every total counts its lines, estimated or not", () => {
+  const budget = budgetOf([
+    entry({ group_key: "reception", amount: 10 }),
+    entry({ group_key: "reception", amount: null }),
+    entry({ group_key: "engagement", amount: 5 }),
+  ]);
+  assert.deepEqual([budget.count, ...budget.groups.map((group) => group.count)], [3, 1, 2]);
+});
+
+test("to pay lists unpaid payments by due date, undated last, with their planned line", () => {
+  const venue = entry({ title: "Venue", amount: 100 });
+  const photo = entry({ title: "Photo", amount: 50 });
+  const late = payment(venue, { title: "late", due_on: "2026-10-05" });
+  const soon = payment(photo, { title: "soon", due_on: "2026-10-20" });
+  const undated = payment(venue, { title: "undated", due_on: null });
+  const paid = payment(venue, { title: "paid", status: "paid", due_on: "2026-10-01", done_on: "2026-10-01" });
+  const queue = toPay(budgetOf([venue, photo, undated, soon, paid, late]));
+  assert.deepEqual(queue.map(({ payment: row }) => row.title), ["late", "soon", "undated"]);
+  assert.deepEqual(queue.map(({ line }) => line.title), ["Venue", "Photo", "Venue"]);
+});
+
+test("to pay keeps a payment asked for by id after it is paid, so it can be undone in place", () => {
+  const venue = entry({ amount: 100 });
+  const done = payment(venue, { title: "done", status: "paid", due_on: "2026-10-01", done_on: "2026-10-07" });
+  const open = payment(venue, { title: "open", due_on: "2026-10-09" });
+  const budget = budgetOf([venue, done, open]);
+  assert.deepEqual(toPay(budget).map(({ payment: row }) => row.title), ["open"]);
+  assert.deepEqual(toPay(budget, new Set([done.id])).map(({ payment: row }) => row.title), ["done", "open"]);
+});
+
+test("to pay ignores payments whose planned line is gone and ties follow the sort order", () => {
+  const gone = entry({});
+  const venue = entry({ amount: 100 });
+  const first = payment(venue, { title: "first", due_on: "2026-10-09", sort: 1 });
+  const second = payment(venue, { title: "second", due_on: "2026-10-09", sort: 2 });
+  const queue = toPay(budgetOf([venue, second, first, payment(gone, { due_on: "2026-10-01" })]));
+  assert.deepEqual(queue.map(({ payment: row }) => row.title), ["first", "second"]);
 });
