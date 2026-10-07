@@ -16,6 +16,7 @@ export type Line = {
 };
 
 export type Totals = {
+  count: number;
   planned: number;
   paid: number;
   paidUnestimated: number;
@@ -40,6 +41,7 @@ const add = (values: readonly number[]) => values.reduce((total, value) => total
 const totalsOf = (lines: readonly Line[]): Totals => {
   const estimated = lines.filter((line) => line.planned !== null);
   return {
+    count: lines.length,
     planned: add(estimated.map((line) => line.planned!)),
     paid: add(estimated.map((line) => line.paid)),
     paidUnestimated: add(lines.filter((line) => line.planned === null).map((line) => line.paid)),
@@ -72,6 +74,21 @@ export const budgetOf = (entries: readonly BudgetEntryRow[]): Budget => {
   });
   return { groups, ...totalsOf(lines) };
 };
+
+export type Payable = { payment: BudgetEntryRow; line: BudgetEntryRow };
+
+const byDue = (a: Payable, b: Payable) =>
+  Number(a.payment.due_on === null) - Number(b.payment.due_on === null) ||
+  compare(a.payment.due_on ?? "", b.payment.due_on ?? "") ||
+  bySort(a.payment, b.payment);
+
+export const toPay = (budget: Budget, keep: ReadonlySet<string> = new Set()): Payable[] =>
+  budget.groups
+    .flatMap((group) => group.lines.flatMap((line) => line.payments.map((payment) => ({ payment, line: line.row }))))
+    .filter(({ payment }) => payment.status === "due" || keep.has(payment.id))
+    .sort(byDue);
+
+export const fillOf = (planned: number, paid: number) => (planned > 0 ? { max: planned, value: Math.min(paid, planned) } : null);
 
 export const dueSoon = (budget: Budget, today: string) => {
   const horizon = addDays(today, DUE_DAYS);

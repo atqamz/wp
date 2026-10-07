@@ -136,6 +136,9 @@ export function Home() {
           </ul>
         </section>
       )}
+      <p className="trail">
+        <a href="#/tasks">{text.route.allTasks}</a>
+      </p>
     </>
   );
 

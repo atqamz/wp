@@ -14,3 +14,8 @@ export const headcount = (guests: readonly ItemRow[]): Record<Side, Headcount> =
   }
   return count;
 };
+
+export const total = (count: Record<Side, Headcount>): Headcount => ({
+  guests: count.a.guests + count.b.guests + count.none.guests,
+  people: count.a.people + count.b.people + count.none.people,
+});

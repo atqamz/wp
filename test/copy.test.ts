@@ -67,3 +67,22 @@ test("the offline badge keeps the word Offline, and says the changes are saved w
   assert.equal(text.sync.offline(0), "Offline");
   for (const waiting of [1, 2, 30]) assert.equal(text.sync.offline(waiting), "Offline, saved on this phone");
 });
+
+test("the not-estimated note and the estimate sentence agree with the count", () => {
+  assert.equal(text.budget.unestimated(1), "1 line is not estimated yet, so it is not in these totals.");
+  assert.equal(text.budget.unestimated(3), "3 lines are not estimated yet, so they are not in these totals.");
+  assert.equal(text.money.estimatedOn(11, 14), "estimated on 11 of 14 lines.");
+  assert.equal(text.money.estimatedOn(1, 1), "estimated on 1 line.");
+  assert.equal(text.money.estimatedOn(2, 2), "estimated on 2 lines.");
+});
+
+test("guest and vendor statuses read as the design words, and no other status changes", () => {
+  assert.deepEqual(text.option["guest.status"], { todo: "Not invited yet", sent: "Invited", confirmed: "Coming", declined: "Not coming" });
+  assert.deepEqual(text.option["vendor.status"], { option: "Considering", confirmed: "Booked", cancelled: "Dropped" });
+  assert.equal(text.option.status.confirmed, "Confirmed");
+});
+
+test("the repeated call and WhatsApp actions name the row they belong to", () => {
+  assert.equal(text.callNamed("Hall"), "Call Hall");
+  assert.equal(text.whatsappNamed("Hall"), "WhatsApp Hall");
+});

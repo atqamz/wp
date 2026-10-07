@@ -54,7 +54,7 @@ export function QuickAdd({ name }: { name: ListName }) {
           <option value="b">{label("b")}</option>
         </select>
       )}
-      <button type="submit" disabled={busy}>
+      <button type="submit" disabled={busy} aria-label={text.quickAdd[name].placeholder}>
         {text.add}
       </button>
       {errors.length > 0 && (

@@ -1,3 +1,7 @@
+.hero :focus-visible {
+  outline-color: var(--on-hero);
+}
+
 .hero {
   --column: 40rem;
   --gutter: var(--s5);
@@ -236,7 +240,11 @@
 }
 
 .stop-h svg {
+  flex: none;
+  width: 0.9375rem;
+  height: 0.9375rem;
   margin-right: var(--s1);
+  stroke-width: 2.2;
   color: var(--route);
 }
 
@@ -293,6 +301,8 @@
 }
 
 .side {
+  --av: 1.75rem;
+  --av-text: 0.75rem;
   padding: var(--s6) var(--s4) 0;
 }
 
@@ -310,11 +320,6 @@
 
 .side li + li {
   border-top: 1px solid var(--line);
-}
-
-.side .av {
-  --av: 1.75rem;
-  font-size: 0.75rem;
 }
 
 .side p {

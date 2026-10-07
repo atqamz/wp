@@ -1,0 +1,54 @@
+.people-group {
+  margin-top: var(--s6);
+}
+
+.people-group h2 {
+  margin-top: 0;
+}
+
+.sides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sides li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding: 0.4375rem var(--s3) 0.4375rem 0.4375rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+}
+
+.sides b {
+  color: var(--ink);
+}
+
+.roster {
+  container-type: inline-size;
+}
+
+.person .quote {
+  display: none;
+}
+
+@container (min-width: 40rem) {
+  .roster[data-kind="vendor"] .person {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 9rem) auto;
+    align-items: center;
+  }
+
+  .roster[data-kind="vendor"] .quote {
+    display: block;
+    text-align: right;
+  }
+}

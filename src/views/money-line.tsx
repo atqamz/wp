@@ -1,23 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { budgetOf } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
-import { bySort } from "../domain/order.ts";
 import { useBusy } from "../hooks/use-busy.ts";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
 import { ItemForm } from "../ui/item-form.tsx";
+import { Money } from "../ui/money.tsx";
 import { PaymentLine } from "../ui/payment-line.tsx";
+import { DetailTitle } from "../ui/split.tsx";
 import { text } from "../ui/text.ts";
-import { Title } from "../ui/title.tsx";
 import { Gone } from "./generic-item.tsx";
 
-export function BudgetLine({ id }: { id: string }) {
+export function MoneyLine({ id, wide }: { id: string; wide: boolean }) {
   const entries = useTable("budget_entries");
+  const budget = useMemo(() => budgetOf(entries), [entries]);
   const [errors, setErrors] = useState<string[]>([]);
   const { busy, once } = useBusy();
-  const line = entries.find((entry) => entry.id === id && entry.entry_type === "planned");
-  if (!line) return <Gone name="planned" id={id} back="#/budget" />;
-  const payments = entries.filter((entry) => entry.entry_type === "payment" && entry.budget_id === id).sort(bySort);
+  const line = budget.groups.flatMap((group) => group.lines).find((candidate) => candidate.row.id === id);
+  if (!line) return <Gone name="planned" id={id} back="#/money" wide={wide} />;
+  const { row, payments } = line;
+  const Heading = wide ? "h3" : "h2";
+  const Sub = wide ? "h4" : "h3";
 
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -28,11 +32,11 @@ export function BudgetLine({ id }: { id: string }) {
     return once(async () => {
       const result = await actions.create("budget_entries", {
         entry_type: "payment",
-        title: String(data.get("title") ?? "").trim() || line.title,
-        budget_id: line.id,
+        title: String(data.get("title") ?? "").trim() || row.title,
+        budget_id: row.id,
         status: "due",
         amount: amount.value as number,
-        currency: line.currency,
+        currency: row.currency,
         due_on: String(data.get("due_on") ?? "") || null,
         sort: payments.length,
       });
@@ -43,10 +47,36 @@ export function BudgetLine({ id }: { id: string }) {
 
   return (
     <>
-      <Title>{line.title}</Title>
-      <ItemForm key={line.id} name="planned" row={line} />
+      <DetailTitle wide={wide}>{row.title}</DetailTitle>
+      <p className="kicker">
+        {text.money.lineKind} · {text.event[row.group_key as keyof typeof text.event] ?? row.group_key}
+      </p>
+      <dl className="nums">
+        <div>
+          <dt>{text.budget.planned}</dt>
+          <dd>{line.planned === null ? text.notSet : <Money rupiah={line.planned} />}</dd>
+        </div>
+        <div>
+          <dt>{text.budget.paid}</dt>
+          <dd>
+            <Money rupiah={line.paid} />
+          </dd>
+        </div>
+        <div>
+          <dt>{text.budget.remaining}</dt>
+          <dd>{line.remaining === null ? text.notSet : <Money rupiah={line.remaining} />}</dd>
+        </div>
+        {line.over > 0 && (
+          <div>
+            <dt>{text.budget.over}</dt>
+            <dd>
+              <Money rupiah={line.over} />
+            </dd>
+          </div>
+        )}
+      </dl>
       <section aria-labelledby="payments">
-        <h2 id="payments">{text.budget.payments}</h2>
+        <Heading id="payments">{text.budget.payments}</Heading>
         {payments.length === 0 ? (
           <p className="empty">{text.empty.payments}</p>
         ) : (
@@ -57,10 +87,10 @@ export function BudgetLine({ id }: { id: string }) {
           </ul>
         )}
         <form className="form" onSubmit={add}>
-          <h3>{text.budget.addPayment}</h3>
+          <Sub>{text.budget.addPayment}</Sub>
           <div className="field">
             <label htmlFor="payment-title">{text.budget.paymentLabel}</label>
-            <input id="payment-title" name="title" maxLength={500} autoComplete="off" placeholder={line.title} />
+            <input id="payment-title" name="title" maxLength={500} autoComplete="off" placeholder={row.title} />
           </div>
           <div className="field">
             <label htmlFor="payment-amount">{text.budget.amountLabel}</label>
@@ -76,15 +106,21 @@ export function BudgetLine({ id }: { id: string }) {
             </p>
           )}
           <div className="form-actions">
-            <button type="submit" disabled={busy}>
+            <button type="submit" disabled={busy} aria-label={text.budget.addPayment}>
               {text.add}
             </button>
           </div>
         </form>
       </section>
-      <p className="trail">
-        <a href="#/budget">{text.back}</a>
-      </p>
+      <section aria-labelledby="line-edit">
+        <Heading id="line-edit">{text.budget.editLine}</Heading>
+        <ItemForm key={row.id} name="planned" row={row} />
+      </section>
+      {!wide && (
+        <p className="trail">
+          <a href="#/money">{text.back}</a>
+        </p>
+      )}
     </>
   );
 }

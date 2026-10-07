@@ -10,7 +10,7 @@ import { Icon } from "./icons.tsx";
 import { Money } from "./money.tsx";
 import { text } from "./text.ts";
 
-export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
+export function PaymentLine({ payment, line }: { payment: BudgetEntryRow; line?: string }) {
   const stamp = useStamp();
   const [failure, setFailure] = useState<string[]>([]);
   const paid = payment.status === "paid";
@@ -44,6 +44,7 @@ export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
               <span>{text.noDueDate}</span>
             )}
             {payment.who && <Who side={payment.who} />}
+            {line !== undefined && line !== payment.title && <span>{line}</span>}
           </span>
         </a>
         <span className="row-r">

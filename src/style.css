@@ -16,6 +16,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-padding: calc(3.5rem + var(--safe-t) + var(--s2)) 0 calc(var(--tabs) + var(--safe-b) + var(--s2));
 }
 
 body {
@@ -33,8 +34,7 @@ body {
   outline-offset: 2px;
 }
 
-.bar[data-hero] :focus-visible,
-.hero :focus-visible {
+.bar[data-hero] :focus-visible {
   outline-color: var(--on-hero);
 }
 
@@ -104,6 +104,7 @@ a {
   display: inline-flex;
   flex: none;
   align-items: center;
+  min-width: var(--target-min);
   min-height: var(--target-min);
   color: inherit;
   font: 800 1.375rem / 1 var(--font-display);
@@ -163,6 +164,8 @@ a {
 }
 
 .pair {
+  --av: 2rem;
+  --av-text: 0.75rem;
   display: grid;
   flex: none;
   place-items: center;
@@ -179,7 +182,7 @@ a {
   left: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   padding: var(--s2) var(--safe-r) var(--safe-b) var(--safe-l);
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -256,6 +259,10 @@ main.recovery {
 }
 
 @media (min-width: 62.5rem) {
+  html {
+    scroll-padding: 0;
+  }
+
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar) minmax(0, 1fr);

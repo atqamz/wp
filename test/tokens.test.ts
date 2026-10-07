@@ -51,6 +51,7 @@ const text = [
   ["ink", "surface-2"],
   ["ink-2", "bg"],
   ["ink-2", "surface"],
+  ["ink-2", "surface-2"],
   ["on-hero", "hero"],
   ["on-hero-2", "hero"],
   ["on-accent", "accent"],
@@ -68,11 +69,13 @@ const text = [
 const graphics = [
   ["focus", "bg"],
   ["focus", "surface"],
+  ["focus", "surface-2"],
   ["on-hero", "hero"],
   ["ink-2", "bg"],
   ["ink-2", "surface"],
   ["route", "bg"],
   ["route", "surface"],
+  ["route", "surface-2"],
 ];
 
 for (const [name, theme] of Object.entries(themes)) {
