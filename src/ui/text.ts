@@ -274,7 +274,7 @@ export const text = {
     exportBody: "Everything here is shared by both of you.",
     syncDetails: "Sync details",
     signOut: "Sign out",
-    signOutNote: "Signs you out of this browser only.",
+    signOutNote: "Ends the Access session on this device. What is already synced to this phone stays readable until you clear this browser's data.",
   },
   stages: {
     heading: "Route stages",
