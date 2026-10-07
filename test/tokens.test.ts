@@ -56,6 +56,7 @@ const text = [
   ["late", "late-bg"],
   ["on-tint", "tint-a"],
   ["on-tint", "tint-b"],
+  ["bg", "ink"],
 ];
 
 const graphics = [
@@ -106,7 +107,7 @@ test("every colour token a rule uses has a contrast pair, except the decorative 
 });
 
 test("only decorative or disabled rules use opacity, so a text pair never hides behind it", () => {
-  const rules = [...sources.matchAll(/([^{}]+)\{[^{}]*\bopacity:\s*[\d.]+/g)].map(([, selector]) => selector.replace(/\s+/g, " ").trim());
+  const rules = [...sources.matchAll(/([^{}]+)\{[^{}]*\bopacity:\s*(?!1\b)[\d.]+/g)].map(([, selector]) => selector.replace(/\s+/g, " ").trim());
   assert.deepEqual(rules, ['.sync[data-state="pending"] a::before, .sync[data-state="offline"] a::before', "button:disabled"]);
 });
 
