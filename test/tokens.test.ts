@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { luminance } from "./oklch.ts";
 
 const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
 
@@ -15,23 +16,6 @@ const read = (part: string) =>
   );
 
 const themes = { light: read(lightPart), dark: { ...read(lightPart), ...read(darkPart) } };
-
-const luminance = ([l, c, h]: number[]) => {
-  const a = c * Math.cos((h * Math.PI) / 180);
-  const b = c * Math.sin((h * Math.PI) / 180);
-  const [x, y, z] = [
-    l + 0.3963377774 * a + 0.2158037573 * b,
-    l - 0.1055613458 * a - 0.0638541728 * b,
-    l - 0.0894841775 * a - 1.291485548 * b,
-  ].map((v) => v ** 3);
-  const linear = [
-    4.0767416621 * x - 3.3077115913 * y + 0.2309699292 * z,
-    -1.2684380046 * x + 2.6097574011 * y - 0.3413193965 * z,
-    -0.0041960863 * x - 0.7034186147 * y + 1.707614701 * z,
-  ];
-  const [r, g, bl] = linear.map((v) => Math.min(1, Math.max(0, v)));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
-};
 
 const ratio = (theme: Record<string, number[]>, fg: string, bg: string) => {
   const [hi, lo] = [luminance(theme[fg]), luminance(theme[bg])].sort((p, q) => q - p);

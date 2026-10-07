@@ -1,0 +1,99 @@
+main.entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: var(--safe-t) 0 var(--safe-b);
+  background: var(--hero);
+  color: var(--on-hero);
+}
+
+.entry :focus-visible {
+  outline-color: var(--on-hero);
+}
+
+.entry-route {
+  flex: 1 1 6rem;
+  width: 100%;
+  min-height: 0;
+  fill: none;
+}
+
+@media (min-width: 62.5rem) {
+  .entry-route {
+    flex: 0 0 20rem;
+  }
+}
+
+.entry-route path {
+  stroke: color-mix(in oklch, var(--on-hero) 30%, transparent);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.entry-route circle {
+  fill: var(--hero);
+  stroke: color-mix(in oklch, var(--on-hero) 30%, transparent);
+  stroke-width: 4;
+}
+
+.entry-route .now {
+  fill: var(--signal);
+  stroke: var(--hero);
+  stroke-width: 5;
+}
+
+.entry-route .day {
+  stroke: var(--on-hero);
+}
+
+.entry-body {
+  width: 100%;
+  max-width: 28rem;
+  padding: var(--s6) max(var(--s6), var(--safe-r)) var(--s8) max(var(--s6), var(--safe-l));
+}
+
+.entry-brand {
+  display: block;
+  margin-bottom: var(--s7);
+  font: 800 2.75rem / 1 var(--font-display);
+  font-stretch: var(--stretch-display);
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.entry-body h1 {
+  margin: 0;
+}
+
+.entry-body p {
+  max-width: 30ch;
+  margin: var(--s3) 0 var(--s6);
+  color: var(--on-hero-2);
+}
+
+.entry-body .entry-note {
+  max-width: none;
+  margin: var(--s4) 0 0;
+  font-size: var(--fs-meta);
+}
+
+a.entry-action {
+  gap: var(--s3);
+  width: 100%;
+  min-height: 3.5rem;
+  border: 0;
+  border-radius: 0.875rem;
+  background: oklch(99% 0 0);
+  color: oklch(25% 0.01 268);
+}
+
+.entry-action svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}

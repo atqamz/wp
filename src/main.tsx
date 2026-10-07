@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { isDenied, withoutDenied } from "./domain/access.ts";
 import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useRoute } from "./router.ts";
@@ -10,6 +11,7 @@ import { Shell } from "./ui/shell.tsx";
 import { text } from "./ui/text.ts";
 import { Title } from "./ui/title.tsx";
 import { Connect } from "./views/connect.tsx";
+import { Denied, SignIn } from "./views/entry.tsx";
 import { GenericItem } from "./views/generic-item.tsx";
 import { Home } from "./views/home.tsx";
 import { MoneyView } from "./views/money.tsx";
@@ -23,6 +25,7 @@ import "./ui/ui.css";
 import "./views/home.css";
 import "./views/money.css";
 import "./views/people.css";
+import "./views/entry.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
   const screen = screenOf(section);
@@ -49,7 +52,7 @@ function Page({ section, id }: { section: string; id?: string }) {
 }
 
 function App() {
-  const { ready, me } = useSnapshot();
+  const { ready, me, link } = useSnapshot();
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
   const first = useRef(true);
@@ -78,8 +81,9 @@ function App() {
     document.title = heading ? `${heading} · ${text.appName}` : text.appName;
   });
 
-  const screen = screenFor(ready, me !== null);
+  const screen = screenFor(ready, me !== null, link === "expired");
   if (screen === "loading") return <p className="splash" role="status">{text.loading}</p>;
+  if (screen === "signin") return <SignIn />;
   if (screen === "connect") return <Connect />;
   return (
     <Shell section={section}>
@@ -90,12 +94,21 @@ function App() {
 
 const root = createRoot(document.getElementById("root")!);
 
-root.render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-);
+if (isDenied(location.search)) {
+  history.replaceState(history.state, "", withoutDenied(location.href));
+  root.render(
+    <StrictMode>
+      <Denied />
+    </StrictMode>,
+  );
+} else {
+  root.render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  );
 
-openStore().catch(() => root.render(<Recovery title={text.storageBrokenTitle} body={text.storageBroken} />));
+  openStore().catch(() => root.render(<Recovery title={text.storageBrokenTitle} body={text.storageBroken} />));
+}

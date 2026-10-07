@@ -251,6 +251,17 @@ export const text = {
     planned: "Budget lines (CSV)",
     payment: "Payments (CSV)",
   },
+  signIn: {
+    title: "Sign in to continue",
+    body: "This plan is private. Only the two Google accounts it was made for can open it.",
+    action: "Continue with Google",
+    note: "Google handles the sign-in. wp never sees your password.",
+  },
+  denied: {
+    title: "Wrong Google account",
+    body: "This Google account cannot open this plan. Sign in with the account you use for wp.",
+    action: "Try another account",
+  },
   connect: {
     title: "Can't reach the server yet",
     body: "This phone has not loaded your plan yet. Check your connection and try again. Nothing is created until the plan has loaded once.",

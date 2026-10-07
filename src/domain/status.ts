@@ -1,7 +1,7 @@
-export type Screen = "loading" | "connect" | "app";
+export type Screen = "loading" | "signin" | "connect" | "app";
 
-export const screenFor = (ready: boolean, heardFromServer: boolean): Screen =>
-  !ready ? "loading" : heardFromServer ? "app" : "connect";
+export const screenFor = (ready: boolean, heardFromServer: boolean, expired: boolean): Screen =>
+  !ready ? "loading" : heardFromServer ? "app" : expired ? "signin" : "connect";
 
 export type Badge = "storage" | "login" | "rejected" | "offline" | "pending" | "synced";
 

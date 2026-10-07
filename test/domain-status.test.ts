@@ -11,10 +11,20 @@ import type { ViewName } from "../src/ui/registry.ts";
 const healthy: Health = { storage: "ok", link: "online", rejected: 0, pending: 0 };
 
 test("the app opens once the server has been heard, with or without data, and never offers creation before that", () => {
-  assert.equal(screenFor(false, false), "loading");
-  assert.equal(screenFor(false, true), "loading");
-  assert.equal(screenFor(true, false), "connect");
-  assert.equal(screenFor(true, true), "app");
+  assert.equal(screenFor(false, false, false), "loading");
+  assert.equal(screenFor(false, true, false), "loading");
+  assert.equal(screenFor(false, false, true), "loading");
+  assert.equal(screenFor(true, false, false), "connect");
+  assert.equal(screenFor(true, true, false), "app");
+});
+
+test("an empty device whose session is missing sees the sign-in screen, never the offline one", () => {
+  assert.equal(screenFor(true, false, true), "signin");
+  assert.equal(screenFor(true, false, false), "connect");
+});
+
+test("a device that holds data keeps the app when the session expired, so nothing is hidden", () => {
+  assert.equal(screenFor(true, true, true), "app");
 });
 
 test("the badge shows the worst state first: storage, login, rejected, offline, pending, synced", () => {
