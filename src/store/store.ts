@@ -56,7 +56,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
 
   const emit = () => {
     const sendable = outbox.filter((entry) => !entry.rejected);
-    view = overlay(base, sendable);
+    view = overlay(base, sendable, me);
     snapshot = {
       ready: loaded && (me !== null || attempted),
       me,

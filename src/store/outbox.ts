@@ -1,5 +1,5 @@
 import { MAX_MUTATIONS, applyPatch } from "../../shared/api.ts";
-import type { Changes, Mutation } from "../../shared/api.ts";
+import type { Changes, Mutation, Side } from "../../shared/api.ts";
 import { tableNames, tables } from "../../shared/tables.ts";
 import type { Column, TableName } from "../../shared/tables.ts";
 import type { Pending, Rows } from "./persistence.ts";
@@ -63,16 +63,17 @@ const blankRow = (table: TableName, patch: Dict): Dict =>
     ]),
   );
 
-export const overlay = (base: Maps, queue: readonly Pending[]): Maps => {
+export const overlay = (base: Maps, queue: readonly Pending[], me: Side | null = null): Maps => {
   const view = Object.fromEntries(tableNames.map((table) => [table, new Map(base[table])])) as Maps;
+  const stamped = (row: Dict): Dict => (me === null ? row : { ...row, updated_by: me });
   for (const mutation of queue) {
     const rows = view[mutation.table];
     const row = rows.get(mutation.row_id);
     if (mutation.op === "create") {
-      if (!row) rows.set(mutation.row_id, blankRow(mutation.table, mutation.patch));
-      else if (mutation.table === "settings") rows.set(mutation.row_id, applyPatch(row, mutation.patch));
+      if (!row) rows.set(mutation.row_id, stamped(blankRow(mutation.table, mutation.patch)));
+      else if (mutation.table === "settings") rows.set(mutation.row_id, stamped(applyPatch(row, mutation.patch)));
     } else if (row) {
-      rows.set(mutation.row_id, mutation.op === "update" ? applyPatch(row, mutation.patch) : { ...row, deleted_at: mutation.at });
+      rows.set(mutation.row_id, mutation.op === "update" ? stamped(applyPatch(row, mutation.patch)) : { ...row, deleted_at: mutation.at });
     }
   }
   return view;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lately } from "../src/domain/lately.ts";
+import { ADDED_WITHIN_MS, LATELY_COUNT, lately } from "../src/domain/lately.ts";
 import { entry, item, payment } from "./domain-rows.ts";
 
 const edited = { created_at: "2026-10-01T00:00:00Z" };
@@ -54,4 +54,36 @@ test("the verb follows what the row looks like now", () => {
       ["vendor done", "changed"],
     ],
   );
+});
+
+test("the default length is LATELY_COUNT", () => {
+  const rows = Array.from({ length: LATELY_COUNT + 2 }, (_, index) => item({ updated_by: "a", updated_at: `2026-10-05T0${index}:00:00Z` }));
+  assert.equal(lately(rows, []).length, LATELY_COUNT);
+  assert.equal(LATELY_COUNT, 5);
+});
+
+test("changes at the same instant sort by id, whatever the input order", () => {
+  const at = { updated_by: "a" as const, updated_at: "2026-10-05T00:00:00Z" };
+  const first = item({ title: "first", id: "00000000-0000-4000-8000-000000000001", ...at });
+  const second = item({ title: "second", id: "00000000-0000-4000-8000-000000000002", ...at });
+  const line = entry({ title: "third", id: "00000000-0000-4000-8000-000000000003", ...at });
+  for (const rows of [
+    [first, second],
+    [second, first],
+  ]) {
+    assert.deepEqual(
+      lately(rows, [line]).map((activity) => activity.title),
+      ["first", "second", "third"],
+    );
+  }
+});
+
+test("added means unsynced, or stored within a minute of creation", () => {
+  const created = "2026-10-05T10:00:00Z";
+  const at = (ms: number) => new Date(Date.parse(created) + ms).toISOString().replace(".000Z", "Z");
+  const verb = (fields: Parameters<typeof item>[0]) => lately([item({ updated_by: "a", created_at: created, ...fields })], [])[0].verb;
+  assert.equal(verb({ updated_at: at(0) }), "added");
+  assert.equal(verb({ updated_at: at(ADDED_WITHIN_MS) }), "added");
+  assert.equal(verb({ updated_at: at(ADDED_WITHIN_MS + 1000) }), "changed");
+  assert.equal(verb({ updated_at: at(3_600_000), rev: 0 }), "added");
 });

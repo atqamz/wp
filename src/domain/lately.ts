@@ -3,6 +3,8 @@ import { compare } from "./order.ts";
 
 export const LATELY_COUNT = 5;
 
+export const ADDED_WITHIN_MS = 60_000;
+
 export type Activity = {
   id: string;
   by: "a" | "b";
@@ -16,7 +18,7 @@ const verbOf = (row: ItemRow | BudgetEntryRow): Activity["verb"] =>
     ? "ticked"
     : "entry_type" in row && row.entry_type === "payment" && row.status === "paid"
       ? "paid"
-      : row.created_at === row.updated_at
+      : row.rev === 0 || Date.parse(row.updated_at) - Date.parse(row.created_at) <= ADDED_WITHIN_MS
         ? "added"
         : "changed";
 
