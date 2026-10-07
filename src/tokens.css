@@ -1,0 +1,108 @@
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Mona Sans";
+  font-style: normal;
+  font-weight: 200 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/mona-sans/files/mona-sans-latin-wdth-normal.woff2") format("woff2-variations");
+}
+
+:root {
+  color-scheme: light dark;
+  --bg: oklch(97.6% 0.006 265);
+  --surface: oklch(99.6% 0.002 265);
+  --surface-2: oklch(94.2% 0.012 265);
+  --line: oklch(88.5% 0.016 265);
+  --ink: oklch(22% 0.045 268);
+  --ink-2: oklch(44% 0.035 268);
+  --route: oklch(26% 0.085 268);
+  --hero: oklch(26% 0.085 268);
+  --on-hero: oklch(98% 0.008 268);
+  --on-hero-2: oklch(80% 0.045 268);
+  --accent: oklch(30% 0.1 268);
+  --on-accent: oklch(98% 0.008 268);
+  --signal: oklch(75% 0.13 355);
+  --on-signal: oklch(22% 0.05 355);
+  --signal-ink: oklch(52% 0.17 355);
+  --late: oklch(50% 0.19 27);
+  --late-bg: oklch(94% 0.03 27);
+  --focus: oklch(30% 0.06 268);
+  --tint-a: oklch(86% 0.05 250);
+  --tint-b: oklch(87% 0.05 350);
+  --on-tint: oklch(24% 0.04 268);
+
+  --font-text: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Mona Sans", ui-sans-serif, system-ui, sans-serif;
+  --stretch-display: 125%;
+  --fs-micro: 0.78125rem;
+  --fs-meta: 0.875rem;
+  --fs-body: 1rem;
+  --fs-station: 1.125rem;
+  --fs-current: 1.425rem;
+  --fs-title: 1.8rem;
+  --fs-count: 7rem;
+  --fs-count-wide: 7.5rem;
+
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.25rem;
+  --s6: 1.5rem;
+  --s7: 2rem;
+  --s8: 2.5rem;
+  --s9: 3.5rem;
+  --row-min: 3.75rem;
+  --target-min: 2.75rem;
+  --r-control: 0.625rem;
+  --r-group: 1rem;
+  --route-w: 0.25rem;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --tabs: 4rem;
+  --sidebar: 15rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-state: 200ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(16.5% 0.035 268);
+    --surface: oklch(20.5% 0.04 268);
+    --surface-2: oklch(24.5% 0.045 268);
+    --line: oklch(31% 0.045 268);
+    --ink: oklch(95% 0.012 268);
+    --ink-2: oklch(76% 0.035 268);
+    --route: oklch(72% 0.08 268);
+    --hero: oklch(25% 0.08 268);
+    --on-hero: oklch(97% 0.01 268);
+    --on-hero-2: oklch(80% 0.05 268);
+    --accent: oklch(82% 0.08 268);
+    --on-accent: oklch(20% 0.05 268);
+    --signal: oklch(79% 0.11 355);
+    --on-signal: oklch(20% 0.05 355);
+    --signal-ink: oklch(81% 0.1 355);
+    --late: oklch(74% 0.15 27);
+    --late-bg: oklch(30% 0.07 27);
+    --focus: oklch(92% 0.02 268);
+    --tint-a: oklch(38% 0.07 250);
+    --tint-b: oklch(38% 0.07 350);
+    --on-tint: oklch(95% 0.01 268);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-state: 0ms;
+  }
+}
