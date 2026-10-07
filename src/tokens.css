@@ -75,7 +75,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: oklch(16.5% 0.035 268);
     --surface: oklch(20.5% 0.04 268);
     --surface-2: oklch(24.5% 0.045 268);
@@ -97,6 +97,34 @@
     --tint-b: oklch(38% 0.07 350);
     --on-tint: oklch(95% 0.01 268);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(16.5% 0.035 268);
+  --surface: oklch(20.5% 0.04 268);
+  --surface-2: oklch(24.5% 0.045 268);
+  --line: oklch(31% 0.045 268);
+  --ink: oklch(95% 0.012 268);
+  --ink-2: oklch(76% 0.035 268);
+  --route: oklch(72% 0.08 268);
+  --hero: oklch(25% 0.08 268);
+  --on-hero: oklch(97% 0.01 268);
+  --on-hero-2: oklch(80% 0.05 268);
+  --accent: oklch(82% 0.08 268);
+  --on-accent: oklch(20% 0.05 268);
+  --signal: oklch(79% 0.11 355);
+  --on-signal: oklch(20% 0.05 355);
+  --late: oklch(74% 0.15 27);
+  --late-bg: oklch(30% 0.07 27);
+  --focus: oklch(92% 0.02 268);
+  --tint-a: oklch(38% 0.07 250);
+  --tint-b: oklch(38% 0.07 350);
+  --on-tint: oklch(95% 0.01 268);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {

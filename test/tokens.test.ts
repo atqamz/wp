@@ -5,7 +5,15 @@ import { luminance } from "./oklch.ts";
 
 const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
 
-const [lightPart, darkPart] = css.split("@media (prefers-color-scheme: dark)");
+const block = (selector: string) => {
+  const start = css.indexOf(`${selector} {`);
+  return start < 0 ? "" : css.slice(start, css.indexOf("}", start));
+};
+
+const lightPart = css.slice(0, css.indexOf("@media (prefers-color-scheme: dark)"));
+const darkPart = block(':root:not([data-theme="light"])');
+const forcedDark = block(':root[data-theme="dark"]');
+const forcedLight = block(':root[data-theme="light"]');
 
 const read = (part: string) =>
   Object.fromEntries(
@@ -100,4 +108,16 @@ test("every colour token a rule uses has a contrast pair, except the decorative 
 test("only decorative or disabled rules use opacity, so a text pair never hides behind it", () => {
   const rules = [...sources.matchAll(/([^{}]+)\{[^{}]*\bopacity:\s*[\d.]+/g)].map(([, selector]) => selector.replace(/\s+/g, " ").trim());
   assert.deepEqual(rules, ['.sync[data-state="pending"] a::before, .sync[data-state="offline"] a::before', "button:disabled"]);
+});
+
+test("a chosen dark theme has exactly the tokens of the system dark theme, so the two cannot drift", () => {
+  assert.ok(Object.keys(read(darkPart)).length >= 20);
+  assert.deepEqual(read(forcedDark), read(darkPart));
+  assert.match(forcedDark, /color-scheme: dark;/);
+  assert.match(forcedLight, /color-scheme: light;/);
+  assert.deepEqual(read(forcedLight), {});
+});
+
+test("the system dark theme steps aside when light is chosen", () => {
+  assert.match(css, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{/);
 });
