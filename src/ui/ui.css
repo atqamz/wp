@@ -265,7 +265,6 @@ button.danger {
 .amt {
   font-variant-numeric: tabular-nums lining-nums;
   font-weight: 650;
-  white-space: nowrap;
 }
 
 .cur {
@@ -315,6 +314,7 @@ button.danger {
 .check input {
   appearance: none;
   margin: 0;
+  padding: 0;
   border: 2px solid var(--ink-2);
   border-radius: 50%;
   background: transparent;
@@ -368,14 +368,6 @@ button.danger {
 .avs .av + .av {
   margin-left: calc(var(--av, 1.25rem) * -0.15);
   box-shadow: 0 0 0 1.5px var(--avring, var(--surface));
-}
-
-.pair {
-  --av: 2rem;
-}
-
-.pair .av {
-  font-size: 0.75rem;
 }
 
 .row-links {
