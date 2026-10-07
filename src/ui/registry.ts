@@ -17,7 +17,7 @@ export const views = {
     variant: "task",
     route: "tasks",
     fields: ["status", "due_on", "who", "group_key", "amount", "note", "data.decision"],
-    summary: ["due_on", "who", "group_key"],
+    summary: ["due_on", "who"],
     done: "done",
     assignable: true,
   },

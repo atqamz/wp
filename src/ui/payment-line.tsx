@@ -1,26 +1,19 @@
 import { useState } from "react";
 import type { BudgetEntryRow } from "../../shared/tables.ts";
-import { isOverdue } from "../domain/dates.ts";
-import { usePartner, useStamp, useToday } from "../hooks/use-plan.ts";
+import { useStamp } from "../hooks/use-plan.ts";
 import { actions } from "../hooks/use-store.ts";
+import { Who } from "./avatar.tsx";
+import { Due } from "./due.tsx";
 import { failureOf } from "./failure.ts";
-import { formatDate, formatDay, formatMoney } from "./format.ts";
+import { formatDate } from "./format.ts";
+import { Icon } from "./icons.tsx";
+import { Money } from "./money.tsx";
 import { text } from "./text.ts";
 
 export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
-  const today = useToday();
   const stamp = useStamp();
-  const { label } = usePartner();
   const [failure, setFailure] = useState<string[]>([]);
   const paid = payment.status === "paid";
-  const late = !paid && isOverdue(payment.due_on, today);
-  const when = paid
-    ? payment.done_on
-      ? `${text.paidOn} ${formatDate(payment.done_on)}`
-      : text.option.status.paid
-    : payment.due_on
-      ? `${late ? text.week.overdue : text.due} ${formatDay(payment.due_on)}`
-      : text.noDueDate;
 
   const toggle = async () => {
     const result = await actions.update(
@@ -32,19 +25,38 @@ export function PaymentLine({ payment }: { payment: BudgetEntryRow }) {
   };
 
   return (
-    <li className="line" data-done={paid || undefined}>
-      <div className="line-row">
-        <a className="line-main" href={`#/payments/${payment.id}`}>
+    <li data-done={paid || undefined}>
+      <div className="row">
+        <span className="lead" aria-hidden="true">
+          <Icon name="receipt" />
+        </span>
+        <a className="row-b" href={`#/payments/${payment.id}`}>
           <span className="title">{payment.title}</span>
           <span className="meta">
-            <span>{payment.amount === null ? text.notSet : formatMoney(payment.amount)}</span>
-            <span data-late={late || undefined}>{when}</span>
-            {payment.who && <span>{label(payment.who)}</span>}
+            {paid ? (
+              <span className="done-m">
+                <Icon name="check" />
+                {payment.done_on ? `${text.paidOn} ${formatDate(payment.done_on)}` : text.option.status.paid}
+              </span>
+            ) : payment.due_on ? (
+              <Due on={payment.due_on} />
+            ) : (
+              <span>{text.noDueDate}</span>
+            )}
+            {payment.who && <Who side={payment.who} />}
           </span>
         </a>
-        <button type="button" className="action" onClick={toggle}>
-          {paid ? text.markUnpaid : text.markPaid}
-        </button>
+        <span className="row-r">
+          {payment.amount === null ? <span className="amt">{text.notSet}</span> : <Money rupiah={payment.amount} />}
+          <button
+            type="button"
+            className="pill"
+            aria-label={paid ? text.markUnpaidNamed(payment.title) : text.markPaidNamed(payment.title)}
+            onClick={toggle}
+          >
+            {paid ? text.markUnpaid : text.markPaid}
+          </button>
+        </span>
       </div>
       {failure.length > 0 && (
         <p className="error" role="alert">

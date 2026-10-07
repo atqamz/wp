@@ -1,49 +1,56 @@
 import type { ReactNode } from "react";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
+import { Pair } from "./avatar.tsx";
 import { Icon } from "./icons.tsx";
-import type { IconName } from "./icons.tsx";
+import { navItems } from "./nav.ts";
 import { SyncBadge } from "./sync-badge.tsx";
 import { text } from "./text.ts";
 
-const tabs: { section: string; icon: IconName; label: string }[] = [
-  { section: "", icon: "week", label: text.nav.week },
-  { section: "tasks", icon: "tasks", label: text.nav.tasks },
-  { section: "budget", icon: "budget", label: text.nav.budget },
-  { section: "vendors", icon: "vendors", label: text.nav.vendors },
-  { section: "guests", icon: "guests", label: text.nav.guests },
-];
+function Nav({ className, section }: { className: "tabs" | "rail"; section: string }) {
+  return (
+    <nav className={className} aria-label={text.nav.label}>
+      {navItems(className).map((item) => (
+        <a key={item.section} href={`#/${item.section}`} aria-current={item.section === section ? "page" : undefined}>
+          <Icon name={item.icon} />
+          <span>{item.label}</span>
+        </a>
+      ))}
+    </nav>
+  );
+}
 
 export function Shell({ section, children }: { section: string; children: ReactNode }) {
   const { notice } = useSnapshot();
+  const home = section === "";
   return (
-    <>
-      <header className="bar">
-        <span className="app-title">{text.appName}</span>
-        <SyncBadge />
-        <a className="icon-link" href="#/settings" aria-label={text.nav.settings} aria-current={section === "settings" ? "page" : undefined}>
-          <Icon name="settings" />
-        </a>
-      </header>
-      {notice && (
-        <div className="notice" role="status">
-          <p>
-            {text.notice.reset}
-            {notice.discarded > 0 && ` ${text.notice.discarded(notice.discarded)}`}
-          </p>
-          <button type="button" className="secondary" onClick={actions.dismissNotice}>
-            {text.notice.dismiss}
-          </button>
-        </div>
-      )}
-      <main>{children}</main>
-      <nav className="tabs" aria-label={text.nav.label}>
-        {tabs.map((tab) => (
-          <a key={tab.section} href={`#/${tab.section}`} aria-current={tab.section === section ? "page" : undefined}>
-            <Icon name={tab.icon} />
-            <span>{tab.label}</span>
+    <div className="shell">
+      <div className="chrome">
+        <header className="bar" data-hero={home || undefined}>
+          <a className="brand" href="#/">
+            {text.appName}
           </a>
-        ))}
-      </nav>
-    </>
+          <SyncBadge />
+          <a className="pair" href="#/settings" aria-label={text.nav.settings} aria-current={section === "settings" ? "page" : undefined}>
+            <Pair />
+          </a>
+        </header>
+        <Nav className="rail" section={section} />
+      </div>
+      <div className="content">
+        {notice && (
+          <div className="notice" role="status">
+            <p>
+              {text.notice.reset}
+              {notice.discarded > 0 && ` ${text.notice.discarded(notice.discarded)}`}
+            </p>
+            <button type="button" className="secondary" onClick={actions.dismissNotice}>
+              {text.notice.dismiss}
+            </button>
+          </div>
+        )}
+        <main data-page={home ? "home" : undefined}>{children}</main>
+      </div>
+      <Nav className="tabs" section={section} />
+    </div>
   );
 }

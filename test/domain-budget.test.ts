@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetOf } from "../src/domain/budget.ts";
+import { budgetOf, dueSoon } from "../src/domain/budget.ts";
 import { entry, payment } from "./domain-rows.ts";
 
 const figures = (totals: ReturnType<typeof budgetOf>) => ({
@@ -131,4 +131,23 @@ test("lines and payments follow the fractional sort", () => {
     budget.groups[0].lines.map((line) => line.row.title),
     ["first", "between", "second"],
   );
+});
+
+test("due soon adds unpaid payments dated up to 30 days ahead, late ones included", () => {
+  const venue = entry({ title: "Venue", amount: 100 });
+  const budget = budgetOf([
+    venue,
+    payment(venue, { amount: 1, due_on: "2026-09-01" }),
+    payment(venue, { amount: 10, due_on: "2026-10-06" }),
+    payment(venue, { amount: 100, due_on: "2026-11-05" }),
+    payment(venue, { amount: 1000, due_on: "2026-11-06" }),
+    payment(venue, { amount: 10_000, due_on: null }),
+    payment(venue, { amount: 100_000, due_on: "2026-10-07", status: "paid", done_on: "2026-10-07" }),
+  ]);
+  assert.equal(dueSoon(budget, "2026-10-06"), 111);
+});
+
+test("due soon ignores payments whose planned line is gone", () => {
+  const gone = entry({});
+  assert.equal(dueSoon(budgetOf([payment(gone, { amount: 5, due_on: "2026-10-07" })]), "2026-10-06"), 0);
 });

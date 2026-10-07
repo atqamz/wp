@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 
-export function Title({ children }: { children: ReactNode }) {
-  return <h1 tabIndex={-1}>{children}</h1>;
+export function Title({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <h1 tabIndex={-1} className={className}>
+      {children}
+    </h1>
+  );
 }

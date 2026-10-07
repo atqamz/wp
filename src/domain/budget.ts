@@ -1,7 +1,10 @@
 import type { BudgetEntryRow } from "../../shared/tables.ts";
+import { addDays } from "./dates.ts";
 import { bySort, compare } from "./order.ts";
 
 export const EVENT_ORDER = ["engagement", "ceremony", "reception"];
+
+export const DUE_DAYS = 30;
 
 export type Line = {
   row: BudgetEntryRow;
@@ -68,4 +71,14 @@ export const budgetOf = (entries: readonly BudgetEntryRow[]): Budget => {
     return { key, lines: own, ...totalsOf(own) };
   });
   return { groups, ...totalsOf(lines) };
+};
+
+export const dueSoon = (budget: Budget, today: string) => {
+  const horizon = addDays(today, DUE_DAYS);
+  return add(
+    budget.groups
+      .flatMap((group) => group.lines.flatMap((line) => line.payments))
+      .filter((payment) => payment.status === "due" && payment.due_on !== null && payment.due_on <= horizon)
+      .map((payment) => payment.amount ?? 0),
+  );
 };

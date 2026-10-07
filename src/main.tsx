@@ -4,6 +4,7 @@ import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useRoute } from "./router.ts";
 import { ErrorBoundary } from "./ui/error-boundary.tsx";
+import { Recovery } from "./ui/recovery-screen.tsx";
 import { Shell } from "./ui/shell.tsx";
 import { listViews, views } from "./ui/registry.ts";
 import { text } from "./ui/text.ts";
@@ -16,8 +17,10 @@ import { GenericList } from "./views/generic-list.tsx";
 import { Home } from "./views/home.tsx";
 import { Settings } from "./views/settings.tsx";
 import { Sync } from "./views/sync.tsx";
+import "./tokens.css";
 import "./style.css";
 import "./ui/ui.css";
+import "./views/home.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
   const listed = listViews.find((name) => views[name].route === section);
@@ -77,4 +80,4 @@ root.render(
   </StrictMode>,
 );
 
-openStore().catch(() => root.render(<p className="splash" role="alert">{text.storageBroken}</p>));
+openStore().catch(() => root.render(<Recovery title={text.storageBrokenTitle} body={text.storageBroken} />));

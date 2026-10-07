@@ -1,5 +1,6 @@
 import { badgeFor } from "../domain/status.ts";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
+import { Icon } from "./icons.tsx";
 import { text } from "./text.ts";
 
 export function SyncBadge() {
@@ -10,17 +11,23 @@ export function SyncBadge() {
     login: text.sync.login,
     rejected: text.sync.rejected(rejected.length),
     offline: text.sync.offline(pending),
-    pending: text.sync.pending(pending),
+    pending: text.sync.pending,
     synced: text.sync.synced,
   };
   return (
     <div role="status" className="sync" data-state={state}>
-      {state === "login" ? (
+      {state === "synced" ? (
+        <span className="visually-hidden">{labels.synced}</span>
+      ) : state === "login" ? (
         <button type="button" onClick={actions.logIn}>
+          <Icon name="late" />
           {labels.login}
         </button>
       ) : (
-        <a href="#/sync">{labels[state]}</a>
+        <a href="#/sync">
+          {state === "storage" || state === "rejected" ? <Icon name="late" /> : null}
+          {labels[state]}
+        </a>
       )}
     </div>
   );

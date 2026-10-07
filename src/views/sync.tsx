@@ -60,11 +60,11 @@ export function Sync() {
         <section aria-labelledby="rejected">
           <h2 id="rejected">{text.sync.attention}</h2>
           <p className="hint">{text.sync.attentionBody}</p>
-          <ul className="lines">
+          <ul className="rows">
             {rejected.map((entry) => (
-              <li key={entry.seq} className="line">
-                <div className="line-row">
-                  <div className="line-main">
+              <li key={entry.seq}>
+                <div className="row">
+                  <div className="row-b">
                     <span className="title">
                       {text.sync.op[entry.op]} {text.sync.table[entry.table]}: {nameOf(entry)}
                     </span>
@@ -79,7 +79,7 @@ export function Sync() {
                       ))}
                     </span>
                   </div>
-                  <button type="button" className="action" onClick={() => actions.discard(entry.seq)}>
+                  <button type="button" className="pill" onClick={() => actions.discard(entry.seq)}>
                     {text.sync.discard}
                   </button>
                 </div>

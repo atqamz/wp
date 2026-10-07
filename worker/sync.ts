@@ -122,7 +122,7 @@ const differences = (name: TableName, stored: Raw, patch: Raw) => {
 const insert = (ctx: Context, name: TableName, mutation: Mutation): Failure | Statement => {
   const columns = Object.entries(tables[name].columns) as [string, Column][];
   const row: Raw = Object.fromEntries(columns.map(([column, spec]) => [column, mutation.patch[column] ?? spec.default ?? null]));
-  Object.assign(row, { rev: 0, updated_at: ctx.stamp, updated_by: ctx.who, deleted_at: null });
+  Object.assign(row, { rev: 0, created_at: ctx.stamp, updated_at: ctx.stamp, updated_by: ctx.who, deleted_at: null });
   const conflicts = checkRefs(ctx.world, name, undefined, row);
   if (conflicts.length > 0) return { status: 409, errors: conflicts };
   ctx.world[name].set(mutation.row_id, row);
