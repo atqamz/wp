@@ -4,6 +4,7 @@ import { screenFor } from "./domain/status.ts";
 import { openStore, useSnapshot } from "./hooks/use-store.ts";
 import { useRoute } from "./router.ts";
 import { ErrorBoundary } from "./ui/error-boundary.tsx";
+import { Recovery } from "./ui/recovery-screen.tsx";
 import { Shell } from "./ui/shell.tsx";
 import { listViews, views } from "./ui/registry.ts";
 import { text } from "./ui/text.ts";
@@ -77,4 +78,4 @@ root.render(
   </StrictMode>,
 );
 
-openStore().catch(() => root.render(<p className="splash" role="alert">{text.storageBroken}</p>));
+openStore().catch(() => root.render(<Recovery title={text.storageBrokenTitle} body={text.storageBroken} />));
