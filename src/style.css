@@ -33,8 +33,7 @@ body {
   outline-offset: 2px;
 }
 
-.bar[data-hero] :focus-visible,
-.hero :focus-visible {
+.bar[data-hero] :focus-visible {
   outline-color: var(--on-hero);
 }
 
@@ -166,16 +165,13 @@ a {
 .pair {
   --av: 2rem;
   display: grid;
+  --av-text: 0.75rem;
   flex: none;
   place-items: center;
   min-width: var(--target-min);
   min-height: var(--target-min);
   border-radius: 999px;
   text-decoration: none;
-}
-
-.pair .av {
-  font-size: 0.75rem;
 }
 
 .tabs {

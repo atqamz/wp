@@ -29,7 +29,7 @@ function PersonRow({ row, kind, selected }: { row: ItemRow; kind: Kind; selected
   const pic = typeof row.data?.pic === "string" ? row.data.pic : null;
   return (
     <li data-selected={selected || undefined}>
-      <div className="row">
+      <div className="row person">
         <a className="row-b" href={`#/${views[kind].route}/${row.id}`} aria-current={selected ? "true" : undefined}>
           <span className="title">{row.title}</span>
           <span className="meta">
@@ -140,7 +140,7 @@ export function People({ route, id }: { route: string; id?: string }) {
               {section.key ?? text.contacts.noGroup}{" "}
               <span className="tally">{kind === "guest" ? text.people(total(headcount(section.rows)).people) : section.rows.length}</span>
             </h2>
-            <div className="sheet" data-kind={kind}>
+            <div className="roster" data-kind={kind}>
               <ul className="rows">
                 {section.rows.map((row) => (
                   <PersonRow key={row.id} row={row} kind={kind} selected={row.id === id} />

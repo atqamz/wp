@@ -235,8 +235,7 @@ button.danger {
   min-width: 0;
 }
 
-.meta svg,
-.stop-h svg {
+.meta svg {
   flex: none;
   width: 0.9375rem;
   height: 0.9375rem;
@@ -346,7 +345,7 @@ button.danger {
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--on-tint);
-  font: 700 0.6875rem / 1 var(--font-text);
+  font: 700 var(--av-text, 0.6875rem) / 1 var(--font-text);
 }
 
 .av[data-side="a"] {
@@ -407,41 +406,6 @@ button.danger {
   flex-wrap: wrap;
   gap: var(--s3);
   margin-top: var(--s2);
-}
-
-.totals {
-  display: grid;
-  margin: 0 0 var(--s2);
-  padding: var(--s1) var(--s3);
-  border-radius: var(--r-group);
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-.totals div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0 var(--s4);
-  min-height: 2.5rem;
-}
-
-.totals div + div {
-  border-top: 1px solid var(--line);
-}
-
-.totals dt {
-  min-width: 0;
-  color: var(--ink-2);
-}
-
-.totals dd {
-  min-width: 0;
-  margin: 0 0 0 auto;
-  text-align: right;
-  font-variant-numeric: tabular-nums lining-nums;
-  font-weight: 700;
 }
 
 .summary {

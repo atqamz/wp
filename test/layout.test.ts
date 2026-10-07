@@ -33,13 +33,40 @@ test("controls that are not full rows keep a 44 px target", () => {
   assert.match(rule(".brand"), /min-width:\s*var\(--target-min\)/);
 });
 
-test("no class is styled in two stylesheets, so a new rule cannot recolour another screen", () => {
-  const owners = new Map<string, Set<string>>();
-  for (const { name, css } of sheets) {
-    for (const [, selector] of css.matchAll(/(?:^|\n)(\.[a-z][\w-]*)\s*(?:,|\{)/g)) (owners.get(selector) ?? owners.set(selector, new Set()).get(selector)!).add(name);
+const sources = readdirSync(new URL("../src/", import.meta.url), { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".tsx"))
+  .map((entry) => readFileSync(`${entry.parentPath}/${entry.name}`, "utf8"));
+
+const classesIn = (css: string) => {
+  const found = new Set<string>();
+  for (const [, prelude] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{/g)) {
+    if (!prelude.trim().startsWith("@")) for (const [, name] of prelude.matchAll(/\.([a-zA-Z][\w-]*)/g)) found.add(name);
   }
+  return found;
+};
+
+const used = new Set(
+  sources.flatMap((source) => [...source.matchAll(/(["'`])((?:\\.|(?!\1)[^\\])*)\1/g)].flatMap(([, , body]) => body.split(/\s+/))),
+);
+
+test("the class finder sees every class of a compound, descendant or attribute selector", () => {
+  assert.deepEqual([...classesIn(".a .b > .c[data-x] + .d:hover, .e::before { color: red }\n@media (min-width: 1rem) { .f { top: 0 } }")].sort(), ["a", "b", "c", "d", "e", "f"]);
+  assert.deepEqual([...classesIn("/* .gone { } */ .kept { }")], ["kept"]);
+});
+
+test("no class appears in two stylesheets, in any selector, so a rule cannot reach into another screen's markup", () => {
+  const owners = new Map<string, string[]>();
+  for (const { name, css } of sheets) for (const cls of classesIn(css)) owners.set(cls, [...(owners.get(cls) ?? []), name]);
   assert.deepEqual(
-    [...owners].filter(([, files]) => files.size > 1).map(([selector]) => selector),
+    [...owners].filter(([, files]) => files.length > 1).map(([cls, files]) => `.${cls}: ${files.join(", ")}`),
+    [],
+  );
+});
+
+test("every class a stylesheet names is used by some component, so a removed screen leaves no rules behind", () => {
+  assert.ok(used.size > 100);
+  assert.deepEqual(
+    [...new Set(sheets.flatMap(({ css }) => [...classesIn(css)]))].filter((cls) => !used.has(cls)).sort(),
     [],
   );
 });

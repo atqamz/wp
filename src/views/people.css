@@ -32,18 +32,22 @@
   color: var(--ink);
 }
 
-.row .quote {
+.roster {
+  container-type: inline-size;
+}
+
+.person .quote {
   display: none;
 }
 
 @container (min-width: 40rem) {
-  .sheet[data-kind="vendor"] .row {
+  .roster[data-kind="vendor"] .person {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 9rem) auto;
     align-items: center;
   }
 
-  .sheet[data-kind="vendor"] .quote {
+  .roster[data-kind="vendor"] .quote {
     display: block;
     text-align: right;
   }
