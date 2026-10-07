@@ -18,6 +18,7 @@ export type Type =
   | "zone"
   | "decimal"
   | "dates"
+  | "stages"
   | readonly string[];
 
 export type Column = {
@@ -85,6 +86,7 @@ export const tables = {
       hijri_offset_days: ["-2", "-1", "0", "1", "2"],
       holidays: "dates",
       portion_multiplier: "decimal",
+      stages: "stages",
     },
   },
   items: {
