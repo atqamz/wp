@@ -163,30 +163,29 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
       if (queue.length === 0) break;
       const batch = takeBatch(queue);
       sending = new Set(batch.map((entry) => entry.seq));
-      let res: Awaited<ReturnType<Api["push"]>>;
       try {
-        res = await api.push(batch.map(wire));
+        const res = await api.push(batch.map(wire));
+        if (res.kind === "ok") {
+          if ((await reconcile(res.body, batch.length)) === "reset") continue;
+          const rows = newer(base, res.body.rows);
+          await persist({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
+          absorb(base, rows);
+          outbox = outbox.filter((entry) => !sending.has(entry.seq));
+          link = "online";
+          emit();
+        } else if (res.kind === "rejected") {
+          const { index } = res.rejection;
+          const named = typeof index === "number" && Number.isInteger(index) && index >= 0 && index < batch.length;
+          const parked = (named ? [batch[index]] : batch).map((entry) => ({ ...entry, rejected: res.rejection.errors.map(String) }));
+          await persist({ outbox: { put: parked } });
+          outbox = outbox.map((entry) => parked.find((candidate) => candidate.seq === entry.seq) ?? entry);
+          link = "online";
+          emit();
+        } else {
+          return failed(res.kind);
+        }
       } finally {
         sending = new Set();
-      }
-      if (res.kind === "ok") {
-        if ((await reconcile(res.body, batch.length)) === "reset") continue;
-        const rows = newer(base, res.body.rows);
-        await persist({ rows, outbox: { drop: batch.map((entry) => entry.seq) } });
-        absorb(base, rows);
-        outbox = outbox.filter((entry) => !batch.includes(entry));
-        link = "online";
-        emit();
-      } else if (res.kind === "rejected") {
-        const { index } = res.rejection;
-        const named = typeof index === "number" && Number.isInteger(index) && index >= 0 && index < batch.length;
-        const parked = (named ? [batch[index]] : batch).map((entry) => ({ ...entry, rejected: res.rejection.errors.map(String) }));
-        await persist({ outbox: { put: parked } });
-        outbox = outbox.map((entry) => parked.find((candidate) => candidate.seq === entry.seq) ?? entry);
-        link = "online";
-        emit();
-      } else {
-        return failed(res.kind);
       }
     }
     await catchUp();
@@ -250,7 +249,7 @@ export const createStore = ({ persistence, api }: { persistence: Persistence; ap
     if (errors.length > 0) return { ok: false, errors };
     const earlier =
       mutation.table === "settings" && mutation.op === "update"
-        ? outbox.find((entry) => entry.table === "settings" && entry.row_id === mutation.row_id && entry.op !== "delete" && !entry.rejected && !sending.has(entry.seq))
+        ? outbox.findLast((entry) => entry.table === "settings" && entry.row_id === mutation.row_id && entry.op !== "delete" && !entry.rejected && !sending.has(entry.seq))
         : undefined;
     if (earlier) return fold(earlier, mutation);
     const seq = Math.max(nextSeq, Date.now() * 1000 + Math.floor(Math.random() * 1000));
