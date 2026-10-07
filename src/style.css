@@ -249,7 +249,7 @@ main.recovery {
   text-align: center;
 }
 
-@media (min-width: 56.25rem) {
+@media (min-width: 62.5rem) {
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar) minmax(0, 1fr);

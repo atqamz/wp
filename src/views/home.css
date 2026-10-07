@@ -1,5 +1,7 @@
 .hero {
-  padding: var(--s2) max(var(--s5), var(--safe-r)) var(--s6) max(var(--s5), var(--safe-l));
+  --column: 40rem;
+  --gutter: var(--s5);
+  padding: var(--s2) max(var(--gutter), calc((100% - var(--column)) / 2 + var(--gutter))) var(--s6);
   background: var(--hero);
   color: var(--on-hero);
   --avring: var(--hero);
@@ -77,6 +79,7 @@
 .home {
   max-width: 40rem;
   margin: 0 auto;
+  padding: 0 var(--safe-r) 0 var(--safe-l);
 }
 
 .spine {
@@ -321,13 +324,16 @@
   font-size: var(--fs-micro);
 }
 
-@media (min-width: 56.25rem) {
+@media (min-width: 62.5rem) {
   .hero {
+    --column: 72rem;
+    --gutter: var(--s8);
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 0 3rem;
     align-items: end;
-    padding: var(--s7) var(--s8) var(--s6);
+    padding-top: var(--s7);
+    padding-bottom: var(--s6);
   }
 
   .count {
@@ -355,6 +361,10 @@
     text-align: right;
   }
 
+  .hero-money > span {
+    white-space: normal;
+  }
+
   .strip {
     --avring: var(--hero);
     position: relative;
@@ -362,7 +372,7 @@
     grid-column: 1 / 3;
     grid-row: 2;
     height: 6.5rem;
-    margin: var(--s5) 3.25rem 0 var(--s2);
+    margin: var(--s5) 3rem 0;
   }
 
   .strip::before,
@@ -398,16 +408,6 @@
     text-align: center;
   }
 
-  .st:first-child {
-    margin-left: -0.5rem;
-    text-align: left;
-  }
-
-  .st:last-child {
-    margin-left: -7.75rem;
-    text-align: right;
-  }
-
   .st b {
     display: block;
     color: var(--on-hero);
@@ -423,16 +423,6 @@
     border: 3px solid color-mix(in oklch, var(--on-hero) 45%, transparent);
     background: var(--hero);
     transform: translate(-50%, -50%);
-  }
-
-  .st:first-child > .mk {
-    left: 0.5rem;
-  }
-
-  .st:last-child > .mk {
-    right: -0.25rem;
-    left: auto;
-    transform: translate(0, -50%);
   }
 
   .st[data-state="past"] > .mk {
@@ -492,15 +482,12 @@
   }
 
   .home {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 22.5rem;
-    gap: 0 var(--s7);
-    max-width: none;
-    margin: 0;
+    max-width: 72rem;
+    padding: 0;
   }
 
   .spine {
-    padding: var(--s7) 0 0 var(--s8);
+    padding: var(--s7) var(--s8) 0;
   }
 
   .stop {
@@ -515,6 +502,22 @@
   .stop::before,
   .stop > .mk {
     display: none;
+  }
+
+  .side {
+    padding: var(--s2) var(--s8) 0;
+  }
+}
+
+@media (min-width: 75rem) {
+  .home {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22.5rem;
+    gap: 0 var(--s7);
+  }
+
+  .spine {
+    padding-right: 0;
   }
 
   .side {
@@ -537,7 +540,7 @@
     animation: pulse 2.2s var(--ease-out) 0.4s 1;
   }
 
-  @media (min-width: 56.25rem) {
+  @media (min-width: 62.5rem) {
     .strip::after {
       transform-origin: left;
       animation: draw-x 0.9s var(--ease-out) both 0.15s;
