@@ -31,7 +31,6 @@
   --on-accent: oklch(98% 0.008 268);
   --signal: oklch(75% 0.13 355);
   --on-signal: oklch(22% 0.05 355);
-  --signal-ink: oklch(52% 0.17 355);
   --late: oklch(50% 0.19 27);
   --late-bg: oklch(94% 0.03 27);
   --focus: oklch(30% 0.06 268);
@@ -91,7 +90,6 @@
     --on-accent: oklch(20% 0.05 268);
     --signal: oklch(79% 0.11 355);
     --on-signal: oklch(20% 0.05 355);
-    --signal-ink: oklch(81% 0.1 355);
     --late: oklch(74% 0.15 27);
     --late-bg: oklch(30% 0.07 27);
     --focus: oklch(92% 0.02 268);

@@ -270,7 +270,6 @@ button.danger {
 
 .cur {
   font-weight: 450;
-  opacity: 0.78;
 }
 
 [data-done] > .row .amt {

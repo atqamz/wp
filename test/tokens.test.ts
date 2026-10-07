@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
 
@@ -38,20 +38,26 @@ const ratio = (theme: Record<string, number[]>, fg: string, bg: string) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
+const sources = readdirSync(new URL("../src/", import.meta.url), { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".css") && entry.name !== "tokens.css")
+  .map((entry) => readFileSync(`${entry.parentPath}/${entry.name}`, "utf8"))
+  .join("\n");
+
+const referenced = new Set([...sources.matchAll(/var\(--([a-z0-9-]+)/g)].map(([, name]) => name));
+
 const text = [
   ["ink", "bg"],
   ["ink", "surface"],
   ["ink", "surface-2"],
   ["ink-2", "bg"],
   ["ink-2", "surface"],
-  ["ink-2", "surface-2"],
   ["on-hero", "hero"],
   ["on-hero-2", "hero"],
   ["on-accent", "accent"],
   ["accent", "bg"],
+  ["accent", "surface"],
   ["on-signal", "signal"],
-  ["signal-ink", "bg"],
-  ["signal-ink", "surface"],
+  ["signal", "hero"],
   ["late", "bg"],
   ["late", "surface"],
   ["late", "late-bg"],
@@ -60,13 +66,13 @@ const text = [
 ];
 
 const graphics = [
-  ["signal", "hero"],
   ["focus", "bg"],
   ["focus", "surface"],
-  ["route", "bg"],
-  ["route", "surface"],
+  ["on-hero", "hero"],
   ["ink-2", "bg"],
   ["ink-2", "surface"],
+  ["route", "bg"],
+  ["route", "surface"],
 ];
 
 for (const [name, theme] of Object.entries(themes)) {
@@ -82,4 +88,29 @@ for (const [name, theme] of Object.entries(themes)) {
 test("both themes define the same tokens", () => {
   assert.deepEqual(Object.keys(themes.dark).sort(), Object.keys(themes.light).sort());
   assert.ok(Object.keys(themes.light).length >= 20);
+});
+
+test("every colour token is used by some rule, and every token in a contrast pair is", () => {
+  const pairs = new Set([...text, ...graphics].flat());
+  assert.deepEqual(
+    [...pairs].filter((name) => !referenced.has(name)),
+    [],
+  );
+  assert.deepEqual(
+    Object.keys(themes.light).filter((name) => !referenced.has(name)),
+    [],
+  );
+});
+
+test("every colour token a rule uses has a contrast pair, except the decorative line", () => {
+  const pairs = new Set([...text, ...graphics].flat());
+  assert.deepEqual(
+    Object.keys(themes.light).filter((name) => name !== "line" && referenced.has(name) && !pairs.has(name)),
+    [],
+  );
+});
+
+test("only decorative or disabled rules use opacity, so a text pair never hides behind it", () => {
+  const rules = [...sources.matchAll(/([^{}]+)\{[^{}]*\bopacity:\s*[\d.]+/g)].map(([, selector]) => selector.replace(/\s+/g, " ").trim());
+  assert.deepEqual(rules, ['.sync[data-state="pending"] a::before, .sync[data-state="offline"] a::before', "button:disabled"]);
 });
