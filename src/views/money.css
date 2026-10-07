@@ -1,0 +1,143 @@
+.summary + section {
+  margin-top: var(--s6);
+}
+
+.events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event {
+  --indent: min(2.25rem, 12vw);
+  position: relative;
+  margin: 0;
+  padding: 0 0 var(--s6) var(--indent);
+}
+
+.event::before {
+  content: "";
+  position: absolute;
+  top: 0.5rem;
+  bottom: -0.5rem;
+  left: calc(var(--indent) / 2);
+  width: var(--route-w);
+  margin-left: calc(var(--route-w) / -2);
+  border-radius: 2px;
+  background: var(--route);
+}
+
+.event:last-child::before {
+  display: none;
+}
+
+.event::after {
+  content: "";
+  position: absolute;
+  top: 0.3125rem;
+  left: calc(var(--indent) / 2);
+  box-sizing: border-box;
+  width: 1rem;
+  height: 1rem;
+  border: 3.5px solid var(--route);
+  border-radius: 50%;
+  background: var(--bg);
+  transform: translateX(-50%);
+}
+
+.event-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--s4);
+}
+
+.event-h h3 {
+  font: 700 var(--fs-station) / 1.2 var(--font-text);
+  letter-spacing: -0.005em;
+}
+
+.event progress {
+  margin: var(--s2) 0 0;
+}
+
+.event-m {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s3);
+  margin: var(--s1) 0 var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+}
+
+.sheet {
+  container-type: inline-size;
+}
+
+.sheet-h {
+  display: none;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px var(--s3);
+  min-height: var(--row-min);
+  padding: var(--s3) var(--s4);
+  color: inherit;
+  text-decoration: none;
+}
+
+.plan {
+  grid-column: 2;
+  text-align: right;
+}
+
+.plan[data-none] {
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+}
+
+.line-s {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 0 var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-meta);
+}
+
+@container (min-width: 40rem) {
+  .sheet-h,
+  .line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 8.5rem));
+  }
+
+  .sheet-h {
+    padding: 0 var(--s4) var(--s2);
+    color: var(--ink-2);
+    font-size: var(--fs-micro);
+    font-weight: 650;
+  }
+
+  .sheet-h span + span,
+  .plan,
+  .line-s span {
+    text-align: right;
+  }
+
+  .plan {
+    grid-column: auto;
+  }
+
+  .line-s {
+    display: contents;
+  }
+
+  .line-s .count-p {
+    display: none;
+  }
+}

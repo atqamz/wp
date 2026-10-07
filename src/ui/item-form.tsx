@@ -22,7 +22,7 @@ const valueOf = (row: Row, field: string) =>
   (field.startsWith("data.") ? (row.data?.[field.slice(5)] ?? null) : (row[field as keyof Row] ?? null)) as Value;
 
 export const backHref = (name: ViewName, row: Row) =>
-  name === "payment" ? `#/budget/${(row as BudgetEntryRow).budget_id}` : `#/${views[name].route}`;
+  name === "payment" ? `#/money/${(row as BudgetEntryRow).budget_id}` : `#/${views[name].route}`;
 
 export function ItemForm({ name, row }: { name: ViewName; row: Row }) {
   const view: View = views[name];

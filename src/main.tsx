@@ -6,32 +6,38 @@ import { useRoute } from "./router.ts";
 import { ErrorBoundary } from "./ui/error-boundary.tsx";
 import { Recovery } from "./ui/recovery-screen.tsx";
 import { Shell } from "./ui/shell.tsx";
-import { listViews, views } from "./ui/registry.ts";
 import { text } from "./ui/text.ts";
 import { Title } from "./ui/title.tsx";
-import { Budget } from "./views/budget.tsx";
-import { BudgetLine } from "./views/budget-line.tsx";
 import { Connect } from "./views/connect.tsx";
 import { GenericItem } from "./views/generic-item.tsx";
-import { GenericList } from "./views/generic-list.tsx";
 import { Home } from "./views/home.tsx";
+import { MoneyView } from "./views/money.tsx";
+import { People } from "./views/people.tsx";
 import { Settings } from "./views/settings.tsx";
 import { Sync } from "./views/sync.tsx";
+import { Tasks } from "./views/tasks.tsx";
 import "./tokens.css";
 import "./style.css";
 import "./ui/ui.css";
 import "./views/home.css";
+import "./views/money.css";
+import "./views/people.css";
 
 function Page({ section, id }: { section: string; id?: string }) {
-  const listed = listViews.find((name) => views[name].route === section);
-  if (listed) return id ? <GenericItem key={id} name={listed} id={id} /> : <GenericList name={listed} />;
   switch (section) {
     case "":
       return <Home />;
+    case "tasks":
+      return id ? <GenericItem key={id} name="task" id={id} /> : <Tasks />;
+    case "money":
     case "budget":
-      return id ? <BudgetLine key={id} id={id} /> : <Budget />;
+      return <MoneyView id={id} />;
     case "payments":
-      return id ? <GenericItem key={id} name="payment" id={id} /> : <Budget />;
+      return id ? <GenericItem key={id} name="payment" id={id} /> : <MoneyView />;
+    case "people":
+    case "guests":
+    case "vendors":
+      return <People route={section} id={id} />;
     case "settings":
       return <Settings />;
     case "sync":
@@ -46,14 +52,21 @@ function App() {
   const route = useRoute();
   const [section = "", id] = route.split("/").filter(Boolean);
   const first = useRef(true);
+  const split = useRef<Element | null>(null);
 
   useEffect(() => {
+    const now = document.querySelector(".split");
+    const selecting = now !== null && now === split.current && now.hasAttribute("data-wide") && id !== undefined;
     if (first.current) first.current = false;
-    else {
+    else if (!selecting) {
       document.querySelector<HTMLElement>("h1")?.focus();
       scrollTo(0, 0);
     }
   }, [route]);
+
+  useEffect(() => {
+    split.current = document.querySelector(".split");
+  });
 
   useEffect(() => {
     const heading = document.querySelector("h1")?.textContent;
@@ -64,7 +77,7 @@ function App() {
   if (screen === "loading") return <p className="splash" role="status">{text.loading}</p>;
   if (screen === "connect") return <Connect />;
   return (
-    <Shell section={section === "payments" ? "budget" : section}>
+    <Shell section={section}>
       <Page section={section} id={id} />
     </Shell>
   );

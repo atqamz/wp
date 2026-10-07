@@ -1,19 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { actions, useTable } from "../hooks/use-store.ts";
 import { failureOf } from "../ui/failure.ts";
 import { ItemForm, backHref } from "../ui/item-form.tsx";
 import { views } from "../ui/registry.ts";
 import type { ViewName } from "../ui/registry.ts";
+import { DetailTitle } from "../ui/split.tsx";
 import { text } from "../ui/text.ts";
 import { Title } from "../ui/title.tsx";
 
-export function Gone({ name, id, back }: { name: ViewName; id: string; back: string }) {
+export function Gone({ name, id, back, wide = false }: { name: ViewName; id: string; back: string; wide?: boolean }) {
   const [failure, setFailure] = useState<string[]>([]);
-  useEffect(() => document.querySelector<HTMLElement>("h1")?.focus(), []);
   const undo = async () => setFailure(failureOf(await actions.update(views[name].table, id, { deleted_at: null } as never)));
   return (
     <>
-      <Title>{text.gone}</Title>
+      <DetailTitle wide={wide}>{text.gone}</DetailTitle>
       {failure.length > 0 && (
         <p className="error" role="alert">
           {failure.join(" ")}
@@ -35,7 +35,7 @@ export function GenericItem({ name, id }: { name: ViewName; id: string }) {
   const view = views[name];
   const rows = useTable(view.table);
   const row = rows.find((candidate) => candidate.id === id);
-  if (!row) return <Gone name={name} id={id} back={`#/${view.route === "payments" ? "budget" : view.route}`} />;
+  if (!row) return <Gone name={name} id={id} back={`#/${view.route === "payments" ? "money" : view.route}`} />;
   return (
     <>
       <Title>{row.title}</Title>

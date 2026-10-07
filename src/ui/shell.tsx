@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { Pair } from "./avatar.tsx";
 import { Icon } from "./icons.tsx";
-import { navItems } from "./nav.ts";
+import { isCurrent, navItems } from "./nav.ts";
 import { SyncBadge } from "./sync-badge.tsx";
 import { text } from "./text.ts";
 
@@ -10,7 +10,7 @@ function Nav({ className, section }: { className: "tabs" | "rail"; section: stri
   return (
     <nav className={className} aria-label={text.nav.label}>
       {navItems(className).map((item) => (
-        <a key={item.section} href={`#/${item.section}`} aria-current={item.section === section ? "page" : undefined}>
+        <a key={item.section} href={`#/${item.section}`} aria-current={isCurrent(item, section) ? "page" : undefined}>
           <Icon name={item.icon} />
           <span>{item.label}</span>
         </a>
