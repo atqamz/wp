@@ -62,3 +62,8 @@ test("the countdown unit agrees with the number", () => {
   assert.deepEqual([text.countdown.to(1), text.countdown.to(2), text.countdown.to(402)], ["day to the akad", "days to the akad", "days to the akad"]);
   assert.deepEqual([text.countdown.since(1), text.countdown.since(2)], ["day since the akad", "days since the akad"]);
 });
+
+test("the offline badge keeps the word Offline, and says the changes are saved when some are waiting", () => {
+  assert.equal(text.sync.offline(0), "Offline");
+  for (const waiting of [1, 2, 30]) assert.equal(text.sync.offline(waiting), "Offline, saved on this phone");
+});

@@ -2,30 +2,19 @@ import type { ReactNode } from "react";
 import { actions, useSnapshot } from "../hooks/use-store.ts";
 import { Pair } from "./avatar.tsx";
 import { Icon } from "./icons.tsx";
-import type { IconName } from "./icons.tsx";
+import { navItems } from "./nav.ts";
 import { SyncBadge } from "./sync-badge.tsx";
 import { text } from "./text.ts";
-
-const tabs: { section: string; icon: IconName; label: string; rail?: true }[] = [
-  { section: "", icon: "home", label: text.nav.home },
-  { section: "tasks", icon: "tasks", label: text.nav.tasks },
-  { section: "budget", icon: "budget", label: text.nav.budget },
-  { section: "vendors", icon: "vendors", label: text.nav.vendors },
-  { section: "guests", icon: "guests", label: text.nav.guests },
-  { section: "settings", icon: "settings", label: text.nav.settings, rail: true },
-];
 
 function Nav({ className, section }: { className: "tabs" | "rail"; section: string }) {
   return (
     <nav className={className} aria-label={text.nav.label}>
-      {tabs
-        .filter((tab) => className === "rail" || !tab.rail)
-        .map((tab) => (
-          <a key={tab.section} href={`#/${tab.section}`} aria-current={tab.section === section ? "page" : undefined}>
-            <Icon name={tab.icon} />
-            <span>{tab.label}</span>
-          </a>
-        ))}
+      {navItems(className).map((item) => (
+        <a key={item.section} href={`#/${item.section}`} aria-current={item.section === section ? "page" : undefined}>
+          <Icon name={item.icon} />
+          <span>{item.label}</span>
+        </a>
+      ))}
     </nav>
   );
 }
