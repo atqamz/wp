@@ -6,14 +6,29 @@ import type { IconName } from "./icons.tsx";
 import { SyncBadge } from "./sync-badge.tsx";
 import { text } from "./text.ts";
 
-const tabs: { section: string; icon: IconName; label: string; wide?: true }[] = [
+const tabs: { section: string; icon: IconName; label: string; rail?: true }[] = [
   { section: "", icon: "home", label: text.nav.home },
   { section: "tasks", icon: "tasks", label: text.nav.tasks },
   { section: "budget", icon: "budget", label: text.nav.budget },
   { section: "vendors", icon: "vendors", label: text.nav.vendors },
   { section: "guests", icon: "guests", label: text.nav.guests },
-  { section: "settings", icon: "settings", label: text.nav.settings, wide: true },
+  { section: "settings", icon: "settings", label: text.nav.settings, rail: true },
 ];
+
+function Nav({ className, section }: { className: "tabs" | "rail"; section: string }) {
+  return (
+    <nav className={className} aria-label={text.nav.label}>
+      {tabs
+        .filter((tab) => className === "rail" || !tab.rail)
+        .map((tab) => (
+          <a key={tab.section} href={`#/${tab.section}`} aria-current={tab.section === section ? "page" : undefined}>
+            <Icon name={tab.icon} />
+            <span>{tab.label}</span>
+          </a>
+        ))}
+    </nav>
+  );
+}
 
 export function Shell({ section, children }: { section: string; children: ReactNode }) {
   const { notice } = useSnapshot();
@@ -30,14 +45,7 @@ export function Shell({ section, children }: { section: string; children: ReactN
             <Pair />
           </a>
         </header>
-        <nav className="tabs" aria-label={text.nav.label}>
-          {tabs.map((tab) => (
-            <a key={tab.section} href={`#/${tab.section}`} data-wide={tab.wide} aria-current={tab.section === section ? "page" : undefined}>
-              <Icon name={tab.icon} />
-              <span>{tab.label}</span>
-            </a>
-          ))}
-        </nav>
+        <Nav className="rail" section={section} />
       </div>
       <div className="content">
         {notice && (
@@ -53,6 +61,7 @@ export function Shell({ section, children }: { section: string; children: ReactN
         )}
         <main data-page={home ? "home" : undefined}>{children}</main>
       </div>
+      <Nav className="tabs" section={section} />
     </div>
   );
 }

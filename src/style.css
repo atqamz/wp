@@ -193,10 +193,6 @@ a {
   text-decoration: none;
 }
 
-.tabs a[data-wide] {
-  display: none;
-}
-
 .tabs a[aria-current="page"] {
   color: var(--ink);
 }
@@ -219,6 +215,10 @@ a {
   margin-left: -2.5px;
   border-radius: 50%;
   background: var(--ink);
+}
+
+.rail {
+  display: none;
 }
 
 .content {
@@ -289,39 +289,36 @@ main.recovery {
   }
 
   .tabs {
-    position: static;
+    display: none;
+  }
+
+  .rail {
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: 2px;
-    padding: 0;
-    background: none;
-    border: 0;
   }
 
-  .tabs a {
-    flex-direction: row;
-    justify-content: flex-start;
+  .rail a {
+    display: flex;
+    align-items: center;
     gap: var(--s3);
     min-height: var(--target-min);
     padding: 0 var(--s3);
     border-radius: var(--r-control);
-    font-size: var(--fs-body);
+    color: var(--ink-2);
+    font-weight: 600;
+    text-decoration: none;
   }
 
-  .tabs a[data-wide] {
-    display: flex;
+  .rail a:last-child {
     margin-top: auto;
   }
 
-  .tabs a:hover,
-  .tabs a[aria-current="page"] {
+  .rail a:hover,
+  .rail a[aria-current="page"] {
     background: var(--surface-2);
     color: var(--ink);
-  }
-
-  .tabs a[aria-current="page"] span::after {
-    display: none;
   }
 
   main,
