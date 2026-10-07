@@ -263,10 +263,12 @@ function AddForm({ seed }: { seed: string }) {
   useEffect(() => {
     overlay.keepDraft(pristine ? null : { input, kindPick, ignore: [...ignore], edits: edits as Record<string, string>, ownerPick });
   }, [pristine, input, kindPick, ignore, edits, ownerPick]);
+
   const read = draft.title !== "" && draft.title !== input.trim().replace(/\s+/g, " ");
-  const chips: { key: Detail | "owner"; icon: IconName; label: string; invalid: boolean }[] = [
-    ...DETAILS[kind].map((detail) => ({ key: detail, icon: DETAIL_ICON[detail], label: chipText(detail), invalid: shown[detail] !== undefined })),
-    ...(parsedOwner !== null && ownerPick === null ? [{ key: "owner" as const, icon: "people" as const, label: label(parsedOwner), invalid: false }] : []),
+  const fieldName = (detail: Detail) => (detail === "group" ? text.sheet.group[kind as keyof typeof text.sheet.group] : text.sheet.detail[detail]);
+  const chips: { key: Detail | "owner"; icon: IconName; field: string; label: string; invalid: boolean }[] = [
+    ...DETAILS[kind].map((detail) => ({ key: detail, icon: DETAIL_ICON[detail], field: fieldName(detail), label: chipText(detail), invalid: shown[detail] !== undefined })),
+    ...(parsedOwner !== null && ownerPick === null ? [{ key: "owner" as const, icon: "people" as const, field: text.sheet.detail.owner, label: label(parsedOwner), invalid: false }] : []),
   ];
   const canPutBack = (key: Detail | "owner") => (key === "owner" ? parsedOwner !== null && ownerPick === null : READ_AS[key] !== undefined && !(key in edits) && draft[key as "amount" | "due" | "phone"] !== null);
   const editing = open === null || open === "owner" ? null : control(open);
@@ -319,7 +321,7 @@ function AddForm({ seed }: { seed: string }) {
         <ul className="chips" aria-label={text.sheet.chips}>
           {chips.map((chip) => (
             <li key={chip.key}>
-              <button type="button" className="chip" aria-expanded={open === chip.key} data-invalid={chip.invalid || undefined} data-empty={chipEmpty(chip.key, values) || undefined} onClick={() => setOpen(open === chip.key ? null : chip.key)}>
+              <button type="button" className="chip" aria-label={text.sheet.chipName(chip.field, chip.label)} aria-expanded={open === chip.key} data-invalid={chip.invalid || undefined} data-empty={chipEmpty(chip.key, values) || undefined} onClick={() => setOpen(open === chip.key ? null : chip.key)}>
                 <Icon name={chip.icon} />
                 <span>{chip.label}</span>
               </button>
