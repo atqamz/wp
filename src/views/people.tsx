@@ -71,7 +71,7 @@ function GuestSummary({ guests }: { guests: readonly ItemRow[] }) {
   return (
     <div className="summary">
       <p className="sum">
-        <b>{text.contacts.invitations(all.guests)}</b> · <b>{text.people(all.people)}</b>
+        <b>{text.contacts.invitations(guests.length)}</b> · <b>{text.people(all.people)}</b>
       </p>
       <ul className="sides">
         {(["a", "b"] as const).map((side) => (

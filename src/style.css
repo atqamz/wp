@@ -16,6 +16,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-padding: calc(3.5rem + var(--safe-t) + var(--s2)) 0 calc(var(--tabs) + var(--safe-b) + var(--s2));
 }
 
 body {
@@ -164,8 +165,8 @@ a {
 
 .pair {
   --av: 2rem;
-  display: grid;
   --av-text: 0.75rem;
+  display: grid;
   flex: none;
   place-items: center;
   min-width: var(--target-min);
@@ -258,6 +259,10 @@ main.recovery {
 }
 
 @media (min-width: 62.5rem) {
+  html {
+    scroll-padding: 0;
+  }
+
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar) minmax(0, 1fr);

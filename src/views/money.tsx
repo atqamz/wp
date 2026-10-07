@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { EVENT_ORDER, budgetOf, toPay } from "../domain/budget.ts";
+import { EVENT_ORDER, budgetOf, fillOf, toPay } from "../domain/budget.ts";
 import type { Budget, Group, Line } from "../domain/budget.ts";
 import { parseField } from "../domain/field.ts";
 import { owns } from "../domain/owner.ts";
@@ -88,13 +88,14 @@ function LineRow({ line, selected }: { line: Line; selected: boolean }) {
 function EventGroup({ group, selected }: { group: Group; selected: string | undefined }) {
   const name = eventName(group.key);
   const estimated = group.count - group.unestimated;
+  const fill = fillOf(group.planned, group.paid);
   return (
     <li className="event">
       <div className="event-h">
         <h3>{name}</h3>
         <span className="event-t">{estimated === 0 ? text.notSet : <Money rupiah={group.planned} />}</span>
       </div>
-      {group.planned > 0 && <progress max={group.planned} value={Math.min(group.paid, group.planned)} aria-label={text.budget.progressNamed(name)} />}
+      {fill && <progress max={fill.max} value={fill.value} aria-label={text.budget.progressNamed(name)} />}
       <p className="event-m">
         {estimated > 0 && <span>{group.paid === 0 ? text.budget.nothingPaid : text.budget.paidAmount(formatMoney(group.paid))}</span>}
         {estimated > 0 && <span>{group.over > 0 ? text.budget.overBy(formatMoney(group.over)) : text.budget.left(formatMoney(group.remaining))}</span>}
@@ -127,6 +128,7 @@ export function MoneyView({ id }: { id?: string }) {
   const kept = useRef(new Set<string>());
   const queue = toPay(budget, kept.current);
   for (const { payment } of queue) if (payment.status === "due") kept.current.add(payment.id);
+  const open = queue.filter(({ payment }) => payment.status === "due");
   const shown = queue.filter(({ payment }) => owns(payment.who, owner, me));
 
   const add = (event: FormEvent<HTMLFormElement>) => {
@@ -157,9 +159,9 @@ export function MoneyView({ id }: { id?: string }) {
       <section aria-labelledby="to-pay">
         <div className="sec-h">
           <h2 id="to-pay">
-            {text.money.toPay} <span className="tally">{queue.length}</span>
+            {text.money.toPay} <span className="tally">{open.length}</span>
           </h2>
-          {queue.length > 0 && <OwnerFilter value={owner} onChange={setOwner} owners={queue.map(({ payment }) => payment.who)} />}
+          {queue.length > 0 && <OwnerFilter value={owner} onChange={setOwner} owners={open.map(({ payment }) => payment.who)} />}
         </div>
         {queue.length === 0 ? (
           <p className="empty">{text.money.nothingToPay}</p>
