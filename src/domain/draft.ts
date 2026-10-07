@@ -27,7 +27,7 @@ export type Draft = {
   phone: string | null;
 };
 
-type State = { rest: string };
+type State = { rest: string; held: string | null };
 
 const START = "(?<![\\p{L}\\p{N}_\\u2212-])";
 const AMOUNT_START = "(?<![\\p{L}\\p{N}_.,\\u2212-])";
@@ -113,7 +113,7 @@ const amountOf = (state: State): number | null => {
   return (
     take(state, new RegExp(`${AMOUNT_START}${AMOUNT_LEAD}${rupiah}(\\d{1,12})(?:[.,](\\d{1,3}))?\\s*(jt|juta|rb|ribu|k)${END}`, "giu"), (m) => unitAmount(m[1], m[2] ?? "", m[3])) ??
     take(state, new RegExp(`${AMOUNT_START}${AMOUNT_LEAD}rp\\.?\\s*(\\d+(?:[.,]\\d+)*)(?![\\d.,])${UNIT_AHEAD}`, "giu"), (m) => parseRupiah(m[1])) ??
-    take(state, new RegExp(`(?<![\\p{L}\\p{N}_./,-])${AMOUNT_LEAD}(?!0)(\\d{1,3}(?:[.,]\\d{3})+|\\d{5,15})(?![\\p{L}\\p{N}_/-]|[.,]\\d)${UNIT_AHEAD}`, "giu"), (m) => {
+    take(state, new RegExp(`(?<![\\p{L}\\p{N}_./,-])${AMOUNT_LEAD}(?!0)(\\d{1,3}(?:[.,]\\d{3})+|\\d{5,9})(?![\\p{L}\\p{N}_/-]|[.,]\\d)${UNIT_AHEAD}`, "giu"), (m) => {
       const value = parseRupiah(m[1]);
       return value !== null && String(value).length >= 5 ? value : null;
     })
@@ -124,36 +124,73 @@ export const parseAmount = (input: string): number | null => {
   const text = input.trim();
   const plain = parseRupiah(text);
   if (plain !== null) return plain;
-  const state: State = { rest: text };
+  const state: State = { rest: text, held: null };
   const read = amountOf(state);
   return state.rest.trim() === "" ? read : null;
 };
 
-const PHONE = /(?<![\p{L}\p{N}_+./,-])(\+?\d{9,15}|((?:\+\d{1,3}|62)[ -])?(\d{2,5}(?:([ -])\d{3,5}(?:\4\d{3,5}){0,3})?))/gu;
+const MARK = "\uE000";
 
 const AMOUNT_WORD = /^\s*(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])/iu;
 
-const PHONE_END = /^(?:[\p{L}\p{N}_/]|[.,]\d)/u;
+const CURRENCY_BEFORE = /(?:^|\s)rp\.?\s*$/i;
 
-const phoneDigits = (text: string) => {
-  const digits = text.replace(/\D/g, "").length;
-  return text.startsWith("+") ? digits >= 9 && digits <= 15 : text.startsWith("62") ? digits >= 11 && digits <= 14 : text.startsWith("0") && digits >= 9 && digits <= 13;
+const PHONE_TOKEN = /^\(?\+?\d+\)?(?:-?\d+)*$/;
+
+const COUNTRY = /^(?:\+\d{2,15}|62\d{0,13})(?:[ -]\d{2,5}){0,4}$/;
+
+const MOBILE = /^08\d{2,3}(?:([ -])\d{3,5}(?:\1\d{3,5}){0,2})?$/;
+
+const LOCAL_RUN = /^0\d{8,12}$/;
+
+const LANDLINE = /^(?:\(0[1-79]\d{0,2}\)[ -]?|0[1-79]\d{0,2}[ -])(\d{5,8}|\d{3,4}(?:[ -]\d{3,4}){1,2})$/;
+
+const digitCount = (text: string) => text.replace(/\D/g, "").length;
+
+const between = (value: number, low: number, high: number) => value >= low && value <= high;
+
+export const isPhone = (text: string): boolean => {
+  const digits = digitCount(text);
+  if (text.startsWith("+")) return COUNTRY.test(text) && between(digits, 9, 15);
+  if (text.startsWith("62")) return COUNTRY.test(text) && between(digits, 11, 14);
+  if (MOBILE.test(text)) return between(digits, 9, 13);
+  if (LOCAL_RUN.test(text)) return true;
+  const landline = LANDLINE.exec(text);
+  return landline !== null && between(digits, 8, 12) && between(digitCount(landline[1]), 5, 8);
 };
 
-const phoneOf = (state: State): string | null => {
-  for (const match of state.rest.matchAll(PHONE)) {
-    if (opaque(state.rest, match.index)) continue;
-    const head = match[2] ?? "";
-    const separator = match[4];
-    const groups = separator === undefined ? [match[3] ?? match[1]] : match[3].split(separator);
-    const text = (count: number) => head + groups.slice(0, count).join(separator);
-    const after = (count: number) => state.rest.slice(match.index + text(count).length);
-    for (let count = groups.length; count >= 1; count--) {
-      const phone = phoneDigits(text(count)) ? normalizePhone(text(count)) : null;
-      const clean = !PHONE_END.test(after(count)) && Array.from({ length: count - 1 }, (_, at) => after(at + 2)).every((rest) => !AMOUNT_WORD.test(rest));
-      if (phone === null || !clean) continue;
-      state.rest = `${state.rest.slice(0, match.index)} ${after(count)}`;
-      return phone;
+const MAX_PHONE_TOKENS = 6;
+
+const PHONE_NEXT = /(?:[\p{L}\p{N}_/]|[.,]\d)/uy;
+
+const AMOUNT_NEXT = /\s*(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])/iuy;
+
+const MONTH_NEXT = new RegExp(`\\s*${MONTH}(?![\\p{L}\\p{N}_])`, "iuy");
+
+const at = (pattern: RegExp, text: string, index: number) => {
+  pattern.lastIndex = index;
+  return pattern.test(text);
+};
+
+const phoneOf = (state: State, keep: boolean): string | null => {
+  const rest = state.rest;
+  const tokens = [...rest.matchAll(/\S+/gu)].map((match) => ({ start: match.index, end: match.index + match[0].length, text: match[0] }));
+  const starts = (text: string) => /^[(+]?\d/.test(text);
+  for (let first = 0; first < tokens.length; first++) {
+    const head = tokens[first];
+    if (!starts(head.text) || OPAQUE.test(head.text) || (first > 0 && /^rp\.?$/i.test(tokens[first - 1].text))) continue;
+    let last = first;
+    while (last + 1 < tokens.length && last + 1 - first < MAX_PHONE_TOKENS && rest[tokens[last].end] === " " && PHONE_TOKEN.test(tokens[last].text) && starts(tokens[last + 1].text)) last++;
+    for (let count = last - first + 1; count >= 1; count--) {
+      const text = rest.slice(head.start, tokens[first + count - 1].end).replace(/[.,;:!?]+$/, "");
+      const end = head.start + text.length;
+      const words = tokens.slice(first, first + count).some((token, index) => index > 0 && (at(AMOUNT_NEXT, rest, token.end) || (token.text.length <= 2 && at(MONTH_NEXT, rest, token.end))));
+      if (words || at(PHONE_NEXT, rest, end) || !PHONE_TOKEN.test(text.slice(text.lastIndexOf(" ") + 1)) || !isPhone(text)) continue;
+      const phone = normalizePhone(text);
+      if (phone === null) continue;
+      state.rest = `${rest.slice(0, head.start)}${keep ? MARK : " "}${rest.slice(end)}`;
+      state.held = keep ? text : null;
+      return keep ? null : phone;
     }
   }
   return null;
@@ -210,13 +247,13 @@ export const draftFor = (input: string, context: Context, ignore: ReadonlySet<Fi
 };
 
 export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<Field> = new Set()): Draft => {
-  const state: State = { rest: input };
-  const phone = ignore.has("phone") ? null : phoneOf(state);
+  const state: State = { rest: input, held: null };
+  const phone = phoneOf(state, ignore.has("phone"));
   const due = ignore.has("due") ? null : dateOf(state, context.today);
   const amount = ignore.has("amount") ? null : amountOf(state);
   const who = ignore.has("who") ? null : ownerOf(state, context);
   const line = ignore.has("line") ? null : lineOf(input, context.lines);
-  const tidy = state.rest
+  const tidy = (state.held === null ? state.rest : state.rest.replace(MARK, () => state.held!))
     .replace(/[([{]\s*[)\]}]/g, " ")
     .replace(/\s+/g, " ")
     .trim()

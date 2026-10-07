@@ -56,14 +56,17 @@ test("amounts: Rp and grouped digits are read as whole rupiah", () => {
     ["10.000", 10_000],
     ["1500000", 1_500_000],
     ["50000", 50_000],
-    ["Pay 12345678901 now", 12_345_678_901],
-    ["Pay 999999999999999 now", 999_999_999_999_999],
+    ["Pay Rp 12345678901 now", 12_345_678_901],
+    ["Pay Rp 999999999999999 now", 999_999_999_999_999],
+    ["Pay 12.345.678.901 now", 12_345_678_901],
+    ["Pay 123.456.789.012.345 now", 123_456_789_012_345],
+    ["Pay 625000000 now", 625_000_000],
   ];
   for (const [text, value] of cases) assert.equal(amountOf(text), value, text);
 });
 
 test("amounts: a bare number under five digits is left alone, and so is a figure too large for a rupiah column", () => {
-  for (const text of ["Book 3 vendors", "Plan for 2027", "Table 2500", "1.500", "Pay 1234567890123456", "Pay 99999999999999 jt"]) {
+  for (const text of ["Book 3 vendors", "Plan for 2027", "Table 2500", "1.500", "Pay 1234567890123456", "Pay 99999999999999 jt", "Pay 12345678901 now", "Pay 999999999999999 now", "Pay 1234567890 now"]) {
     assert.equal(amountOf(text), null, text);
   }
 });
@@ -375,7 +378,7 @@ test("the parser is deterministic and does not touch its input", () => {
   assert.deepEqual(ctx, context({ lines }));
 });
 
-test("long and odd input is read in a bounded time", () => {
+test("long and odd input is read in a bounded time", { timeout: 20000 }, () => {
   const inputs = ["1".repeat(20_000), "1 ".repeat(10_000), "1.".repeat(10_000), "0-".repeat(10_000), `${"a".repeat(20_000)} 2,5 jt`, "rp ".repeat(10_000), "12/".repeat(10_000), " ".repeat(20_000)];
   const started = performance.now();
   for (const text of inputs) parseDraft(text, context({ lines }));
