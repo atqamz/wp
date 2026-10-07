@@ -204,7 +204,7 @@ test("a create on an existing settings key updates the value, last write wins", 
   assert.equal(row?.value, "Asia/Makassar");
   assert.equal(row?.updated_by, "b");
   assert.equal(row?.rev, 2);
-  assert.equal(row?.created_at, CLIENT_STAMP);
+  assert.equal(row?.created_at, STAMP);
   assert.equal(second.rev, 2);
   assert.equal(count(sqlite, "settings"), 1);
 });
@@ -258,17 +258,18 @@ test("the server owns rev, updated_by and deleted_at", async () => {
   await rejected(apply(db, [mutation("update", "items", id(4), { created_at: CLIENT_STAMP })]), 400, 0, /created_at: cannot be changed/);
 });
 
-test("updated_at and deleted_at use the server clock, updated_by is the authenticated side", async () => {
+test("created_at, updated_at and deleted_at use the server clock, updated_by is the authenticated side", async () => {
   const { db, sqlite } = await fresh();
-  ok(await apply(db, [task(4, { updated_at: "2020-01-01T00:00:00Z" })], "b"));
+  ok(await apply(db, [task(4, { created_at: "2020-01-01T00:00:00Z", updated_at: "2020-01-01T00:00:00Z" })], "b"));
   let row = stored(sqlite, "items", id(4));
-  assert.equal(row?.created_at, CLIENT_STAMP);
+  assert.equal(row?.created_at, STAMP);
   assert.equal(row?.updated_at, STAMP);
   assert.equal(row?.updated_by, "b");
   assert.equal(row?.deleted_at, null);
   const later = new Date("2026-11-01T10:20:30.999Z");
   ok(await apply(db, [mutation("update", "items", id(4), { title: "Later", updated_at: "2020-01-01T00:00:00Z" })], "a", later));
   row = stored(sqlite, "items", id(4));
+  assert.equal(row?.created_at, STAMP);
   assert.equal(row?.updated_at, "2026-11-01T10:20:30Z");
   assert.equal(row?.updated_by, "a");
   ok(await apply(db, [mutation("delete", "items", id(4))], "b", NOW));

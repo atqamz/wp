@@ -87,7 +87,7 @@ export const createServer = () => {
     if (mutation.op === "create") {
       if (row && table === "settings") write(applyPatch(row, { value: patch.value }));
       else if (!row) {
-        const created = { ...blank(table, patch), ...patch, deleted_at: null };
+        const created = { ...blank(table, patch), ...patch, created_at: at, deleted_at: null };
         const refused = pointers(draft, table, created, Object.keys(patch));
         if (refused) return refused;
         write(created);
