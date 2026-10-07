@@ -32,21 +32,32 @@ test("without a known side no filter hides anything, and the input is never reor
   assert.deepEqual(titles(owned), before);
 });
 
-test("sections are alphabetical without regard to case, trim their keys and put no group last", () => {
+test("one category is one section however it is cased, spaced or padded, shown as first written", () => {
   const rows = [
-    item({ title: "1", group_key: "friends" }),
-    item({ title: "2", group_key: null }),
-    item({ title: "3", group_key: "Family" }),
-    item({ title: "4", group_key: " friends " }),
-    item({ title: "5", group_key: "  " }),
-    item({ title: "6", group_key: "Family" }),
+    item({ title: "1", group_key: "family" }),
+    item({ title: "2", group_key: "Family" }),
+    item({ title: "3", group_key: "  FAMILY  " }),
+    item({ title: "4", group_key: "Friends  and\toffice" }),
+    item({ title: "5", group_key: "friends and office" }),
   ];
   assert.deepEqual(
     sectionsOf(rows).map((section) => [section.key, titles(section.rows)]),
     [
-      ["Family", ["3", "6"]],
-      ["friends", ["1", "4"]],
-      [null, ["2", "5"]],
+      ["family", ["1", "2", "3"]],
+      ["Friends and office", ["4", "5"]],
+    ],
+  );
+});
+
+test("sections run alphabetically without regard to case, and rows with no group come last", () => {
+  const rows = ["Cherry", null, "apple", "  ", "Banana"].map((group_key, i) => item({ title: String(i), group_key }));
+  assert.deepEqual(
+    sectionsOf(rows).map((section) => [section.key, titles(section.rows)]),
+    [
+      ["apple", ["2"]],
+      ["Banana", ["4"]],
+      ["Cherry", ["0"]],
+      [null, ["1", "3"]],
     ],
   );
 });

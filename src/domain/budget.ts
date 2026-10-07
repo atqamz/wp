@@ -88,6 +88,8 @@ export const toPay = (budget: Budget, keep: ReadonlySet<string> = new Set()): Pa
     .filter(({ payment }) => payment.status === "due" || keep.has(payment.id))
     .sort(byDue);
 
+export const fillOf = (planned: number, paid: number) => (planned > 0 ? { max: planned, value: Math.min(paid, planned) } : null);
+
 export const dueSoon = (budget: Budget, today: string) => {
   const horizon = addDays(today, DUE_DAYS);
   return add(

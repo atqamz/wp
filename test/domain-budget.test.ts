@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetOf, dueSoon, toPay } from "../src/domain/budget.ts";
+import { budgetOf, dueSoon, fillOf, toPay } from "../src/domain/budget.ts";
 import { entry, payment } from "./domain-rows.ts";
 
 const figures = (totals: ReturnType<typeof budgetOf>) => ({
@@ -182,11 +182,36 @@ test("to pay keeps a payment asked for by id after it is paid, so it can be undo
   assert.deepEqual(toPay(budget, new Set([done.id])).map(({ payment: row }) => row.title), ["done", "open"]);
 });
 
-test("to pay ignores payments whose planned line is gone and ties follow the sort order", () => {
+test("to pay ignores payments whose planned line is gone", () => {
   const gone = entry({});
   const venue = entry({ amount: 100 });
-  const first = payment(venue, { title: "first", due_on: "2026-10-09", sort: 1 });
-  const second = payment(venue, { title: "second", due_on: "2026-10-09", sort: 2 });
-  const queue = toPay(budgetOf([venue, second, first, payment(gone, { due_on: "2026-10-01" })]));
-  assert.deepEqual(queue.map(({ payment: row }) => row.title), ["first", "second"]);
+  const queue = toPay(budgetOf([venue, payment(venue, { title: "kept", due_on: "2026-10-09" }), payment(gone, { due_on: "2026-10-01" })]));
+  assert.deepEqual(queue.map(({ payment: row }) => row.title), ["kept"]);
+});
+
+test("payments due the same day on different lines follow their own sort order, not their line's", () => {
+  const first = entry({ title: "first line", sort: 0 });
+  const second = entry({ title: "second line", sort: 1 });
+  const late = payment(first, { title: "sorted last", due_on: "2026-10-09", sort: 2 });
+  const early = payment(second, { title: "sorted first", due_on: "2026-10-09", sort: 1 });
+  const queue = toPay(budgetOf([first, second, late, early]));
+  assert.deepEqual(queue.map(({ payment: row }) => row.title), ["sorted first", "sorted last"]);
+  assert.deepEqual(queue.map(({ line }) => line.title), ["second line", "first line"]);
+});
+
+test("the fill is paid against planned, capped when overpaid, and absent without a planned amount", () => {
+  assert.deepEqual(fillOf(100, 30), { max: 100, value: 30 });
+  assert.deepEqual(fillOf(100, 0), { max: 100, value: 0 });
+  assert.deepEqual(fillOf(100, 150), { max: 100, value: 100 });
+  assert.equal(fillOf(0, 0), null);
+  assert.equal(fillOf(0, 50), null);
+});
+
+test("a group fill leaves out lines without an estimate, so their payments never fill the bar", () => {
+  const known = entry({ amount: 100 });
+  const unknown = entry({ amount: null });
+  const [group] = budgetOf([known, unknown, payment(known, { status: "paid", amount: 40 }), payment(unknown, { status: "paid", amount: 900 })]).groups;
+  assert.deepEqual(fillOf(group.planned, group.paid), { max: 100, value: 40 });
+  const [bare] = budgetOf([unknown, payment(unknown, { status: "paid", amount: 900 })]).groups;
+  assert.equal(fillOf(bare.planned, bare.paid), null);
 });
