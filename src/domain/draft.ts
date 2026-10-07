@@ -111,7 +111,7 @@ const amountOf = (state: State): number | null => {
   return (
     take(state, new RegExp(`${START}${AMOUNT_LEAD}${rupiah}(\\d{1,12})(?:[.,](\\d{1,3}))?\\s*(jt|juta|rb|ribu|k)${END}`, "giu"), (m) => unitAmount(m[1], m[2] ?? "", m[3])) ??
     take(state, new RegExp(`${START}${AMOUNT_LEAD}rp\\.?\\s*(\\d+(?:[.,]\\d+)*)(?![\\d.,])${UNIT_AHEAD}`, "giu"), (m) => parseRupiah(m[1])) ??
-    take(state, new RegExp(`(?<![\\p{L}\\p{N}_./,-])${AMOUNT_LEAD}(\\d{1,3}(?:[.,]\\d{3})+|\\d{5,15})(?![\\p{L}\\p{N}_/-]|[.,]\\d)${UNIT_AHEAD}`, "giu"), (m) => {
+    take(state, new RegExp(`(?<![\\p{L}\\p{N}_./,-])${AMOUNT_LEAD}(?!0)(\\d{1,3}(?:[.,]\\d{3})+|\\d{5,15})(?![\\p{L}\\p{N}_/-]|[.,]\\d)${UNIT_AHEAD}`, "giu"), (m) => {
       const value = parseRupiah(m[1]);
       return value !== null && String(value).length >= 5 ? value : null;
     })
@@ -127,11 +127,35 @@ export const parseAmount = (input: string): number | null => {
   return state.rest.trim() === "" ? read : null;
 };
 
-const phoneOf = (state: State): string | null =>
-  take(state, /(?<![\p{L}\p{N}_+])(\+?\d{2,5}(?:[ -]\d{2,5}){1,4}|\+?\d{9,15})(?![\p{L}\p{N}_])/gu, (m) => {
-    const phone = normalizePhone(m[1]);
-    return phone !== null && /^(?:\+|0|62)/.test(m[1]) && m[1].replace(/\D/g, "").length >= 9 ? phone : null;
-  });
+const PHONE = /(?<![\p{L}\p{N}_+./,-])(\+?\d{9,15}|((?:\+\d{1,3}|62)[ -])?(\d{2,5}(?:([ -])\d{3,5}(?:\4\d{3,5}){0,3})?))/gu;
+
+const AMOUNT_WORD = /^\s*(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])/iu;
+
+const PHONE_END = /^(?:[\p{L}\p{N}_/]|[.,]\d)/u;
+
+const phoneDigits = (text: string) => {
+  const digits = text.replace(/\D/g, "").length;
+  return text.startsWith("+") ? digits >= 9 && digits <= 15 : text.startsWith("62") ? digits >= 11 && digits <= 14 : text.startsWith("0") && digits >= 9 && digits <= 13;
+};
+
+const phoneOf = (state: State): string | null => {
+  for (const match of state.rest.matchAll(PHONE)) {
+    if (opaque(state.rest, match.index)) continue;
+    const head = match[2] ?? "";
+    const separator = match[4];
+    const groups = separator === undefined ? [match[3] ?? match[1]] : match[3].split(separator);
+    const text = (count: number) => head + groups.slice(0, count).join(separator);
+    const after = (count: number) => state.rest.slice(match.index + text(count).length);
+    for (let count = groups.length; count >= 1; count--) {
+      const phone = phoneDigits(text(count)) ? normalizePhone(text(count)) : null;
+      const clean = !PHONE_END.test(after(count)) && Array.from({ length: count - 1 }, (_, at) => after(at + 2)).every((rest) => !AMOUNT_WORD.test(rest));
+      if (phone === null || !clean) continue;
+      state.rest = `${state.rest.slice(0, match.index)} ${after(count)}`;
+      return phone;
+    }
+  }
+  return null;
+};
 
 const escaped = (phrase: string) => phrase.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
 

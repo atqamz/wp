@@ -398,3 +398,59 @@ test("the amount editor takes any whole amount, plain digits of any length, and 
   ];
   for (const [text, value] of cases) assert.equal(parseAmount(text), value, text);
 });
+
+test("phone: a number never swallows the token that follows it, whether a figure, a day or an amount", () => {
+  const cases: [string, Partial<Record<"title" | "phone" | "amount" | "due" | "who", string | number | null>>][] = [
+    ["Rias Laras 0878 0000 1032 12 jt", { title: "Rias Laras", phone: "+6287800001032", amount: 12_000_000 }],
+    ["Dimas 0878 0000 1032 12/10", { phone: "+6287800001032", due: "2026-10-12", who: "b", title: "" }],
+    ["Florist 0812 3456 7890 12 oct", { title: "Florist", phone: "+6281234567890", due: "2026-10-12" }],
+    ["Florist 0812 3456 7890 25000", { title: "Florist", phone: "+6281234567890", amount: 25_000 }],
+    ["Florist 0812 3456 7890 250", { title: "Florist 250", phone: "+6281234567890", amount: null }],
+    ["Florist 0812 3456 7890 2,5 jt", { title: "Florist", phone: "+6281234567890", amount: 2_500_000 }],
+    ["Florist 0812 3456 7890 500rb", { title: "Florist", phone: "+6281234567890", amount: 500_000 }],
+    ["Florist 0812-3456-7890 friday", { title: "Florist", phone: "+6281234567890", due: "2026-10-09" }],
+  ];
+  for (const [text, expected] of cases) {
+    const read = parseDraft(text, context());
+    for (const [field, value] of Object.entries(expected)) assert.equal(read[field as keyof typeof read], value, `${text}: ${field}`);
+  }
+});
+
+test("phone: a plain amount that starts with 62 is an amount, and so is any figure of nine digits that is not a phone", () => {
+  for (const text of ["Pay 625000000", "Rp 625000000", "Pay Rp 625.000.000"]) {
+    const read = parseDraft(text, context());
+    assert.deepEqual([read.phone, read.amount], [null, 625_000_000], text);
+  }
+  assert.deepEqual([parseDraft("Pay 62500000000", context()).phone, parseDraft("Pay 62500000000", context()).amount], ["+62500000000", null]);
+  assert.equal(parseDraft("Pay 725000000", context()).amount, 725_000_000);
+});
+
+test("phone: the length is 9 to 13 digits for a local number, 11 to 14 for a bare 62 and 9 to 15 after a plus", () => {
+  const phone = (text: string) => parseDraft(text, context()).phone;
+  const local = (digits: number) => `0${"8".repeat(digits - 1)}`;
+  assert.deepEqual([8, 9, 13, 14].map((n) => phone(`X ${local(n)}`)), [null, `+62${"8".repeat(8)}`, `+62${"8".repeat(12)}`, null]);
+  assert.deepEqual([10, 11, 14, 15].map((n) => phone(`X 62${"8".repeat(n - 2)}`) !== null), [false, true, true, false]);
+  assert.deepEqual([8, 9, 15, 16].map((n) => phone(`X +${"1".repeat(n)}`) !== null), [false, true, true, false]);
+});
+
+test("phone: groups must use one separator, and a country code may stand before them", () => {
+  const phone = (text: string) => parseDraft(text, context()).phone;
+  assert.equal(phone("X 0878 0000 1032"), "+6287800001032");
+  assert.equal(phone("X 0878-0000-1032"), "+6287800001032");
+  assert.equal(phone("X +62 878 0000 1032"), "+6287800001032");
+  assert.equal(phone("X +62 878-0000-1032"), "+6287800001032");
+  assert.equal(phone("X 62 878 0000 1032"), "+6287800001032");
+  assert.equal(phone("X 0878 0000-1032"), null);
+  assert.equal(parseDraft("X 0878 0000-1032", context()).title, "X 0878 0000-1032");
+});
+
+test("phone: a group that is followed by an amount word is an amount, not part of the number", () => {
+  const read = parseDraft("Cake 0812 345 500 rb", context());
+  assert.deepEqual([read.phone, read.amount, read.title], [null, 500_000, "Cake 0812 345"]);
+  assert.equal(parseDraft("Cake 0812 3456 7890 500 rb", context()).amount, 500_000);
+});
+
+test("phone: a figure that starts with a zero is never an amount", () => {
+  const read = parseDraft("Order 0812345678901234 ready", context());
+  assert.deepEqual([read.phone, read.amount, read.title], [null, null, "Order 0812345678901234 ready"]);
+});
