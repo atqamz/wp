@@ -27,14 +27,16 @@ export type Draft = {
   phone: string | null;
 };
 
-type State = { text: string; rest: string; gone: Uint8Array };
+type State = { rest: string; gone: Uint8Array; hold: Uint8Array; read: string[]; spans: Spans };
 
-const begin = (text: string): State => ({ text, rest: text, gone: new Uint8Array(text.length) });
+export type Spans = (state: State, start: number, end: number, mark: Uint8Array) => void;
 
-const blank = (state: State, start: number, end: number, consume: boolean) => {
+export const blank: Spans = (state, start, end, mark) => {
   state.rest = `${state.rest.slice(0, start)}${" ".repeat(end - start)}${state.rest.slice(end)}`;
-  if (consume) state.gone.fill(1, start, end);
+  mark.fill(1, start, end);
 };
+
+const begin = (text: string, spans: Spans = blank): State => ({ rest: text, gone: new Uint8Array(text.length), hold: new Uint8Array(text.length), read: [], spans });
 
 const START = "(?<![\\p{L}\\p{N}_\\u2212-])";
 const AMOUNT_START = "(?<![\\p{L}\\p{N}_.,\\u2212-])";
@@ -61,13 +63,21 @@ const opaque = (text: string, at: number) => {
   return OPAQUE.test(text.slice(from, to));
 };
 
+const after = (match: RegExpExecArray) => match.index + String.fromCodePoint(match[0].codePointAt(0) ?? 0x20).length;
+
 const take = <T>(state: State, pattern: RegExp, read: (match: RegExpExecArray) => T | null): T | null => {
-  for (const match of state.rest.matchAll(pattern)) {
-    if (match[0].length === 0 || opaque(state.rest, match.index)) continue;
-    const value = read(match);
-    if (value === null) continue;
-    blank(state, match.index, match.index + match[0].length, true);
-    return value;
+  pattern.lastIndex = 0;
+  for (let match = pattern.exec(state.rest); match !== null; match = pattern.exec(state.rest)) {
+    const end = match.index + match[0].length;
+    if (end === match.index || state.hold.subarray(match.index, end).includes(1)) pattern.lastIndex = after(match);
+    else if (!opaque(state.rest, match.index)) {
+      const value = read(match);
+      if (value !== null) {
+        state.read.push(match[0]);
+        state.spans(state, match.index, end, state.gone);
+        return value;
+      }
+    }
   }
   return null;
 };
@@ -200,8 +210,10 @@ const phoneOf = (state: State, keep: boolean): string | null => {
       if (words || at(PHONE_NEXT, rest, end) || !PHONE_TOKEN.test(text.slice(text.lastIndexOf(" ") + 1)) || !isPhone(text)) continue;
       const phone = normalizePhone(text);
       if (phone === null) continue;
-      blank(state, head.start, end, !keep);
-      return keep ? null : phone;
+      state.spans(state, head.start, end, keep ? state.hold : state.gone);
+      if (keep) return null;
+      state.read.push(text);
+      return phone;
     }
   }
   return null;
@@ -248,17 +260,8 @@ export const STORED: Record<Kind, readonly Field[]> = {
 
 const READ_IN_TEXT: readonly Field[] = ["amount", "due", "who", "phone"];
 
-export const draftFor = (input: string, context: Context, ignore: ReadonlySet<Field>, pick: Kind | null): { draft: Draft; kind: Kind } => {
-  const first = parseDraft(input, context, ignore);
-  const kind = pick ?? first.kind;
-  const blocked = READ_IN_TEXT.filter((field) => !STORED[kind].includes(field) && !ignore.has(field));
-  const second = blocked.length === 0 ? first : parseDraft(input, context, new Set([...ignore, ...blocked]));
-  const both = kind === "guest" && second.who === "both";
-  return { kind, draft: both ? parseDraft(input, context, new Set([...ignore, ...blocked, "who"])) : second };
-};
-
-export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<Field> = new Set()): Draft => {
-  const state = begin(input);
+const parse = (input: string, context: Context, ignore: ReadonlySet<Field>, spans: Spans): { draft: Draft; read: string[] } => {
+  const state = begin(input, spans);
   const phone = phoneOf(state, ignore.has("phone"));
   const due = ignore.has("due") ? null : dateOf(state, context.today);
   const amount = ignore.has("amount") ? null : amountOf(state);
@@ -276,5 +279,31 @@ export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<
     .replace(/[,;:]+\s*([.!?])/g, "$1")
     .replace(/^[\s,;:]+|[\s,;:]+$/g, "");
   const title = /[\p{L}\p{N}]/u.test(tidy) ? tidy : "";
-  return { title, kind: amount !== null && line !== null ? "payment" : "task", amount, due, who, line, phone };
+  return { draft: { title, kind: amount !== null && line !== null ? "payment" : "task", amount, due, who, line, phone }, read: state.read };
+};
+
+export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<Field> = new Set()): Draft => parse(input, context, ignore, blank).draft;
+
+export const fallbacks = { count: 0 };
+
+const letters = (text: string) => [...text.matchAll(/[\p{L}\p{N}]/gu)].map(([char]) => char);
+
+export const lossless = (input: string, title: string, read: readonly string[]) => {
+  const typed = letters(input);
+  const kept = letters(title);
+  let at = 0;
+  for (const char of typed) if (char === kept[at]) at++;
+  return at === kept.length && [...kept, ...read.flatMap(letters)].sort().join("") === [...typed].sort().join("");
+};
+
+export const draftFor = (input: string, context: Context, ignore: ReadonlySet<Field>, pick: Kind | null, spans: Spans = blank): { draft: Draft; kind: Kind } => {
+  const first = parse(input, context, ignore, spans);
+  const kind = pick ?? first.draft.kind;
+  const blocked = READ_IN_TEXT.filter((field) => !STORED[kind].includes(field) && !ignore.has(field));
+  const second = blocked.length === 0 ? first : parse(input, context, new Set([...ignore, ...blocked]), spans);
+  const both = kind === "guest" && second.draft.who === "both";
+  const { draft, read } = both ? parse(input, context, new Set([...ignore, ...blocked, "who"]), spans) : second;
+  if (lossless(input, draft.title, read)) return { kind, draft };
+  fallbacks.count++;
+  return { kind: pick ?? "task", draft: { title: input.trim(), kind: "task", amount: null, due: null, who: null, line: null, phone: null } };
 };

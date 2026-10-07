@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { STORED, draftFor, isPhone, parseDraft } from "../src/domain/draft.ts";
+import { STORED, draftFor, fallbacks, isPhone, parseDraft } from "../src/domain/draft.ts";
 import type { Context, Kind } from "../src/domain/draft.ts";
 
 const KINDS: readonly Kind[] = ["task", "planned", "payment", "guest", "vendor"];
@@ -213,4 +213,144 @@ test("property: with a fixed seed no kind makes an amount from a phone's digits,
     }
   }
   assert.ok(withPhone > 300);
+});
+
+const mbak: Context = { ...context, nicknames: { a: "Mbak Rani", b: "Dimas" } };
+
+type Read = [amount: number | null, due: string | null, who: string | null, phone: string | null, title: string];
+
+const CROSSING: [string, Context, Record<Kind, Read>][] = [
+  ["Top up for 0812 3456 7890 50k", context, {
+    task: [50_000, null, null, null, "Top up for 0812 3456 7890"],
+    planned: [50_000, null, null, null, "Top up for 0812 3456 7890"],
+    payment: [50_000, null, null, null, "Top up for 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "Top up for 50k"],
+    vendor: [50_000, null, null, "+6281234567890", "Top up"],
+  }],
+  ["Pay florist for 0812 3456 7890 5 jt", context, {
+    task: [5_000_000, null, null, null, "Pay florist for 0812 3456 7890"],
+    planned: [5_000_000, null, null, null, "Pay florist for 0812 3456 7890"],
+    payment: [5_000_000, null, null, null, "Pay florist for 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "Pay florist for 5 jt"],
+    vendor: [5_000_000, null, null, "+6281234567890", "Pay florist"],
+  }],
+  ["Pay for 021 5551234 500rb", context, {
+    task: [500_000, null, null, null, "Pay for 021 5551234"],
+    planned: [500_000, null, null, null, "Pay for 021 5551234"],
+    payment: [500_000, null, null, null, "Pay for 021 5551234"],
+    guest: [null, null, null, "+62215551234", "Pay for 500rb"],
+    vendor: [500_000, null, null, "+62215551234", "Pay"],
+  }],
+  ["Call on 0812 3456 7890 friday", context, {
+    task: [null, "2026-10-09", null, null, "Call on 0812 3456 7890"],
+    planned: [null, null, null, null, "Call on 0812 3456 7890 friday"],
+    payment: [null, "2026-10-09", null, null, "Call on 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "Call on friday"],
+    vendor: [null, null, null, "+6281234567890", "Call on friday"],
+  }],
+  ["Book by 0812 3456 7890 12 oct", context, {
+    task: [null, "2026-10-12", null, null, "Book by 0812 3456 7890"],
+    planned: [null, null, null, null, "Book by 0812 3456 7890 12 oct"],
+    payment: [null, "2026-10-12", null, null, "Book by 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "Book by 12 oct"],
+    vendor: [null, null, null, "+6281234567890", "Book by 12 oct"],
+  }],
+  ["for 0812 3456 7890 5 jt", context, {
+    task: [5_000_000, null, null, null, "for 0812 3456 7890"],
+    planned: [5_000_000, null, null, null, "for 0812 3456 7890"],
+    payment: [5_000_000, null, null, null, "for 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "for 5 jt"],
+    vendor: [5_000_000, null, null, "+6281234567890", ""],
+  }],
+  ["Mbak 0812 3456 7890 Rani", mbak, {
+    task: [null, null, null, null, "Mbak 0812 3456 7890 Rani"],
+    planned: [null, null, null, null, "Mbak 0812 3456 7890 Rani"],
+    payment: [null, null, null, null, "Mbak 0812 3456 7890 Rani"],
+    guest: [null, null, "a", "+6281234567890", ""],
+    vendor: [null, null, null, "+6281234567890", "Mbak Rani"],
+  }],
+  ["next 0812 3456 7890 friday", context, {
+    task: [null, "2026-10-09", null, null, "next 0812 3456 7890"],
+    planned: [null, null, null, null, "next 0812 3456 7890 friday"],
+    payment: [null, "2026-10-09", null, null, "next 0812 3456 7890"],
+    guest: [null, null, null, "+6281234567890", "next friday"],
+    vendor: [null, null, null, "+6281234567890", "next friday"],
+  }],
+  ["12 0812 3456 7890 oct", context, {
+    task: [null, null, null, null, "12 0812 3456 7890 oct"],
+    planned: [null, null, null, null, "12 0812 3456 7890 oct"],
+    payment: [null, null, null, null, "12 0812 3456 7890 oct"],
+    guest: [null, null, null, "+6281234567890", "12 oct"],
+    vendor: [null, null, null, "+6281234567890", "12 oct"],
+  }],
+  ["Pay at 021 5551234 500k me", context, {
+    task: [500_000, null, "a", null, "Pay at 021 5551234"],
+    planned: [500_000, null, null, null, "Pay at 021 5551234 me"],
+    payment: [500_000, null, "a", null, "Pay at 021 5551234"],
+    guest: [null, null, "a", "+62215551234", "Pay at 500k"],
+    vendor: [500_000, null, null, "+62215551234", "Pay me"],
+  }],
+];
+
+test("a lead word before a phone and a date, amount or nickname after it never take the phone's digits, on every kind", () => {
+  const before = fallbacks.count;
+  for (const [text, ctx, expected] of CROSSING) {
+    for (const kind of KINDS) {
+      const { draft } = draftFor(text, ctx, new Set(), kind);
+      assert.deepEqual([draft.amount, draft.due, draft.who, draft.phone, draft.title], expected[kind], `${kind}: ${text}`);
+    }
+    const inferred = draftFor(text, ctx, new Set(), null);
+    const task = draftFor(text, ctx, new Set(), "task").draft;
+    assert.deepEqual([inferred.kind, inferred.draft], ["task", task], text);
+  }
+  assert.equal(fallbacks.count, before, "the parser itself never needs the exit check for these");
+});
+
+test("a phone put back by its chip restores exactly the typed text, even with a read piece on either side", () => {
+  for (const [text, ctx] of CROSSING) {
+    for (const kind of KINDS) {
+      const back = draftFor(text, ctx, new Set(["phone"]), kind).draft;
+      assert.equal(back.phone, null, `${kind}: ${text}`);
+      const everything = draftFor(text, ctx, new Set(["amount", "due", "who", "phone"]), kind).draft;
+      assert.equal(everything.title, text, `${kind}: ${text}`);
+    }
+  }
+  const vendor = draftFor("Top up for 0812 3456 7890 50k", context, new Set(["phone"]), "vendor").draft;
+  assert.deepEqual([vendor.phone, vendor.amount, vendor.title], [null, 50_000, "Top up for 0812 3456 7890"]);
+  const guest = draftFor("Call on 0812 3456 7890 friday", context, new Set(["phone"]), "guest").draft;
+  assert.deepEqual([guest.phone, guest.title], [null, "Call on 0812 3456 7890 friday"]);
+});
+
+const LEADS = ["for", "on", "by", "next", "this", "due", "pay", "call", "at"];
+
+const TAILS = ["50k", "5 jt", "500rb", "friday", "12 oct", "tomorrow", "me"];
+
+test("every lead word before and after every phone form, with a read piece on the other side, on every kind: the number is read where it is stored and is kept exactly as typed where it is not", () => {
+  const before = fallbacks.count;
+  let seen = 0;
+  for (const [typed, e164] of NUMBERS) {
+    const squeezed = typed.replace(/\s/g, "");
+    for (const lead of LEADS) {
+      for (const tail of TAILS) {
+        for (const text of [`${lead} ${typed} ${tail}`, `Order ${lead} ${typed} ${tail}`, `${tail} ${lead} ${typed}`, `${typed} ${lead} ${tail}`]) {
+          for (const kind of KINDS) {
+            seen++;
+            const { draft } = draftFor(text, context, new Set(), kind);
+            const where = `${kind}: ${text} -> ${JSON.stringify(draft)}`;
+            if (stores(kind)) {
+              assert.equal(draft.phone, e164, where);
+              assert.ok(!draft.title.replace(/\s/g, "").includes(squeezed), where);
+            } else {
+              assert.equal(draft.phone, null, where);
+              assert.ok(draft.title.includes(typed), where);
+            }
+            const back = draftFor(text, context, new Set(["phone"]), kind).draft;
+            assert.ok(back.phone === null && back.title.includes(typed), `put back, ${where}`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(seen > 30_000);
+  assert.equal(fallbacks.count, before, "the exit check never fires on these");
 });

@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { STORED, draftFor, parseDraft } from "../src/domain/draft.ts";
-import type { Context, Kind } from "../src/domain/draft.ts";
+import { STORED, draftFor, fallbacks, parseDraft } from "../src/domain/draft.ts";
+import type { Context, Field, Kind } from "../src/domain/draft.ts";
 
 const KINDS: readonly Kind[] = ["task", "planned", "payment", "guest", "vendor"];
 
 const context: Context = { today: "2026-10-07", me: "a", nicknames: { a: "Rani", b: "Dimas" }, lines: [{ id: "line-venue", title: "Venue", vendor: null }] };
+
+const mbak: Context = { ...context, nicknames: { a: "Mbak Rani", b: "Dimas" } };
 
 const BUDGET_MS = 50;
 
@@ -176,34 +178,53 @@ const PIECES = [
   "venue", "hall", "florist", "call", "aunt", "x", "é", "💍", "حفل", "", "", "‍", "(", ")", "-", "+", ".", ",", "/", "_", "…", "a)", "(5jt)",
 ];
 
-const SPACES = [" ", " ", " ", "  ", "\t", " ", "　", "-"];
+const LEAD_WORDS = ["for", "on", "by", "next", "this", "due", "pay", "call", "at", "before", "until", "Top up", "Mbak", "12", "Rp", "and"];
 
-const UNIT_OR_MARK = /(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])|\brp\b|\d[.,]\d{3}/iu;
+const SPACES = [" ", " ", " ", "  ", "\t", " ", "　", "-"];
 
-test("fuzz with a fixed seed: no amount from digits alone, nothing invented, nothing a kind cannot store, no marker, and no call near a hang", () => {
+const FIELDS: readonly Field[] = ["amount", "due", "who", "phone"];
+
+const UNIT_OR_MARK = /(?:jt|juta|rb|ribu|k)(?![\p{L}\p{N}_])|\brp\.?\s*\d|\d[.,]\d{3}/iu;
+
+const typed = (text: string) => [...text].filter((char) => /[\p{L}\p{N}]/u.test(char)).join("");
+
+test("fuzz with a fixed seed: no amount from digits alone, nothing invented or lost, nothing a kind cannot store, no marker, and no call near a hang", () => {
   const random = mulberry32(20261009);
   const pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)];
+  const before = fallbacks.count;
+  let inputs = 0;
   for (let run = 0; run < 1500; run++) {
     const count = 1 + Math.floor(random() * 12);
     let text = "";
-    for (let at = 0; at < count; at++) text += `${at === 0 ? "" : pick(SPACES)}${pick(PIECES)}`;
+    for (let at = 0; at < count; at++) text += `${at === 0 ? "" : pick(SPACES)}${random() < 0.3 ? pick(LEAD_WORDS) : pick(PIECES)}`;
     if (random() < 0.05) text = text.repeat(1 + Math.floor(500 / Math.max(text.length, 1))).slice(0, 500);
-    for (const kind of [...KINDS, null] as const) {
-      const started = performance.now();
-      const { draft, kind: chosen } = draftFor(text, context, new Set(), kind);
-      const where = `${kind ?? "inferred"} (${chosen}): ${JSON.stringify(text)}`;
-      assert.ok(included(draft.title, text), `nothing invented: ${where} -> ${JSON.stringify(draft.title)}`);
-      assert.ok(!draft.title.includes("") || text.includes(""), `no marker: ${where}`);
-      if (!UNIT_OR_MARK.test(text)) assert.equal(draft.amount, null, `no amount from digits alone: ${where}`);
-      if (draft.phone !== null) {
-        assert.match(draft.phone, /^\+[1-9]\d{6,14}$/, where);
-        assert.ok(STORED[chosen].includes("phone"), `a phone only where it is stored: ${where}`);
+    const ctx = run % 2 === 0 ? context : mbak;
+    const some = new Set(FIELDS.filter(() => random() < 0.25));
+    for (const ignore of [new Set<Field>(), some]) {
+      for (const kind of [...KINDS, null] as const) {
+        inputs++;
+        const started = performance.now();
+        const { draft, kind: chosen } = draftFor(text, ctx, ignore, kind);
+        const where = `${kind ?? "inferred"} (${chosen}) ignoring ${[...ignore].join(",") || "nothing"}: ${JSON.stringify(text)}`;
+        assert.equal(fallbacks.count, before, `the exit check fired, so a parser bug lost typed text: ${where}`);
+        assert.ok(included(draft.title, text), `nothing invented: ${where} -> ${JSON.stringify(draft.title)}`);
+        assert.ok(!draft.title.includes("") || text.includes(""), `no marker: ${where}`);
+        if (!UNIT_OR_MARK.test(text)) assert.equal(draft.amount, null, `no amount from digits alone: ${where}`);
+        if (draft.phone !== null) {
+          assert.match(draft.phone, /^\+[1-9]\d{6,14}$/, where);
+          assert.ok(STORED[chosen].includes("phone"), `a phone only where it is stored: ${where}`);
+        }
+        for (const field of ["amount", "due", "who"] as const) if (!STORED[chosen].includes(field)) assert.equal(draft[field], null, `${field} not stored: ${where}`);
+        for (const field of ignore) if (field !== "line") assert.equal(draft[field], null, `${field} ignored: ${where}`);
+        if (chosen === "guest") assert.notEqual(draft.who, "both", where);
+        if (draft.amount === null && draft.due === null && draft.who === null && draft.phone === null) assert.equal(typed(draft.title), typed(text), `nothing read, nothing lost: ${where}`);
+        assert.equal(typed(draftFor(text, ctx, new Set(FIELDS), kind).draft.title), typed(text), `everything put back gives the typed text: ${where}`);
+        assert.ok(performance.now() - started < BUDGET_MS * 4, `time: ${where}`);
       }
-      for (const field of ["amount", "due", "who"] as const) if (!STORED[chosen].includes(field)) assert.equal(draft[field], null, `${field} not stored: ${where}`);
-      if (chosen === "guest") assert.notEqual(draft.who, "both", where);
-      assert.ok(performance.now() - started < BUDGET_MS * 4, `time: ${where}`);
     }
   }
+  assert.equal(inputs, 1500 * 2 * 6);
+  assert.equal(fallbacks.count, before);
 });
 
 test("parseDraft alone never writes a private character into a long input", () => {
