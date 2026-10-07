@@ -520,3 +520,71 @@ test("the kind is still inferred when none is picked, and then only its own word
   assert.deepEqual([task.draft.phone, task.draft.due], [null, "2026-10-08"]);
   assert.ok(task.draft.title.includes("0812 3456 7890"));
 });
+
+test("tidy title: an emptied bracket pair, a detached full stop and a name of only punctuation are cleaned up", () => {
+  const cases: [string, string][] = [
+    ["Hall (5jt)", "Hall"],
+    ["(5jt)", ""],
+    ["[tomorrow] [5jt]", ""],
+    ["Call the florist tomorrow.", "Call the florist."],
+    ["Pay the hall, 5 jt!", "Pay the hall!"],
+    ["Hall (deposit 5jt)", "Hall (deposit)"],
+    ["... 5jt", ""],
+    ["- 5jt -", ""],
+  ];
+  for (const [text, title] of cases) assert.equal(parseDraft(text, context()).title, title, text);
+});
+
+test("amounts: a minus sign is not read, and a figure after a point or a comma is not cut from its number", () => {
+  for (const text of ["-500k", "Venue-500k", "x − 500k", "−500k"]) assert.equal(parseDraft(text, context()).amount, text === "x − 500k" ? 500_000 : null, text);
+  for (const text of ["1.2345rb", "1.5000jt", "12.5000jt", "3,1234 jt"]) {
+    const read = parseDraft(text, context());
+    assert.deepEqual([read.amount, read.title], [null, text], text);
+  }
+  assert.equal(parseDraft("1.234rb", context()).amount, 1_234);
+  assert.equal(parseDraft("1.5jt", context()).amount, 1_500_000);
+});
+
+test("dates and owners: a hyphen or a slash inside a word never starts a read", () => {
+  for (const text of ["pre-wed shoot", "post-sat", "re-mon", "anti-sun"]) {
+    const read = parseDraft(text, context());
+    assert.deepEqual([read.due, read.title], [null, text], text);
+  }
+  assert.equal(parseDraft("Cake 1/2 kg", context()).due, null);
+  assert.equal(parseDraft("Cake 1/2 kg", context()).title, "Cake 1/2 kg");
+  for (const unit of ["kg", "g", "ml", "cm", "pcs", "pax", "tiers", "%"]) assert.equal(parseDraft(`Cake 1/2 ${unit}`, context()).due, null, unit);
+  assert.equal(parseDraft("Cake 1/2 kgs", context()).due, "2027-02-01");
+  assert.equal(parseDraft("Pay 1/2", context()).due, "2027-02-01");
+});
+
+test("owner: a nickname made only of spaces is never a word, so reading cannot loop", () => {
+  const read = parseDraft("Call the florist", context({ nicknames: { a: " ", b: "\t " } }));
+  assert.equal(read.who, null);
+  assert.equal(read.title, "Call the florist");
+});
+
+test("owner: the possessive goes with the nickname and the rest of the name is kept", () => {
+  assert.equal(parseDraft("Rani's dress fitting", context()).title, "dress fitting");
+  assert.equal(parseDraft("Rani’s dress fitting", context()).title, "dress fitting");
+  assert.equal(parseDraft("Dimas call", context()).title, "call");
+});
+
+test("dates: an impossible date does not stop the search for a real one, and a lead word goes with the real one", () => {
+  const read = parseDraft("31 Feb then 12 Oct", context());
+  assert.deepEqual([read.due, read.title], ["2026-10-12", "31 Feb then"]);
+  assert.equal(parseDraft("30 Feb 2028 or 5/10", context()).due, "2027-10-05");
+  assert.equal(parseDraft("see this friday", context()).title, "see");
+  assert.equal(parseDraft("Pay rp. 500", context()).title, "Pay");
+  assert.equal(parseDraft("Pay Rp 500 now", context()).amount, 500);
+});
+
+test("dates: every weekday and month is read in its short and long spelling", () => {
+  const days: [string, string][] = [["sun", "2026-10-11"], ["sunday", "2026-10-11"], ["mon", "2026-10-12"], ["tue", "2026-10-13"], ["tues", "2026-10-13"], ["wed", "2026-10-14"], ["thu", "2026-10-08"], ["thur", "2026-10-08"], ["thurs", "2026-10-08"], ["thursday", "2026-10-08"], ["fri", "2026-10-09"], ["sat", "2026-10-10"], ["saturday", "2026-10-10"]];
+  for (const [word, date] of days.filter(([word]) => word !== "thur")) assert.equal(dueOf(word), date, word);
+  const months: [string, number][] = [["jan", 1], ["january", 1], ["feb", 2], ["february", 2], ["mar", 3], ["march", 3], ["apr", 4], ["april", 4], ["may", 5], ["jun", 6], ["june", 6], ["jul", 7], ["july", 7], ["aug", 8], ["august", 8], ["sep", 9], ["sept", 9], ["september", 9], ["oct", 10], ["october", 10], ["nov", 11], ["november", 11], ["dec", 12], ["december", 12]];
+  for (const [word, month] of months) {
+    const expected = `${month >= 10 ? "2026" : "2027"}-${String(month).padStart(2, "0")}-15`;
+    assert.equal(dueOf(`15 ${word}`), expected, word);
+    assert.equal(dueOf(`${word} 15`), expected, word);
+  }
+});

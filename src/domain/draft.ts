@@ -29,7 +29,8 @@ export type Draft = {
 
 type State = { rest: string };
 
-const START = "(?<![\\p{L}\\p{N}_])";
+const START = "(?<![\\p{L}\\p{N}_\\u2212-])";
+const AMOUNT_START = "(?<![\\p{L}\\p{N}_.,\\u2212-])";
 const END = "(?![\\p{L}\\p{N}_])";
 const MAX_AMOUNT = 999_999_999_999_999;
 
@@ -39,6 +40,7 @@ const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const WEEKDAY = "(sunday|sun|monday|mon|tuesday|tues|tue|wednesday|wed|thursday|thurs|thu|friday|fri|saturday|sat)";
 const DATE_LEAD = "(?:(?:by|on|due|before|until)\\s+)?";
 const AMOUNT_LEAD = "(?:(?:for|at)\\s+)?";
+const MEASURE_AHEAD = "(?!\\s*(?:kg|g|gr|gram|l|ml|cm|mm|m|km|pcs|pax|people|portions|persons|tiers|x|%)(?![\\p{L}\\p{N}_]))";
 const UNIT_AHEAD = "(?!\\s*(?:jt|juta|rb|ribu|k)(?![\\p{L}\\p{N}_]))";
 const UNITS: Record<string, number> = { k: 1_000, rb: 1_000, ribu: 1_000, jt: 1_000_000, juta: 1_000_000 };
 
@@ -90,7 +92,7 @@ const dateOf = (state: State, today: string): string | null => {
     take(state, pattern("(\\d{4})-(\\d{2})-(\\d{2})"), (m) => iso(Number(m[1]), Number(m[2]), Number(m[3]))) ??
     take(state, pattern(`(\\d{1,2})(?:st|nd|rd|th)?\\s*${MONTH}(?:,?\\s+(\\d{4}))?`), (m) => named(m[1], m[2], m[3])) ??
     take(state, pattern(`${MONTH}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?`), (m) => named(m[2], m[1], m[3])) ??
-    take(state, pattern("(\\d{1,2})/(\\d{1,2})(?:/(\\d{4}|\\d{2}))?"), (m) => {
+    take(state, pattern(`(\\d{1,2})/(\\d{1,2})(?:/(\\d{4}|\\d{2}))?${MEASURE_AHEAD}`), (m) => {
       const y = year(m[3]);
       return y === null ? upcoming(today, Number(m[2]), Number(m[1])) : iso(y, Number(m[2]), Number(m[1]));
     }) ??
@@ -109,8 +111,8 @@ const unitAmount = (whole: string, fraction: string, unit: string) => {
 const amountOf = (state: State): number | null => {
   const rupiah = "(?:rp\\.?\\s*)?";
   return (
-    take(state, new RegExp(`${START}${AMOUNT_LEAD}${rupiah}(\\d{1,12})(?:[.,](\\d{1,3}))?\\s*(jt|juta|rb|ribu|k)${END}`, "giu"), (m) => unitAmount(m[1], m[2] ?? "", m[3])) ??
-    take(state, new RegExp(`${START}${AMOUNT_LEAD}rp\\.?\\s*(\\d+(?:[.,]\\d+)*)(?![\\d.,])${UNIT_AHEAD}`, "giu"), (m) => parseRupiah(m[1])) ??
+    take(state, new RegExp(`${AMOUNT_START}${AMOUNT_LEAD}${rupiah}(\\d{1,12})(?:[.,](\\d{1,3}))?\\s*(jt|juta|rb|ribu|k)${END}`, "giu"), (m) => unitAmount(m[1], m[2] ?? "", m[3])) ??
+    take(state, new RegExp(`${AMOUNT_START}${AMOUNT_LEAD}rp\\.?\\s*(\\d+(?:[.,]\\d+)*)(?![\\d.,])${UNIT_AHEAD}`, "giu"), (m) => parseRupiah(m[1])) ??
     take(state, new RegExp(`(?<![\\p{L}\\p{N}_./,-])${AMOUNT_LEAD}(?!0)(\\d{1,3}(?:[.,]\\d{3})+|\\d{5,15})(?![\\p{L}\\p{N}_/-]|[.,]\\d)${UNIT_AHEAD}`, "giu"), (m) => {
       const value = parseRupiah(m[1]);
       return value !== null && String(value).length >= 5 ? value : null;
@@ -167,7 +169,7 @@ const vocabulary = ({ me, nicknames }: Context): [string, Side | "both"][] => {
   const other = me === "a" ? "b" : "a";
   const pronouns: [string, Side][] = me === null ? [] : [["me", me], ["mine", me], ["them", other], ["theirs", other]];
   const names = (["a", "b", "both"] as const).map((who): [string, Side | "both"] => [sideName(who, me, nicknames, NO_FALLBACK), who]);
-  return [...names, ...pronouns].filter(([word]) => word !== "").sort((a, b) => b[0].length - a[0].length);
+  return [...names, ...pronouns].filter(([word]) => word.trim() !== "").sort((a, b) => b[0].length - a[0].length);
 };
 
 const ownerOf = (state: State, context: Context): Draft["who"] => {
@@ -214,6 +216,15 @@ export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<
   const amount = ignore.has("amount") ? null : amountOf(state);
   const who = ignore.has("who") ? null : ownerOf(state, context);
   const line = ignore.has("line") ? null : lineOf(input, context.lines);
-  const title = state.rest.replace(/\s+/g, " ").replace(/^[\s,;:\u2013\u2014-]+|[\s,;:\u2013\u2014-]+$/g, "");
+  const tidy = state.rest
+    .replace(/[([{]\s*[)\]}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:[\u2013\u2014-]+ )+|(?: [\u2013\u2014-]+)+$/g, "")
+    .replace(/\s+([.,;:!?)\]}])/g, "$1")
+    .replace(/([([{])\s+/g, "$1")
+    .replace(/[,;:]+\s*([.!?])/g, "$1")
+    .replace(/^[\s,;:]+|[\s,;:]+$/g, "");
+  const title = /[\p{L}\p{N}]/u.test(tidy) ? tidy : "";
   return { title, kind: amount !== null && line !== null ? "payment" : "task", amount, due, who, line, phone };
 };
