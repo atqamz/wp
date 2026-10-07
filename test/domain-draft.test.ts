@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { todayIn } from "../src/domain/dates.ts";
-import { parseAmount, parseDraft } from "../src/domain/draft.ts";
+import { draftFor, parseAmount, parseDraft } from "../src/domain/draft.ts";
 import type { Context, Field } from "../src/domain/draft.ts";
 
 const WEDNESDAY = "2026-10-07";
@@ -453,4 +453,70 @@ test("phone: a group that is followed by an amount word is an amount, not part o
 test("phone: a figure that starts with a zero is never an amount", () => {
   const read = parseDraft("Order 0812345678901234 ready", context());
   assert.deepEqual([read.phone, read.amount, read.title], [null, null, "Order 0812345678901234 ready"]);
+});
+
+const KINDS = ["task", "planned", "payment", "guest", "vendor"] as const;
+const STORES: Record<(typeof KINDS)[number], string[]> = {
+  task: ["amount", "due", "who"],
+  planned: ["amount"],
+  payment: ["amount", "due", "who"],
+  guest: ["phone", "who"],
+  vendor: ["amount", "phone"],
+};
+const WORDS: Record<string, string> = { amount: "5 jt", due: "tomorrow", who: "Dimas", phone: "0812 3456 7890" };
+
+test("nothing typed vanishes on any kind: a read word is either saved by the kind or stays in the name", () => {
+  const ctx = context({ lines });
+  const text = "Aunt Sari tomorrow 5 jt Dimas 0812 3456 7890";
+  for (const kind of KINDS) {
+    const { draft, kind: chosen } = draftFor(text, ctx, new Set(), kind);
+    assert.equal(chosen, kind);
+    for (const field of ["amount", "due", "who", "phone"] as const) {
+      const value = draft[field];
+      if (STORES[kind].includes(field)) {
+        assert.notEqual(value, null, `${kind} reads ${field}`);
+        assert.ok(!draft.title.includes(WORDS[field]), `${kind}: ${field} left the name`);
+      } else {
+        assert.equal(value, null, `${kind} does not read ${field}`);
+        assert.ok(draft.title.includes(WORDS[field]), `${kind}: the words of ${field} stay in the name: ${draft.title}`);
+      }
+    }
+    assert.ok(draft.title.startsWith("Aunt Sari"), kind);
+  }
+});
+
+test("nothing typed vanishes on any kind: each word on its own, and every pair of words", () => {
+  const fields = ["amount", "due", "who", "phone"] as const;
+  const subsets = fields.flatMap((a, i) => [[a], ...fields.slice(i + 1).map((b) => [a, b])]);
+  for (const kind of KINDS) {
+    for (const used of subsets) {
+      const text = `Thing ${used.map((field) => WORDS[field]).join(" ")}`;
+      const { draft } = draftFor(text, context(), new Set(), kind);
+      const kept = used.filter((field) => STORES[kind].includes(field));
+      const stays = used.filter((field) => !STORES[kind].includes(field));
+      for (const field of kept) assert.notEqual(draft[field], null, `${kind} ${text}: ${field}`);
+      for (const field of stays) assert.ok(draft.title.includes(WORDS[field]) && draft[field] === null, `${kind} ${text}: ${field} stays`);
+      const rebuilt = [draft.title, ...kept.map((field) => WORDS[field])].join(" ");
+      assert.equal(rebuilt.split(/\s+/).sort().join(" "), text.split(/\s+/).sort().join(" "), `${kind} ${text}: words are neither lost nor invented`);
+    }
+  }
+});
+
+test("nothing typed vanishes on a guest: both is a word a guest cannot store, so it stays in the name", () => {
+  const { draft } = draftFor("Table both families", context(), new Set(), "guest");
+  assert.deepEqual([draft.who, draft.title], [null, "Table both families"]);
+  const task = draftFor("Table both families", context(), new Set(), "task").draft;
+  assert.deepEqual([task.who, task.title], ["both", "Table families"]);
+});
+
+test("the kind is still inferred when none is picked, and then only its own words are read", () => {
+  const ctx = context({ lines });
+  const paid = draftFor("Venue 5 jt friday 0812 3456 7890", ctx, new Set(), null);
+  assert.equal(paid.kind, "payment");
+  assert.deepEqual([paid.draft.amount, paid.draft.due, paid.draft.phone, paid.draft.line], [5_000_000, "2026-10-09", null, "line-venue"]);
+  assert.ok(paid.draft.title.includes("0812 3456 7890"));
+  const task = draftFor("Call florist 0812 3456 7890 tomorrow", context(), new Set(), null);
+  assert.equal(task.kind, "task");
+  assert.deepEqual([task.draft.phone, task.draft.due], [null, "2026-10-08"]);
+  assert.ok(task.draft.title.includes("0812 3456 7890"));
 });

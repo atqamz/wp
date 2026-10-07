@@ -188,6 +188,25 @@ const lineOf = (input: string, lines: readonly Line[]): string | null => {
   return hits.sort((a, b) => b.size - a.size)[0]?.id ?? null;
 };
 
+const STORED: Record<Kind, readonly Field[]> = {
+  task: ["amount", "due", "who"],
+  planned: ["amount"],
+  payment: ["amount", "due", "who"],
+  guest: ["phone", "who"],
+  vendor: ["amount", "phone"],
+};
+
+const READ_IN_TEXT: readonly Field[] = ["amount", "due", "who", "phone"];
+
+export const draftFor = (input: string, context: Context, ignore: ReadonlySet<Field>, pick: Kind | null): { draft: Draft; kind: Kind } => {
+  const first = parseDraft(input, context, ignore);
+  const kind = pick ?? first.kind;
+  const blocked = READ_IN_TEXT.filter((field) => !STORED[kind].includes(field) && !ignore.has(field));
+  const second = blocked.length === 0 ? first : parseDraft(input, context, new Set([...ignore, ...blocked]));
+  const both = kind === "guest" && second.who === "both";
+  return { kind, draft: both ? parseDraft(input, context, new Set([...ignore, ...blocked, "who"])) : second };
+};
+
 export const parseDraft = (input: string, context: Context, ignore: ReadonlySet<Field> = new Set()): Draft => {
   const state: State = { rest: input };
   const phone = ignore.has("phone") ? null : phoneOf(state);

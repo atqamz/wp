@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { EVENT_ORDER } from "../domain/budget.ts";
-import { parseAmount, parseDraft } from "../domain/draft.ts";
+import { draftFor, parseAmount } from "../domain/draft.ts";
 import type { Field as Parsed, Kind } from "../domain/draft.ts";
 import { sortBefore } from "../domain/order.ts";
 import { normalizePhone } from "../domain/phone.ts";
@@ -76,11 +76,10 @@ function AddForm({ seed }: { seed: string }) {
     [entries, items],
   );
 
-  const draft = useMemo(
-    () => parseDraft(input, { today, me, nicknames: { a: settings.partnerA, b: settings.partnerB }, lines }, ignore),
-    [input, today, me, settings.partnerA, settings.partnerB, lines, ignore],
+  const { draft, kind } = useMemo(
+    () => draftFor(input, { today, me, nicknames: { a: settings.partnerA, b: settings.partnerB }, lines }, ignore, kindPick),
+    [input, today, me, settings.partnerA, settings.partnerB, lines, ignore, kindPick],
   );
-  const kind = kindPick ?? draft.kind;
 
   const phase = useMemo(() => {
     if (settings.ceremonyDate === null) return "";
