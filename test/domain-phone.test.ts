@@ -108,15 +108,14 @@ test("a figure after a phone is still an amount, and an amount with a word or a 
   assert.equal(read("Call Aunt 6281234567890 5 jt").title, "Call Aunt 6281234567890");
   assert.equal(read("Florist 021 5551234 12 jt", "vendor").amount, 12_000_000);
   assert.equal(read("Florist 021 5551234 12 jt", "vendor").phone, "+62215551234");
-  assert.equal(read("Florist 0812 3456 7890 25000", "vendor").amount, 25_000);
+  assert.deepEqual([read("Florist 0812 3456 7890 25000", "vendor").amount, read("Florist 0812 3456 7890 25000", "vendor").title], [null, "Florist 25000"]);
   assert.equal(read("Pay Rp 6281234567890").amount, 6_281_234_567_890);
   assert.equal(read("Pay Rp 0812 3456 7890").phone, null);
   assert.equal(read("Pay 6281234567890 rb").amount, null);
 });
 
-test("plain amounts are still read: a word, a currency mark or grouped thousands, or a bare run of five to nine digits", () => {
+test("plain amounts are still read: a word, a currency mark or grouped thousands", () => {
   const cases: [string, number][] = [
-    ["1500000", 1_500_000],
     ["Rp 1.500.000", 1_500_000],
     ["Rp1500000", 1_500_000],
     ["2,5 jt", 2_500_000],
@@ -124,8 +123,6 @@ test("plain amounts are still read: a word, a currency mark or grouped thousands
     ["500k", 500_000],
     ["5 juta", 5_000_000],
     ["250 ribu", 250_000],
-    ["625000000", 625_000_000],
-    ["50000", 50_000],
     ["12.345.678.901", 12_345_678_901],
     ["Rp 12345678901", 12_345_678_901],
     ["Rp 6281234567890", 6_281_234_567_890],
@@ -136,8 +133,8 @@ test("plain amounts are still read: a word, a currency mark or grouped thousands
   }
 });
 
-test("a bare run of ten or more digits is never an amount, and stays in the name when it is not a phone", () => {
-  for (const typed of ["1234567890", "12345678901", "999999999999999", "6281234567", "2500000000", "0812345678901234"]) {
+test("a bare run of digits is never an amount, whatever its length, and stays in the name when it is not a phone", () => {
+  for (const typed of ["50000", "1500000", "625000000", "1234567890", "12345678901", "999999999999999", "6281234567", "2500000000", "0812345678901234"]) {
     for (const kind of KINDS) {
       const { draft } = draftFor(`Order ${typed} ready`, context, new Set(), kind);
       assert.equal(draft.amount, null, `${kind}: ${typed}`);
@@ -160,10 +157,15 @@ test("the phone put back by its chip stays protected from the amount rules", () 
   assert.deepEqual([bare.phone, bare.amount, bare.title], [null, null, "Florist 6281234567890"]);
 });
 
-test("the leading currency mark makes the next run an amount, and only the next run", () => {
-  assert.equal(parseDraft("Rp 021 5551234", context).phone, null);
-  assert.equal(parseDraft("rp. 6281234567890", context).phone, null);
-  assert.equal(parseDraft("Rp 5 jt 021 5551234", context).phone, "+62215551234");
+test("the currency mark makes the next run an amount instead of a phone, and only that run", () => {
+  for (const text of ["Rp 6281234567890", "rp. 6281234567890", "Pay Rp 6281234567890"]) {
+    const read = parseDraft(text, context);
+    assert.deepEqual([read.phone, read.amount], [null, 6_281_234_567_890], text);
+  }
+  const both = parseDraft("Rp 5 jt 021 5551234", context);
+  assert.deepEqual([both.amount, both.phone], [5_000_000, "+62215551234"]);
+  const spaced = parseDraft("Rp 5551234 021 5551234", context);
+  assert.deepEqual([spaced.amount, spaced.phone], [5_551_234, "+62215551234"]);
 });
 
 const mulberry32 = (seed: number) => () => {
@@ -179,7 +181,7 @@ test("property: with a fixed seed no kind makes an amount from a phone's digits,
   const random = mulberry32(20261008);
   const pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)];
   const words = ["venue", "hall", "florist", "cake", "aunt", "call", "book", "tent", "chairs", "caterer"];
-  const amounts: [string, number][] = [["5 jt", 5_000_000], ["500rb", 500_000], ["2,5jt", 2_500_000], ["Rp 1.500.000", 1_500_000], ["1500000", 1_500_000], ["250 ribu", 250_000], ["Rp 6281234567890", 6_281_234_567_890]];
+  const amounts: [string, number][] = [["5 jt", 5_000_000], ["500rb", 500_000], ["2,5jt", 2_500_000], ["Rp 1.500.000", 1_500_000], ["250 ribu", 250_000], ["Rp 6281234567890", 6_281_234_567_890]];
   const dates = ["tomorrow", "12 Oct", "friday", "12/10"];
   const owners = ["me", "Dimas"];
   let withPhone = 0;

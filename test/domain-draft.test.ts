@@ -54,21 +54,20 @@ test("amounts: Rp and grouped digits are read as whole rupiah", () => {
     ["Rp 500", 500],
     ["1.500.000", 1_500_000],
     ["10.000", 10_000],
-    ["1500000", 1_500_000],
-    ["50000", 50_000],
     ["Pay Rp 12345678901 now", 12_345_678_901],
     ["Pay Rp 999999999999999 now", 999_999_999_999_999],
     ["Pay 12.345.678.901 now", 12_345_678_901],
     ["Pay 123.456.789.012.345 now", 123_456_789_012_345],
-    ["Pay 625000000 now", 625_000_000],
   ];
   for (const [text, value] of cases) assert.equal(amountOf(text), value, text);
 });
 
-test("amounts: a bare number under five digits is left alone, and so is a figure too large for a rupiah column", () => {
-  for (const text of ["Book 3 vendors", "Plan for 2027", "Table 2500", "1.500", "Pay 1234567890123456", "Pay 99999999999999 jt", "Pay 12345678901 now", "Pay 999999999999999 now", "Pay 1234567890 now"]) {
+test("amounts: a bare run of digits of any length is never an amount, and neither is a figure too large for a rupiah column", () => {
+  for (const text of ["Book 3 vendors", "Plan for 2027", "Table 2500", "1.500", "1500000", "50000", "625000000", "Pay 1234567890123456", "Pay 99999999999999 jt", "Pay 12345678901 now", "Pay 999999999999999 now", "Pay 1234567890 now"]) {
     assert.equal(amountOf(text), null, text);
+    assert.equal(parseDraft(text, context()).title, text, text);
   }
+  assert.equal(amountOf("Pay 6281234567890"), null);
 });
 
 test("amounts: only the first amount is read and a lead word such as for goes with it", () => {
@@ -407,7 +406,7 @@ test("phone: a number never swallows the token that follows it, whether a figure
     ["Rias Laras 0878 0000 1032 12 jt", { title: "Rias Laras", phone: "+6287800001032", amount: 12_000_000 }],
     ["Dimas 0878 0000 1032 12/10", { phone: "+6287800001032", due: "2026-10-12", who: "b", title: "" }],
     ["Florist 0812 3456 7890 12 oct", { title: "Florist", phone: "+6281234567890", due: "2026-10-12" }],
-    ["Florist 0812 3456 7890 25000", { title: "Florist", phone: "+6281234567890", amount: 25_000 }],
+    ["Florist 0812 3456 7890 25000", { title: "Florist 25000", phone: "+6281234567890", amount: null }],
     ["Florist 0812 3456 7890 250", { title: "Florist 250", phone: "+6281234567890", amount: null }],
     ["Florist 0812 3456 7890 2,5 jt", { title: "Florist", phone: "+6281234567890", amount: 2_500_000 }],
     ["Florist 0812 3456 7890 500rb", { title: "Florist", phone: "+6281234567890", amount: 500_000 }],
@@ -419,13 +418,16 @@ test("phone: a number never swallows the token that follows it, whether a figure
   }
 });
 
-test("phone: a plain amount that starts with 62 is an amount, and so is any figure of nine digits that is not a phone", () => {
-  for (const text of ["Pay 625000000", "Rp 625000000", "Pay Rp 625.000.000"]) {
+test("phone: an amount that starts with 62 is an amount when it has Rp or grouping, and a bare run of digits is never one", () => {
+  for (const text of ["Rp 625000000", "Pay Rp 625.000.000", "Pay 625.000.000"]) {
     const read = parseDraft(text, context());
     assert.deepEqual([read.phone, read.amount], [null, 625_000_000], text);
   }
+  for (const text of ["Pay 625000000", "Pay 725000000"]) {
+    const read = parseDraft(text, context());
+    assert.deepEqual([read.phone, read.amount, read.title], [null, null, text], text);
+  }
   assert.deepEqual([parseDraft("Pay 62500000000", context()).phone, parseDraft("Pay 62500000000", context()).amount], ["+62500000000", null]);
-  assert.equal(parseDraft("Pay 725000000", context()).amount, 725_000_000);
 });
 
 test("phone: the length is 9 to 13 digits for a local number, 11 to 14 for a bare 62 and 9 to 15 after a plus", () => {
@@ -455,9 +457,11 @@ test("phone: a group that is followed by an amount word is an amount, not part o
   assert.equal(parseDraft("Cake 0812 3456 7890 500 rb", context()).amount, 500_000);
 });
 
-test("phone: a figure that starts with a zero is never an amount", () => {
-  const read = parseDraft("Order 0812345678901234 ready", context());
-  assert.deepEqual([read.phone, read.amount, read.title], [null, null, "Order 0812345678901234 ready"]);
+test("phone: a figure that starts with a zero is never an amount, with or without grouping", () => {
+  for (const text of ["Order 0812345678901234 ready", "Order 01234567 ready", "Order 021.555.1234 ready", "Order 0.500.000 ready"]) {
+    const read = parseDraft(text, context());
+    assert.deepEqual([read.phone, read.amount, read.title], [null, null, text], text);
+  }
 });
 
 const KINDS = ["task", "planned", "payment", "guest", "vendor"] as const;
