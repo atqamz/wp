@@ -223,6 +223,8 @@ const escaped = (phrase: string) => phrase.trim().replace(/[.*+?^${}()|[\]\\]/g,
 
 const phrase = (name: string) => new RegExp(`${START}${escaped(name)}${END}`, "iu");
 
+const mentions = (input: string, name: string) => new RegExp(escaped(name), "iu").test(input) && phrase(name).test(input);
+
 const NO_FALLBACK = { you: "", them: "", both: "both", nobody: "" };
 
 const vocabulary = ({ me, nicknames }: Context): [string, Side | "both"][] => {
@@ -245,7 +247,7 @@ const MIN_NAME = 3;
 
 const lineOf = (input: string, lines: readonly Line[]): string | null => {
   const hits = lines.flatMap((line) =>
-    [line.title, line.vendor].flatMap((name) => (name !== null && name.trim().length >= MIN_NAME && phrase(name).test(input) ? [{ id: line.id, size: name.trim().length }] : [])),
+    [line.title, line.vendor].flatMap((name) => (name !== null && name.trim().length >= MIN_NAME && mentions(input, name) ? [{ id: line.id, size: name.trim().length }] : [])),
   );
   return hits.sort((a, b) => b.size - a.size)[0]?.id ?? null;
 };

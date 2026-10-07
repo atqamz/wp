@@ -236,6 +236,20 @@ test("parseDraft alone never writes a private character into a long input", () =
   }
 });
 
+test("a long budget costs no compiled pattern per line on the first call", () => {
+  const cold = (word: string) => {
+    const lines = Array.from({ length: 150 }, (_, i) => ({ id: `line-${i}`, title: `${word}${i} hall`, vendor: `${word}${i} studio` }));
+    const started = performance.now();
+    const { draft } = draftFor("Pay florist 5 jt", { ...context, lines }, new Set(), null);
+    assert.equal(draft.line, null);
+    return performance.now() - started;
+  };
+  const ms = Math.min(cold("Zorblat"), cold("Quindle"), cold("Mervane"));
+  assert.ok(ms < BUDGET_MS, `${ms.toFixed(1)} ms`);
+  const hit = draftFor("Zorblat7 hall deposit 5 jt", { ...context, lines: [{ id: "line-7", title: "Zorblat7 hall", vendor: null }, { id: "line-8", title: "Zorblat8 hall", vendor: null }] }, new Set(), null);
+  assert.deepEqual([hit.draft.line, hit.draft.kind], ["line-7", "payment"]);
+});
+
 test("draft.ts has no constant that nothing uses", () => {
   const source = readFileSync(new URL("../src/domain/draft.ts", import.meta.url), "utf8");
   const names = [...source.matchAll(/^const ([A-Za-z_]\w*)\b/gm)].map(([, name]) => name);
