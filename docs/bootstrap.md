@@ -1,6 +1,6 @@
 # Bootstrap runbook: the manual steps before the first deploy
 
-Written 6 October 2026 and updated the same day, after the steps were run. This is the checklist for steps M1 to M8 of [infra §8.2](infra.md#82-bootstrap-checklist), kept as a record and for recovery. You can follow it without reading the rest of the docs; the design reasons live in [infra.md](infra.md), and each step links to the section that decided it. Each step has an **Outcome** paragraph with what actually happened, from the supervisor's report. The instructions themselves come from the linked official pages, which I fetched on 6 October 2026, or from the source of wrangler 4.147.0 downloaded from npm (named where used); the wrangler claims were checked against the real first deploy only where an Outcome paragraph says so.
+Written 6 October 2026 and updated the same day, after the steps were run; updated again on 7 October 2026 for the path destinations of the Access application, the public app shell and the design pages. This is the checklist for steps M1 to M8 of [infra §8.2](infra.md#82-bootstrap-checklist), kept as a record and for recovery. You can follow it without reading the rest of the docs; the design reasons live in [infra.md](infra.md), and each step links to the section that decided it. Each step has an **Outcome** paragraph with what actually happened, from the supervisor's report. The instructions themselves come from the linked official pages, which I fetched on 6 October 2026, or from the source of wrangler 4.147.0 downloaded from npm (named where used); the wrangler claims were checked against the real first deploy only where an Outcome paragraph says so.
 
 > **Privacy.** This repo is public. Every account name, email, ID, team name, token and secret in this file is a placeholder. Real values go in your password manager, never in the repo, a commit message, an issue, a PR, a CI log or a screenshot. The domains `atqamz.com` and `wp.atqamz.com` are not personal and stay as they are.
 >
@@ -19,8 +19,9 @@ Written 6 October 2026 and updated the same day, after the steps were run. This 
 | [M7](#m7-set-the-three-worker-secrets) | Set the three Worker secrets | Supervisor, via `npx cf` | 10 min | The first deploy (`secrets.required`) | [x] (by the first deploy, run by hand) |
 | [M8](#m8-set-the-github-actions-secrets) | Set the two GitHub Actions secrets | Supervisor, via `npx cf` | 5 min | The first deploy from CI | [x] |
 | [Adding the Google sign-in](#adding-the-google-sign-in) | The console steps for the Google client, how Google reached the Access application, and the last step (Google only) | Operator, then supervisor | | Retiring One-time PIN as the everyday login | [x] |
+| [Design pages](#design-pages) | The KV namespace behind `/design/*`, and how a page is put in and taken out | Supervisor, via `npx cf` | 10 min per page | Nothing | [x] (the namespace exists; pages are uploaded as needed) |
 
-**Status, 6 October 2026.** The operator delegated all Cloudflare work to the supervisor, who ran it with `npx cf` (the Cloudflare CLI, logged in as the operator through OAuth). M1 to M8 are done; what happened is under each step. `wp.atqamz.com` serves the full app, deployed by CI, and every path answers 302 to the Cloudflare Access login. Access now allows only the Google identity provider, with auto redirect on; One-time PIN is no longer offered; the policy still includes exactly two allowed emails. The production database was wiped and re-migrated once on day one (migration 0001 was rewritten in place when the Project concept was removed; see [infra §8.2](infra.md#82-bootstrap-checklist)), and the two nicknames (`partner_a_label`, `partner_b_label`) were seeded as private data: the values are not in the repository or in these documents. What remains is M9, the on-phone test ([infra §8.2](infra.md#82-bootstrap-checklist)).
+**Status, 7 October 2026.** The operator delegated all Cloudflare work to the supervisor, who ran it with `npx cf` (the Cloudflare CLI, logged in as the operator through OAuth). M1 to M8 are done; what happened is under each step. `wp.atqamz.com` serves the full app, deployed by CI. Since pull request 15 the app shell is public: `/` and every path except two answer without any login, and the Access application covers only `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*`, with the custom deny URL `https://wp.atqamz.com/?access=denied`. Access allows only the Google identity provider, with auto redirect on; One-time PIN is no longer offered; the policy still includes exactly two allowed emails. The production database was wiped and re-migrated once on day one (migration 0001 was rewritten in place when the Project concept was removed; see [infra §8.2](infra.md#82-bootstrap-checklist)), and the two nicknames (`partner_a_label`, `partner_b_label`) were seeded as private data: the values are not in the repository or in these documents. What remains is M9, the on-phone test ([infra §8.2](infra.md#82-bootstrap-checklist)), which now includes the first visit with no session ([M6, Verify](#m6-create-the-access-app-and-note-the-aud)).
 
 Out of scope here: M0 (scaffold the app) is code work and is done; M9 (test on two phones) needs a person with two phones; M10 is done (see [infra §7.5](infra.md#75-adding-wp-to-atqamzgithub-later)).
 
@@ -245,7 +246,7 @@ What this means for the operator: Testing is the safe start and is reversible by
 
 Resources: **Account Resources** > **Include** > the single account `<account-name>`; never "All accounts" ([GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), 18 September 2026: "restrict the generated API token to only the account on which you will be deploying"). **Zone Resources** appear once you add a zone permission; the only one is the Zone Read of the next paragraph.
 
-What I left out of Cloudflare's own "Edit Cloudflare Workers" template ([API token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/)): Workers KV Storage Write, Workers R2 Storage Write, Workers Tail Read, Account Settings Read, User Details Read, User Memberships Read, and the zone permission Workers Routes Write. wp uses no KV or R2, runs `wrangler` without `tail`, and sets `CLOUDFLARE_ACCOUNT_ID` so wrangler does not need to list accounts (the memberships lookup is skipped when the account ID is given: wrangler source, **unverified in docs**).
+What I left out of Cloudflare's own "Edit Cloudflare Workers" template ([API token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/)): Workers KV Storage Write, Workers R2 Storage Write, Workers Tail Read, Account Settings Read, User Details Read, User Memberships Read, and the zone permission Workers Routes Write. wp uses no R2, and its one KV namespace (`wp-design`, [Design pages](#design-pages)) is written by the supervisor's own login, not by CI; whether the CI deploy needs Workers KV Storage Write to bind that namespace is not recorded here (**unverified**). wp runs `wrangler` without `tail`, and sets `CLOUDFLARE_ACCOUNT_ID` so wrangler does not need to list accounts (the memberships lookup is skipped when the account ID is given: wrangler source, **unverified in docs**).
 
 **The Custom Domain question is answered: no DNS or routes permission is needed.** The only permission any official page names for attaching a Custom Domain through the API is Workers Scripts Write ([Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)), and no page says whether Cloudflare also checks zone permissions when it creates the DNS record and the certificate. The first CI deploy attached `wp.atqamz.com` and ran green with exactly the permissions of the table plus **Zone** > **Zone Read** on the one `atqamz.com` zone (below), so neither Workers Routes Edit, DNS Edit nor SSL and Certificates Edit is part of `wp-ci`. Whether Zone Read is itself needed, or only harmless, was not tested.
 
@@ -333,13 +334,13 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
 
 ## M6. Create the Access app and note the AUD
 
-**Outcome (done).** The supervisor created the Access application through the Cloudflare CLI: self-hosted, hostname-based for `wp.atqamz.com`, a 30-day session, SameSite `lax` cookie, one inline allow policy that includes exactly the two allowed emails. It was first created with One-time PIN, the only identity provider that existed then; Google was added later ([Adding the Google sign-in](#adding-the-google-sign-in)), and the application now allows only Google with `auto_redirect_to_identity` on. The AUD was recorded for M7 and is not written here. No `wp-access-setup` token and no script were used.
+**Outcome (done).** The supervisor created the Access application through the Cloudflare CLI: self-hosted, first for the whole host `wp.atqamz.com` and, since pull request 15 (7 October 2026), for the two path destinations `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*` with the custom deny URL `https://wp.atqamz.com/?access=denied`; a 30-day session, SameSite `lax` cookie, one inline allow policy that includes exactly the two allowed emails. It was first created with One-time PIN, the only identity provider that existed then; Google was added later ([Adding the Google sign-in](#adding-the-google-sign-in)), and the application now allows only Google with `auto_redirect_to_identity` on. The AUD was recorded for M7 and is not written here. No `wp-access-setup` token and no script were used.
 
-**Why.** The Access app puts a login (Google, the only method) and the two-email allow policy in front of `wp.atqamz.com`. The Worker verifies the `Cf-Access-Jwt-Assertion` token against the app's `aud` claim ([infra §6.4](infra.md#64-jwt-verification-in-the-worker)), so you need the AUD tag for M7.
+**Why.** The Access app puts a login (Google, the only method) and the two-email allow policy in front of `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*`. The rest of the host, the app shell, stays public on purpose: the app shows its own sign-in screen, and the deny URL brings a refused Google account back to a screen of the app ([infra §6](infra.md#6-auth)). The Worker verifies the `Cf-Access-Jwt-Assertion` token against the app's `aud` claim ([infra §6.4](infra.md#64-jwt-verification-in-the-worker)), so you need the AUD tag for M7.
 
 **Prerequisites.** M2 (organisation), an identity provider to allow (One-time PIN from M2, and the Google one from M3 if it exists), a way to call the Access API (the logged-in Cloudflare CLI, or `wp-access-setup` from M4), `<team-name>`, `<account-id>`. The hostname `wp.atqamz.com` need not exist yet: the dashboard flow says domains "must belong to an active zone in your Cloudflare account", not that a record must exist ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/), 4 September 2026). Whether the API accepts the app before the first deploy is **unverified**: if it refuses, finish this step after the first deploy and rerun M7 for `ACCESS_AUD`.
 
-`scripts/access.sh` was planned and not written; this runbook gives the calls by hand, and they were run through the CLI. The body below is the intended final shape (Google only, auto redirect); the application as it is today allows two identity providers and has auto redirect off.
+`scripts/access.sh` was planned and not written; this runbook gives the calls by hand, and they were run through the CLI. The body below is the shape of the application as it runs today (Google only, auto redirect, two path destinations, the deny URL). The names `destinations` (a list of `{ type: "public", uri }`) and `custom_deny_url` are from the create-application API reference ([API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/)) as I remember it and were not re-read in this pass, and whether `domain` must be left out when `destinations` is given is not stated here: **unverified**. The live application is the source of truth.
 
 **Steps (API).**
 1. [ ] Set up the shell (read secrets silently; the emails come from your password manager):
@@ -361,13 +362,17 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
    ```
 
    Pick the one with `type` `google`.
-3. [ ] Create the app ([create application](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/), `POST /accounts/{account_id}/access/apps`). Values from [infra §6.2](infra.md#62-setup-steps) step 6: self-hosted, hostname-based, one allowed identity provider with instant auth, a 30-day session, one **inline** policy with two `email` rules. Inline and reusable policies are mutually exclusive in this API, so wp creates no account-level policy object:
+3. [ ] Create the app ([create application](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/), `POST /accounts/{account_id}/access/apps`). Values from [infra §6.2](infra.md#62-setup-steps) step 6: self-hosted, the two path destinations, the deny URL, one allowed identity provider with instant auth, a 30-day session, one **inline** policy with two `email` rules. Inline and reusable policies are mutually exclusive in this API, so wp creates no account-level policy object:
 
    ```sh
    jq -n --arg idp "$IDP" --arg a "$EMAIL_A" --arg b "$EMAIL_B" '{
      type: "self_hosted",
      name: "wp",
-     domain: "wp.atqamz.com",
+     destinations: [
+       {type: "public", uri: "wp.atqamz.com/api/*"},
+       {type: "public", uri: "wp.atqamz.com/design/*"}
+     ],
+     custom_deny_url: "https://wp.atqamz.com/?access=denied",
      allowed_idps: [$idp],
      auto_redirect_to_identity: true,
      session_duration: "720h",
@@ -379,26 +384,35 @@ Resources: the same single account. Expiry: set an end date two days out (**TTL*
    }' | curl -sS "${AUTH[@]}" -X POST $API/accounts/$ACC/access/apps --data @- | jq '{success, aud: .result.aud, errors}'
    ```
 
-   Field names are from the API reference: `type`, `domain`, `allowed_idps`, `auto_redirect_to_identity` ("You must specify only one identity provider in allowed_idps"), `session_duration` (a duration such as `2h45m`), inline `policies` with `decision`, `include` and `name`, the `email` rule `{email: {email: "..."}}`, and `aud` in the response. The `name` of the inline policy is my choice. Instant auth is the dashboard's **Apply instant authentication**; the Cloudflare docs recommend it when there is one identity provider ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)). Sessions can last up to "one month"; 720h is 30 days ([Session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)).
+   Field names are from the API reference (`destinations` and `custom_deny_url` excepted, see the note above): `type`, `allowed_idps`, `auto_redirect_to_identity` ("You must specify only one identity provider in allowed_idps"), `session_duration` (a duration such as `2h45m`), inline `policies` with `decision`, `include` and `name`, the `email` rule `{email: {email: "..."}}`, and `aud` in the response. The `name` of the inline policy is my choice. Instant auth is the dashboard's **Apply instant authentication**; the Cloudflare docs recommend it when there is one identity provider ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)). Sessions can last up to "one month"; 720h is 30 days ([Session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)).
 4. [ ] Copy `<aud>` from the output into `wp / access app`. Nothing was written to disk: the body went through a pipe, and the output shows only `success`, `aud` and `errors`.
 
-**Steps (dashboard, if you prefer).** **Zero Trust** > **Access controls** > **Applications** > **Create new application** > **Self-hosted and private** > **Add public hostname**; choose the domain `atqamz.com` and the subdomain `wp`; add an **Allow** policy that includes the two emails; select only the `wp-google` identity provider and turn on **Apply instant authentication**; set **Session Duration** to 30 days; **Create** ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)). Copy the AUD: **Zero Trust** > **Access controls** > **Applications** > **Configure** > **Additional settings** > **Application Audience (AUD) Tag**; the tag "will never change unless you delete or recreate the Access application" ([Validate JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/), 6 May 2026). Check the session duration field accepts 30 days in the UI: the docs give "one month" as the maximum, the UI wording is **unverified**.
+**Steps (dashboard, if you prefer).** **Zero Trust** > **Access controls** > **Applications** > **Create new application** > **Self-hosted and private** > **Add public hostname**; choose the domain `atqamz.com`, the subdomain `wp` and the path `api/*`, then add a second public hostname with the path `design/*`; set the custom deny URL to `https://wp.atqamz.com/?access=denied` (where the dashboard puts these fields is **unverified**); add an **Allow** policy that includes the two emails; select only the `wp-google` identity provider and turn on **Apply instant authentication**; set **Session Duration** to 30 days; **Create** ([Self-hosted public application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)). Copy the AUD: **Zero Trust** > **Access controls** > **Applications** > **Configure** > **Additional settings** > **Application Audience (AUD) Tag**; the tag "will never change unless you delete or recreate the Access application" ([Validate JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/), 6 May 2026). Check the session duration field accepts 30 days in the UI: the docs give "one month" as the maximum, the UI wording is **unverified**.
 
 **Then revoke the setup token.**
 5. [ ] **Manage account** > **Account API tokens** > `wp-access-setup` > delete or roll ([Account API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)). Remove its entry's value from the password manager and `unset CF_TOKEN EMAIL_A EMAIL_B`.
 
 **Verify.**
-1. [ ] **Applications** lists `wp` for `wp.atqamz.com`, with only `wp-google` as identity provider and one Allow policy of two emails.
+1. [ ] **Applications** lists `wp` with the two destinations `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*` and nothing else, the deny URL `https://wp.atqamz.com/?access=denied`, only `wp-google` as identity provider and one Allow policy of two emails.
 2. [ ] `<aud>` matches the dashboard's **Additional settings** value.
 3. [ ] Scenario B only ([M1](#m1-find-the-cloudflare-account)): no other Access app is changed, and the **Protect all Workers** card is still as you found it.
-4. [ ] The real end-to-end test is [M9](infra.md#82-bootstrap-checklist), after the first deploy.
+4. [ ] **First visit, no login needed** (the same three requests as the CI smoke test, [infra §7.2](infra.md#72-workflow)). After a deploy:
 
-**Record.** `wp / access app`: the app name, the hostname, `<aud>`, the identity provider ID, the session duration, the date. `wp / emails`: the exact `ALLOWED_EMAILS` string (`<partner-a-email>,<partner-b-email>`, lowercase), as typed in M7.
+   ```sh
+   for p in / /api/health /design/round2/; do curl -sS -o /dev/null -w "$p %{http_code} %{content_type} %{redirect_url}\n" "https://wp.atqamz.com$p"; done
+   ```
+
+   `/` must answer `200` with `text/html`. `/api/health` and `/design/round2/` must answer a redirect (301 to 308) to `<team-name>.cloudflareaccess.com`, or a 401 or a 403. Then open `https://wp.atqamz.com/` in a private browser window: the app's own sign-in screen appears with no redirect first, and "Continue with Google" goes straight to Google (no chooser) and back into the app.
+5. [ ] **Wrong account.** In a private window, sign in with a Google account that the policy does not allow: Access refuses, the browser lands on `https://wp.atqamz.com/?access=denied`, and the app shows the wrong-account screen with the parameter already gone from the address bar. What Google offers when "Try another account" is tapped is **unverified**.
+6. [ ] The real end-to-end test is [M9](infra.md#82-bootstrap-checklist), on two phones, after the first deploy.
+
+**Record.** `wp / access app`: the app name, the destinations, the deny URL, `<aud>`, the identity provider ID, the session duration, the date. `wp / emails`: the exact `ALLOWED_EMAILS` string (`<partner-a-email>,<partner-b-email>`, lowercase), as typed in M7.
 
 **If it fails.**
 - `403` or an authentication error: `wp-access-setup` lacks a permission or belongs to another account. Run the M4 verify, then check both permission rows.
 - An error about `allowed_idps` or the identity provider ID: list the providers again and copy the `id`, not the name.
 - An error that the domain is not in an active zone, or that the app cannot be created before the Worker: see the prerequisites note above; the API behaviour is **unverified**. Try the dashboard path.
+- `/` answers a redirect or a 403 in the first-visit check: a destination covers more than the two paths (for example the whole host). Fix the destinations; the CI smoke test fails the deploy in the same way.
 - Another Access app already covers `wp.atqamz.com`, or the all-Workers policy is on (scenario B): do not edit it. Report it to the account owner ([infra §2.4](infra.md#24-what-can-go-wrong) risks 3 and 4).
 - You lost the AUD: it is in **Additional settings**. If you delete and recreate the app, it changes, and M7's `ACCESS_AUD` must be set again.
 
@@ -501,7 +515,28 @@ The rest of this section is kept as a record and for recovery (a deleted or expi
 
 **What the supervisor does:** create the Google identity provider from the client values, add it to the Access application's allowed identity providers (done, together with One-time PIN), and then replace the allowed list with Google alone and turn auto redirect on (done). Inline policies are untouched by these changes.
 
-**Verify.** On a phone and a laptop, open `https://wp.atqamz.com`: there is no chooser, the browser goes straight to Google; Google signs in the allowed account and returns to the app, and a third Google account is refused by the policy. This is part of M9 and has not been done yet.
+**Verify.** On a phone and a laptop, open `https://wp.atqamz.com`: the app shows its own sign-in screen (the shell is public, so there is no redirect yet); tap "Continue with Google" (a link to `/api/login`): there is no chooser, the browser goes straight to Google; Google signs in the allowed account and returns to the app, and a third Google account is refused by the policy and ends on the app's wrong-account screen ([M6, Verify](#m6-create-the-access-app-and-note-the-aud)). This is part of M9 and has not been done yet.
+
+---
+
+## Design pages
+
+**Outcome (done).** The Worker serves `/design/<name>/` from the Workers KV namespace `wp-design`, bound as `DESIGN` in `wrangler.jsonc` (pull request 12). The namespace id is committed there next to the D1 id; it is an identifier, not a credential (the same judgement as for the D1 id, [infra §5.3](infra.md#53-worker-structure-and-dev-auth)). The pages themselves are never committed.
+
+**Why.** To look at a design on a phone, behind the same login as the app, without committing it to a public repository and without a deploy per page. The Access application covers `/design/*` and the Worker checks the same token again ([infra §5.3](infra.md#53-worker-structure-and-dev-auth) says what the Worker returns and how).
+
+**Steps** (the supervisor, with the Cloudflare CLI logged in as the operator; CI never touches KV):
+1. [ ] **Once (done):** create the namespace with the title `wp-design` (`wrangler kv namespace create` is the wrangler command for it) and put its id in the top-level `kv_namespaces` entry of `wrangler.jsonc`; the `env.dev` entry keeps its all-zero placeholder.
+2. [ ] **Put a page in:** write the page as one self-contained HTML file (no links to other files: a deeper path is a 404) with made-up data only, and store it under its name with `wrangler kv key put`, against the remote namespace of the `DESIGN` binding. The name is lowercase letters, digits and hyphens, at most 40 characters, starting with a letter or a digit; the page is then at `https://wp.atqamz.com/design/<name>/`.
+3. [ ] **Take a page out:** `wrangler kv key delete` with the same name and namespace. `wrangler kv key list` shows what is there.
+4. [ ] **Check:** without a session, `curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' https://wp.atqamz.com/design/<name>/` must answer a redirect to `<team-name>.cloudflareaccess.com`, a 401 or a 403, never the page; in a signed-in browser the page shows. A new or changed page can take up to a minute to appear everywhere (KV is eventually consistent, [how KV works](https://developers.cloudflare.com/kv/concepts/how-kv-works/)).
+
+The command names are wrangler's ([KV commands](https://developers.cloudflare.com/workers/wrangler/commands/kv/)); that page was not fetched in this pass, so their flags are **unverified**, in particular how to choose the remote rather than the local namespace. The supervisor's own CLI (`npx cf`) has its own KV commands, which these documents do not name.
+
+**If it fails.**
+- The page 404s as JSON right after an upload: wait a minute, then check the name against the rule in step 2.
+- The page shows the app instead of the page: the path did not reach the Worker; check `run_worker_first` in `wrangler.jsonc` ([infra §5.2](infra.md#52-frontend-build-a-vite-react-spa-on-the-worker)).
+- A page answers without a login: stop and check the Access destinations ([M6](#m6-create-the-access-app-and-note-the-aud), Verify).
 
 ---
 
@@ -552,5 +587,7 @@ Every page below was fetched on 6 October 2026. Dates are the "last updated" sho
 | GitHub: `GITHUB_TOKEN` does not start workflow runs, except `workflow_dispatch` and `repository_dispatch` | https://docs.github.com/en/actions/concepts/security/github_token | none shown |
 | GitHub CLI: `gh secret set` | https://cli.github.com/manual/gh_secret_set | none shown |
 | Wrangler 4.147.0 source (`wrangler-dist/cli.js` from `npm pack wrangler`) | https://www.npmjs.com/package/wrangler | 4.147.0 |
+
+Added on 7 October 2026 and not fetched in that pass: Wrangler KV commands, https://developers.cloudflare.com/workers/wrangler/commands/kv/ (the design pages, **unverified**); the KV page quoted above, https://developers.cloudflare.com/kv/concepts/how-kv-works/ (read on 6 October 2026 for brainstorm §3.2); the create-application API page already listed, for the `destinations` and `custom_deny_url` fields (not re-read).
 
 The Google Workspace page on creating credentials said "client secrets aren't used for Web applications"; it contradicts the Google Cloud console help and Cloudflare's guide, which both use a client secret for this setup, so I followed those two.

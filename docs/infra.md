@@ -1,10 +1,10 @@
 # Infra and stack: wp on Cloudflare
 
-Research and decisions as of 6 October 2026. **Status, 6 October 2026:** the design below was approved and built the same day: the scaffold, the shared contract, the Worker, the SPA core and the deployment are on `main` and live at `wp.atqamz.com`. Sections say what is built and what is still plan (the service worker, the on-phone test M9). **Revised on 6 October 2026:** the frontend is now a React + TypeScript + Vite single-page app served by the same Worker, replacing the earlier plan of plain HTML, CSS and JS with no build step. React is a working choice that may be revised, so the design keeps the UI layer replaceable ([brainstorm §6.1](brainstorm.md#61-principles-and-layers)). What this revision supersedes is listed in [§9.3](#93-what-this-revision-supersedes) (this document) and [§9.4](#94-parts-of-docsbrainstormmd-that-are-superseded) (`docs/brainstorm.md`, updated in the same pass).
+Research and decisions as of 6 October 2026. **Status, 6 October 2026:** the design below was approved and built the same day: the scaffold, the shared contract, the Worker, the SPA core and the deployment are on `main` and live at `wp.atqamz.com`. Sections say what is built and what is still plan (the service worker, the on-phone test M9). **Updated on 7 October 2026:** the Worker also serves private design pages from a KV namespace ([§5.3](#53-worker-structure-and-dev-auth)); the app shell is public and Access protects only `/api/*` and `/design/*`, while the app shows its own sign-in screen ([§6](#6-auth)); and the UI was rebuilt in three stages (pull requests 13 to 16, [§5.6](#56-data-and-state-layer)). **Revised on 6 October 2026:** the frontend is now a React + TypeScript + Vite single-page app served by the same Worker, replacing the earlier plan of plain HTML, CSS and JS with no build step. React is a working choice that may be revised, so the design keeps the UI layer replaceable ([brainstorm §6.1](brainstorm.md#61-principles-and-layers)). What this revision supersedes is listed in [§9.3](#93-what-this-revision-supersedes) (this document) and [§9.4](#94-parts-of-docsbrainstormmd-that-are-superseded) (`docs/brainstorm.md`, updated in the same pass).
 
 > **Privacy.** This repo is public. No real emails or first names here: the two users are **Partner A** and **Partner B**, and addresses are written as `<email-partner-a>` and `<email-partner-b>`. Findings from private repos are written generically ("other org's repo", "office repo"), with no code, hostnames, IDs, secret names or people's names. The `atqamz/github` repo is public, so it can be quoted.
 >
-> **Label.** **unverified** = I can't prove it from the repo, docs or public DNS. **verified locally** = I built or ran it in a throwaway scratch project on 6 October 2026 (Node v26.10.0, wrangler 4.147.0, Vite 8.3.2); that shows how the tools behave, not how browsers or the Cloudflare edge behave. **built** = present on `main` and checked by reading the code and running `npm run check` on a clean checkout on 6 October 2026 (62 packages, Node v26.10.0). The author of the research had no Cloudflare, Google or GitHub write credentials; the supervisor ran the Cloudflare and GitHub steps ([bootstrap](bootstrap.md)). All versions and dates were checked on 6 October 2026 through npm, the GitHub API, the Go proxy and the linked docs pages; the version of each npm package is linked in [§5.4](#54-each-dependency-and-why) or [§5.7](#57-pwa-and-service-worker).
+> **Label.** **unverified** = I can't prove it from the repo, docs or public DNS. **verified locally** = I built or ran it in a throwaway scratch project on 6 October 2026 (Node v26.10.0, wrangler 4.147.0, Vite 8.3.2); that shows how the tools behave, not how browsers or the Cloudflare edge behave. **built** = present on `main` and checked by reading the code and running `npm run check` on a clean checkout on 6 October 2026 (62 packages, Node v26.10.0). What pull requests 12 to 16 added (7 October 2026) is labelled **built** after reading `main` at commit `e9a3e39`; `npm run check` was not run again for it. The author of the research had no Cloudflare, Google or GitHub write credentials; the supervisor ran the Cloudflare and GitHub steps ([bootstrap](bootstrap.md)). All versions and dates were checked on 6 October 2026 through npm, the GitHub API, the Go proxy and the linked docs pages; the version of each npm package is linked in [§5.4](#54-each-dependency-and-why) or [§5.7](#57-pwa-and-service-worker).
 
 ## Decision table
 
@@ -17,20 +17,20 @@ Research and decisions as of 6 October 2026. **Status, 6 October 2026:** the des
 | 5 | Effect | **No** (later only with the trigger in §4) | Two users and ±3 endpoints; Alchemy v2 forces Effect, so choosing it means choosing both |
 | 6 | Language | TypeScript for the Worker, the SPA and the shared code, checked by `tsc -b` | One language end to end; Partner B already works in TypeScript |
 | 7 | Frontend | React 19 SPA built by Vite 8, served by the same Worker through `@cloudflare/vite-plugin`, `assets.not_found_handling = "single-page-application"` | The operator's choice; the plugin builds the Worker and the assets in one `vite build` and generates the deploy config (§5.2) |
-| 8 | Router | No library: hash routing, 8 lines in `src/router.ts` | A handful of screens; plain `<a href="#/...">` links need no click handling (§5.6) |
+| 8 | Router | No library: hash routing, 8 lines in `src/router.ts`; the table of route words and screens is `src/ui/routes.ts` | A handful of screens; plain `<a href="#/...">` links need no click handling (§5.6) |
 | 9 | Data and state | `src/store/` (IndexedDB, outbox, the sync cycle) and `src/domain/` (pure functions), connected to React by `useSyncExternalStore`. No state library | The store is the offline source of truth; a server-state cache would be a second cache (§5.6) |
 | 10 | Validation | Hand-written from the table specs and the `kind` registry (also the SQL whitelist), in `shared/` | One source of truth, zero dependencies, runs in the SPA and in the Worker |
 | 11 | Sharing types | A `shared/` folder imported by relative path from `src/` and `worker/`; three `tsconfig` files | No package, no codegen (§5.5) |
 | 12 | D1 access | `prepare().bind()` and `batch()`, no ORM | Small queries, already written in brainstorm §5.3 |
 | 13 | Migrations | SQL files + `wrangler d1 migrations apply`, run in CI before the build and deploy | Built into D1; a failed migration is rolled back automatically |
-| 14 | Tests | `node --test` (TypeScript directly, newest Node) over `test/`: `shared/`, `src/domain/`, the store (in-memory persistence and a fake server), the Worker (against a SQLite stand-in for D1) and the migration; one integration test against `CLOUDFLARE_ENV=dev vite`. No component tests | Zero test framework; `vitest` only when views gain logic (§5.1) |
+| 14 | Tests | `node --test` (TypeScript directly, newest Node) over `test/`: `shared/`, `src/domain/`, the store (in-memory persistence and a fake server), the Worker (against a SQLite stand-in for D1) and the migration; one integration test against `CLOUDFLARE_ENV=dev vite`; a few tests that read the CSS and the copy as text (tokens, layout, scrollbars, wording). No component tests | Zero test framework; `vitest` only when views gain logic (§5.1) |
 | 15 | PWA and service worker | **Not built yet.** Plan: a hand-written service worker (about 25 lines) + a 20-line Vite plugin that stamps its precache list. Not `vite-plugin-pwa` | 0 extra packages instead of +329; trigger to switch in §5.7 |
-| 16 | Auth | Access, hostname-based app, allow policy for two emails; the Worker verifies the JWT with `jose`. **Google is the only identity provider**, with auto redirect on; One-time PIN is no longer offered ([bootstrap](bootstrap.md#adding-the-google-sign-in)); each change is a change of the app's identity providers only | What you asked for, and zero login code |
+| 16 | Auth | Access, a self-hosted app with the path destinations `/api/*` and `/design/*` (the app shell is public), allow policy for two emails; the Worker verifies the JWT with `jose`. **Google is the only identity provider**, with auto redirect on; One-time PIN is no longer offered ([bootstrap](bootstrap.md#adding-the-google-sign-in)); each change is a change of the app's identity providers only | What you asked for, and zero login code |
 | 17 | The two emails | Local password store (source), Worker secret, and the Access policy. Not in the repo, not in GitHub secrets, **not in D1** (the Worker turns the verified email into `a` or `b`) | Fewer copies, smaller chance of a leak |
 | 18 | CI/CD | GitHub Actions calls `npx` for `vite` and `wrangler` directly; not Workers Builds | One CI system for checks + migrations + build + deploy; Workers Builds only accepts user-owned tokens |
 | 19 | Environment | A single `production`, no preview. Staging later if there's a trigger | Preview URLs are public by default and share D1 unless separated |
 | 20 | Repo settings | A `wp` row in `repos.go` of `atqamz/github` (**done**, §7.5); CI secrets stay `gh secret set` | That repo's own rule: settings there, workflow and dependabot in each repo |
-| 21 | Dependencies | 3 runtime (`react`, `react-dom`, `jose`) + 8 dev (`vite`, `@vitejs/plugin-react`, `@cloudflare/vite-plugin`, `wrangler`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`) | Each one is justified in §5.4 |
+| 21 | Dependencies | 5 runtime (`react`, `react-dom`, `jose` and the two fontsource variable font packages) + 8 dev (`vite`, `@vitejs/plugin-react`, `@cloudflare/vite-plugin`, `wrangler`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`) | Each one is justified in §5.4 |
 
 ---
 
@@ -102,7 +102,7 @@ Sources: [README](https://github.com/atqamz/github), `AGENTS.md`, `main.go`, `re
 | DNS records | Six explicit records including one wildcard | Many, one zone | One record, created automatically by Custom Domain |
 | Access org | Not managed | App/policy/token in code; **org, team domain, IdP created manually** | One Google IdP and one app |
 | Workers | None | Only routes and subdomain; script from the app repo | The `wp` script deployed by wrangler |
-| D1 / KV | None | Created by IaC, schema in the app repo | D1 `wp` created once through `wrangler d1 create` |
+| D1 / KV | None | Created by IaC, schema in the app repo | D1 `wp` created once through `wrangler d1 create`; one KV namespace `wp-design` for the private design pages ([§5.3](#53-worker-structure-and-dev-auth)) |
 
 ### 2.2 Is the `atqamz.com` zone in their state?
 
@@ -164,12 +164,13 @@ wp usage: ±200 requests/day, 1 database, 2 seats. **Unverified:** how much the 
 |---|---|
 | Worker `wp` (script, versions, secrets, assets) | All other Workers and their routes |
 | D1 `wp` and its contents | Other databases |
+| KV namespace `wp-design` and its keys | Other namespaces |
 | Custom Domain `wp.atqamz.com` (one DNS record + one certificate) | Other records in `atqamz.com`, zone settings, zone-wide rules |
-| One Access app `wp` (hostname-based, inline policy) | Other Access applications, reusable policies, the `all_workers` application |
+| One Access app `wp` (path destinations `/api/*` and `/design/*`, inline policy) | Other Access applications, reusable policies, the `all_workers` application |
 | One Google IdP (the only account-level object; **live**) | The Access org (team domain, login page, global duration), other IdPs |
 | Token `wp-ci` (deploy; `wp-access-setup` was not needed, §7.3) | Other tokens and their inventory |
 
-**Smallest footprint:** Worker, D1, Custom Domain, Access app, IdP, two tokens. The policy is created **inline** in the app (not reusable), so wp doesn't add an account-level policy object: the API says "Reusable and inline policies are mutually exclusive" ([API reference](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/)).
+**Smallest footprint:** Worker, D1, one KV namespace, Custom Domain, Access app, IdP, two tokens. The policy is created **inline** in the app (not reusable), so wp doesn't add an account-level policy object: the API says "Reusable and inline policies are mutually exclusive" ([API reference](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/)).
 
 ---
 
@@ -224,7 +225,7 @@ Reasons:
 2. No state, so no state that can clash with another org's IaC.
 3. `secrets.required` in wrangler makes the deploy fail if a secret isn't set yet ([docs](https://developers.cloudflare.com/workers/wrangler/configuration/#secrets-configuration-property)).
 
-**The Access script (`scripts/access.sh`)** was the part you could skip, and it was skipped: it was not written. The Access application was created once through the Cloudflare CLI with the calls in [bootstrap M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud), which also serve as the runnable checklist, with the two emails coming from the environment, not typed into a file. Nothing about Access is part of CI.
+**The Access script (`scripts/access.sh`)** was the part you could skip, and it was skipped: it was not written. The Access application was created once through the Cloudflare CLI with the calls in [bootstrap M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud), which also serve as the runnable checklist, with the two emails coming from the environment, not typed into a file; since pull request 15 (7 October 2026) the application has the two path destinations instead of the whole host. Nothing about Access is part of CI, except that the smoke test of [§7.2](#72-workflow) checks that the two protected paths still answer with a login redirect, a 401 or a 403.
 
 **Why not the others now:**
 
@@ -269,15 +270,17 @@ Assessment:
 |---|---|---|
 | Language | TypeScript everywhere (Worker, SPA, shared code) | wrangler and Vite bundle TS with no extra config; TS is [first-class on Workers](https://developers.cloudflare.com/workers/languages/typescript/) (3 July 2026). `typescript` 7.0.2, `tsc -b` ([§5.5](#55-sharing-types-and-code-between-the-worker-and-the-spa)) |
 | Frontend | React 19.3.0 + Vite 8.3.3 + `@vitejs/plugin-react` 6.1.2 | The operator's choice, and it is the layout of Cloudflare's own [React guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/) (5 September 2026). Details in [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker) |
-| Serving | One Worker: static assets from `dist/client` + `/api/*` | `@cloudflare/vite-plugin` 1.62.5; `assets.not_found_handling = "single-page-application"`, `assets.run_worker_first = ["/api/*"]` |
-| Worker structure | One `fetch` handler with a `switch` on the path and the method, four files (`worker/index.ts`, `worker/auth.ts`, `worker/sync.ts`, `worker/export.ts`) | See [§5.3](#53-worker-structure-and-dev-auth) |
-| Router | No library; hash routing (`#/budget`) with an 8-line `useSyncExternalStore` hook in `src/router.ts` | Hash links are plain `<a>` tags, so no click interception and no history code; the service worker (not built yet) will only ever see navigations to `/`. Trigger for [`wouter`](https://www.npmjs.com/package/wouter) (3.13.0, 30 September 2026; peer `react >=16.8`, ships a hash-location hook in its package, `wouter/use-hash-location`; depends on `regexparam` and `use-sync-external-store`): path URLs are wanted (shareable deep links) or more than about 8 routes. Not `react-router` (8.4.0, 15 September 2026): a framework-sized API for a handful of screens |
+| Serving | One Worker: static assets from `dist/client` + `/api/*` + `/design/*` | `@cloudflare/vite-plugin` (version in [§5.4](#54-each-dependency-and-why)); `assets.not_found_handling = "single-page-application"`, `assets.run_worker_first = ["/api/*", "/design/*"]` |
+| Worker structure | One `fetch` handler with a `switch` on the path and the method, four files (`worker/index.ts`, `worker/auth.ts`, `worker/sync.ts`, `worker/export.ts`); `/design/<name>/` is read from KV in `worker/index.ts` | See [§5.3](#53-worker-structure-and-dev-auth) |
+| Router | No library; hash routing (`#/money`, `#/people`) with an 8-line `useSyncExternalStore` hook in `src/router.ts` and the table of route words and screens in `src/ui/routes.ts` (seven screens, ten route words: the old `#/budget` still opens Money, and `#/guests` and `#/vendors` open the two lists of People) | Hash links are plain `<a>` tags, so no click interception and no history code; the service worker (not built yet) will see navigations to `/` and to `/design/<name>/`, and has to leave the second to the network ([§5.7](#57-pwa-and-service-worker)). Trigger for [`wouter`](https://www.npmjs.com/package/wouter) (3.13.0, 30 September 2026; peer `react >=16.8`, ships a hash-location hook in its package, `wouter/use-hash-location`; depends on `regexparam` and `use-sync-external-store`): path URLs are wanted (shareable deep links) or more than about 8 routes. Not `react-router` (8.4.0, 15 September 2026): a framework-sized API for a handful of screens |
 | Data and state | `src/store/` + `src/domain/`, bridged by `useSyncExternalStore` | See [§5.6](#56-data-and-state-layer). No TanStack Query, Redux or Zustand |
 | Validation | A hand-written function in `shared/validate.ts`, driven by the table specs and the `kind` registry in `shared/tables.ts`, which are also the SQL whitelist | Trigger: payload shape grows beyond a per-table patch → `valibot` ([1.5.0](https://www.npmjs.com/package/valibot), 9 September 2026) or `zod` ([4.6.5](https://www.npmjs.com/package/zod), 13 September 2026) |
 | D1 access | `env.DB.prepare(sql).bind(...)` and `env.DB.batch([...])`; SQL only from the whitelist | Trigger: many dynamic queries → Kysely (0.29.6). Drizzle is supported by wrangler through `migrations_pattern` ([docs](https://developers.cloudflare.com/d1/reference/migrations/)) but adds a toolchain |
 | Migrations | `migrations/NNNN_*.sql`, `wrangler d1 migrations apply wp --remote` in CI | Use the database name, not the binding name, so it doesn't hit the wrong target ([docs](https://developers.cloudflare.com/d1/reference/migrations/), 8 June 2026). In CI the confirmation is skipped, a backup is still taken, and a failed migration is rolled back ([docs](https://developers.cloudflare.com/workers/wrangler/commands/d1/)). `0001_init.sql` creates `sync_state`, `settings`, `items` and `budget_entries` (SQL in `docs/brainstorm.md` §7.2, identical to the file); it is applied to the production database, which was wiped and migrated again once on day one after the file was rewritten in place (Project removed, `sync_state.epoch` added), and `test/migration.test.ts` runs it in SQLite and checks the tables, the revision counter, the random `epoch`, the foreign keys, the `updated_by` check and the two shapes of `budget_entries`. D1 rejects `GLOB` patterns over 50 bytes ([limits](https://developers.cloudflare.com/d1/platform/limits/), 21 April 2026), which is why the instant checks in that SQL are short. Adding a kind of list later needs no migration; adding a column to `items` does The generated deploy config keeps `migrations_dir` pointing at the source folder (verified locally: `../../migrations` in `dist/wp/wrangler.json`; also in the [plugin changelog](https://newreleases.io/project/github/cloudflare/workers-sdk/release/@cloudflare%2Fvite-plugin@1.42.4), PR 14490) |
 | Tests | `node --test` (the `test` script, no path argument) over `test/`: `shared/`, `src/domain/`, the store, the Worker's auth, sync and export, and the migration. The Worker tests run against a `node:sqlite` stand-in for D1 (`test/sync-db.ts`) that rejects more than 100 bound parameters. One integration test (`test/sync-integration.test.ts`) applies the migrations to a local D1, starts `CLOUDFLARE_ENV=dev vite` and calls the API; it is part of `npm test`. Browser checks (not part of `npm test`, not a dependency in `package.json`) run Playwright through `npx --yes playwright@latest` | Node runs `.ts` directly: type stripping is stable since v24.12.0 and is on in every newer line, needs `.ts` extensions in imports and `import type`, and doesn't run `.tsx` ([Node docs](https://nodejs.org/docs/latest/api/typescript.html)), so `domain/` and `shared/` contain no JSX. **verified locally:** a `node --test` file importing `src/domain/*.ts`, which imports a type from `shared/*.ts`, passes. No component tests; trigger for `vitest` ([5.0.3](https://www.npmjs.com/package/vitest), 30 September 2026) + Testing Library: views gain logic that isn't in `domain/`. `@cloudflare/vitest-plugin` ([1.3.6](https://www.npmjs.com/package/@cloudflare/vitest-plugin), 2 October 2026) peers `vitest ^4.1.0`, so vitest would have to be pinned to 4.x; it is only worth it for per-test D1 isolation inside workerd |
 | PWA | Hand-written service worker + a small Vite plugin | [§5.7](#57-pwa-and-service-worker) |
+| Look | **Built.** Design tokens in `src/tokens.css` (the Ink and rose palette in OKLCH, light and dark, spacing, type scale); two self-hosted variable fonts from fontsource, Mona Sans for display and Hanken Grotesk for text, loaded by `@font-face` rules in the same file; per-device theme (Match this device, Light, Dark) kept in `localStorage` under `wp-theme` and applied before first paint by a small inline script in `index.html`; scrollbars are thin and tokenised, and hidden under `@media (pointer: coarse)` in `src/style.css`; every width condition is in `rem`; the shell is a header and a bottom bar on a phone and a sidebar from 62.5 rem (1000 px at the default text size) | `test/tokens.test.ts` computes contrast ratios from the OKLCH tokens, `test/scrollbars.test.ts` and `test/layout.test.ts` read the CSS as text. No CSS framework and no font host: the public shell makes no request to a third party. How the screens look in a browser is not part of `npm test` |
+| Design pages | **Built.** `/design/<name>/` is served by the Worker from the KV namespace `wp-design` (binding `DESIGN`), after the same Access JWT check as the API | Pages are uploaded by hand and never committed; see [§5.3](#53-worker-structure-and-dev-auth) |
 | Local dev | `npm run dev` = `CLOUDFLARE_ENV=dev vite`: HMR for the SPA, the Worker runs in workerd, D1 is local. There is no seed script and nothing to seed (the app opens empty), and any seed added later must contain **fake data only** | Local D1 comes from `wrangler d1 migrations apply wp --local --env dev`, which `npm run dev` does not run: a fresh `.wrangler` needs it once, and `.wrangler` must be deleted and the migration applied again after any edit to `0001_init.sql` (it is rewritten in place); without it `/api/sync` returns 500 (README); **verified locally** that the Vite dev server reads that database. Dev auth is described in [§5.3](#53-worker-structure-and-dev-auth) |
 | Worker types | `wrangler types` generates `worker-configuration.d.ts` (committed) | No need for `@cloudflare/workers-types`. **verified locally:** it includes the dev-only vars (`AUTH_MODE?`, `DEV_WHO?`) and lists the three secrets as optional `string`, so `authenticate` must treat them as possibly missing (fail closed) |
 
@@ -292,10 +295,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { cloudflare } from "@cloudflare/vite-plugin";
 
-export default defineConfig({ plugins: [react(), cloudflare()] });
+const persist = process.env.WP_PERSIST_TO;
+
+export default defineConfig({ plugins: [react(), cloudflare(persist ? { persistState: { path: persist } } : {})] });
 ```
 
-`wrangler.jsonc` (built; `assets.directory` is deliberately absent because the plugin fills it in, per the static-assets page above). The production `database_id` appears at the top level only; `env.dev` keeps an all-zero placeholder, because the local D1 does not need the real id and the dev build must never point at production:
+When `WP_PERSIST_TO` is set, the dev server keeps the local D1 and KV state in that folder instead of `.wrangler` (read from the code; the plugin option is `persistState`, and its docs page was not re-read in this pass: unverified).
+
+`wrangler.jsonc` (built; `assets.directory` is deliberately absent because the plugin fills it in, per the static-assets page above). The production `database_id` and the production KV namespace `id` appear at the top level only; `env.dev` keeps all-zero placeholders, because the local D1 and the local KV do not need the real ids and the dev build must never point at production:
 
 ```jsonc
 {
@@ -305,10 +312,11 @@ export default defineConfig({ plugins: [react(), cloudflare()] });
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "wp.atqamz.com", "custom_domain": true }],
-  "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/design/*"] },
   "d1_databases": [
     { "binding": "DB", "database_name": "wp", "database_id": "783df04a-8254-4586-b705-8d73d0d54ec6", "migrations_dir": "migrations" }
   ],
+  "kv_namespaces": [{ "binding": "DESIGN", "id": "ca244314e31b4b03b76cde03ae99ad8b" }],
   "secrets": { "required": ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "ALLOWED_EMAILS"] },
   "env": {
     "dev": {
@@ -316,6 +324,7 @@ export default defineConfig({ plugins: [react(), cloudflare()] });
       "d1_databases": [
         { "binding": "DB", "database_name": "wp", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
       ],
+      "kv_namespaces": [{ "binding": "DESIGN", "id": "00000000000000000000000000000000" }],
       "vars": { "AUTH_MODE": "dev", "DEV_WHO": "a" }
     }
   }
@@ -330,7 +339,7 @@ dist/
     index.html
     manifest.webmanifest  copied as is from public/
     apple-touch-icon.png, icon-192.png, icon-512.png   copied as is from public/
-    assets/index-<hash>.js, assets/index-<hash>.css
+    assets/index-<hash>.js, assets/index-<hash>.css, and the font files the CSS refers to
     .assetsignore
   wp/                     the Worker
     index.js
@@ -340,9 +349,9 @@ dist/
 .wrangler/deploy/config.json   points at dist/wp/wrangler.json
 ```
 
-There is no `sw.js` yet ([§5.7](#57-pwa-and-service-worker)). `wrangler deploy` follows `.wrangler/deploy/config.json` to `dist/wp/wrangler.json` and the static files in `dist/client` (it printed "Using redirected Wrangler configuration" in a dry run, and the CI deploy job works this way). The [plugin docs](https://developers.cloudflare.com/workers/vite-plugin/reference/static-assets/) say the same: "an output `wrangler.json` configuration file is generated as part of the build output". So the deploy steps are `npm run build` (which is `vite build`) and then `npx wrangler deploy`, not a bare `wrangler deploy`.
+There is no `sw.js` yet ([§5.7](#57-pwa-and-service-worker)). The font files in `assets/` come from reading the `@font-face` rules in `src/tokens.css`; the build was not run again after they were added (unverified). `wrangler deploy` follows `.wrangler/deploy/config.json` to `dist/wp/wrangler.json` and the static files in `dist/client` (it printed "Using redirected Wrangler configuration" in a dry run, and the CI deploy job works this way). The [plugin docs](https://developers.cloudflare.com/workers/vite-plugin/reference/static-assets/) say the same: "an output `wrangler.json` configuration file is generated as part of the build output". So the deploy steps are `npm run build` (which is `vite build`) and then `npx wrangler deploy`, not a bare `wrangler deploy`.
 
-**Why `run_worker_first: ["/api/*"]` stays.** In SPA mode an unmatched navigation returns `index.html` with 200, and the docs warn: "if you navigate to `/api/date` in your browser, you will be served an HTML file" ([SPA mode](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)). `/api/login` is a navigation that must reach the Worker ([§6.5](#65-manifest-and-service-worker-behind-access-rechecking-the-caveats)). **verified locally** in `vite dev`: a request with `Sec-Fetch-Mode: navigate` to `/api/login` returned the Worker's response and one to `/budget/x` returned the HTML. Navigations are otherwise answered by the asset layer without invoking the Worker, because the `assets_navigation_prefers_asset_serving` flag is on by default from compatibility date 2025-04-01 ([flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)); this one is covered by the 2026-10-06 date above. With hash routing ([§5.1](#51-decisions)) SPA mode is not needed to make deep links work; it is kept because the operator chose it, it makes stray paths return the app instead of a bare 404, and path routing needs it. Behind Access, `/` answers 302 to the login on every path today (the live check of the CI smoke test, [§7.2](#72-workflow)).
+**Why `run_worker_first: ["/api/*", "/design/*"]` stays.** In SPA mode an unmatched navigation returns `index.html` with 200, and the docs warn: "if you navigate to `/api/date` in your browser, you will be served an HTML file" ([SPA mode](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)). `/api/login` is a navigation that must reach the Worker ([§6.5](#65-manifest-and-service-worker-with-a-public-shell-rechecking-the-caveats)), and so is `/design/<name>/`, which has to get the page from KV and not `index.html`. **verified locally** in `vite dev`: a request with `Sec-Fetch-Mode: navigate` to `/api/login` returned the Worker's response and one to `/budget/x` returned the HTML. Navigations are otherwise answered by the asset layer without invoking the Worker, because the `assets_navigation_prefers_asset_serving` flag is on by default from compatibility date 2025-04-01 ([flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)); this one is covered by the 2026-10-06 date above. With hash routing ([§5.1](#51-decisions)) SPA mode is not needed to make deep links work; it is kept because the operator chose it, it makes stray paths return the app instead of a bare 404, and path routing needs it. The two paths in `run_worker_first` are also the two destinations of the Access application ([§6](#6-auth)); every other path, `/` included, is answered by the asset layer and is public. The live check of the CI smoke test ([§7.2](#72-workflow)) asks for `/` (200 HTML) and for `/api/health` and `/design/round2/` (protected).
 
 `package.json` scripts (built):
 
@@ -354,12 +363,12 @@ There is no `sw.js` yet ([§5.7](#57-pwa-and-service-worker)). `wrangler deploy`
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "node --test",
-    "check": "npm run typecheck && npm test && npm run build && test -s dist/wp/wrangler.json && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"[^>]*use-credentials' dist/client/index.html && test -d worker && test -d shared && (grep -rEq \"(from|import)[ (]*[\\\"']react\" worker shared src/domain src/store; test $? = 1) && (grep -rEq \"fetch *\\(|indexedDB|XMLHttpRequest|sendBeacon\" src/views src/ui src/hooks; test $? = 1)"
+    "check": "npm run typecheck && npm test && npm run build && test -s dist/wp/wrangler.json && ! grep -q AUTH_MODE dist/wp/wrangler.json && grep -q 'rel=\"manifest\"' dist/client/index.html && ! grep -q 'use-credentials' dist/client/index.html && test -d worker && test -d shared && (grep -rEq \"(from|import)[ (]*[\\\"']react\" worker shared src/domain src/store; test $? = 1) && (grep -rEq \"fetch *\\(|indexedDB|XMLHttpRequest|sendBeacon\" src/views src/ui src/hooks; test $? = 1)"
   }
 }
 ```
 
-`check` therefore runs the type check, the tests and the build, then guards the output: a non-empty production config without `AUTH_MODE`, the manifest `crossorigin="use-credentials"` in the built `index.html`, and the layer rules of [brainstorm §6.1](brainstorm.md#61-principles-and-layers) (no React import in `worker/`, `shared/`, `src/domain/` and `src/store/`; no `fetch`, IndexedDB, XMLHttpRequest or `sendBeacon` in `src/views/`, `src/ui/` and `src/hooks/`). The two `test -d` guards make a grep over a missing folder fail instead of pass.
+`check` therefore runs the type check, the tests and the build, then guards the output: a non-empty production config without `AUTH_MODE`, a `rel="manifest"` link in the built `index.html` that does not contain `use-credentials` (the manifest is public, [§6.5](#65-manifest-and-service-worker-with-a-public-shell-rechecking-the-caveats)), and the layer rules of [brainstorm §6.1](brainstorm.md#61-principles-and-layers) (no React import in `worker/`, `shared/`, `src/domain/` and `src/store/`; no `fetch`, IndexedDB, XMLHttpRequest or `sendBeacon` in `src/views/`, `src/ui/` and `src/hooks/`). The two `test -d` guards make a grep over a missing folder fail instead of pass.
 
 The `CLOUDFLARE_ENV=dev` prefix needs a POSIX shell (Windows is **unverified**; add `cross-env` only if Partner B needs it).
 
@@ -367,25 +376,28 @@ The `CLOUDFLARE_ENV=dev` prefix needs a POSIX shell (Windows is **unverified**; 
 
 The `fetch` flow:
 
-1. Only `/api/*` reaches the Worker (`assets.run_worker_first: ["/api/*"]`); static files are served by the platform and free. A path outside `/api/` that reaches the Worker anyway gets a 404 JSON.
-2. `authenticate(request, env)` returns `"a"`, `"b"` or `null`, never an email; `null` means a 401 JSON. The side is what the Worker writes to `updated_by` and returns to the client (`me`, brainstorm §3.3). Every `/api/*` route, `/api/health` included, is behind it.
-3. `switch` on the path, then on the method (a wrong method is a 405 with an `allow` header): `GET /api/health` (`{ "ok": true }`), `GET /api/login` (302 to `/`, `cache-control: no-store`), `GET /api/export` (JSON dump, or one CSV per `kind` or `entry_type`, `worker/export.ts`), `GET /api/sync` and `POST /api/sync` (contract in brainstorm §3.3). An unknown `/api/` path is a 404.
+1. Only `/api/*` and `/design/*` reach the Worker (`assets.run_worker_first: ["/api/*", "/design/*"]`); static files are served by the platform and free. A path outside both that reaches the Worker anyway gets a 404 JSON, before any authentication.
+2. `authenticate(request, env)` returns `"a"`, `"b"` or `null`, never an email; `null` means a 401 JSON. The side is what the Worker writes to `updated_by` and returns to the client (`me`, brainstorm §3.3). Every `/api/*` and `/design/*` route, `/api/health` included, is behind it.
+3. A path under `/design/` goes to the design handler below. Any other path is a `switch` on the path, then on the method (a wrong method is a 405 with an `allow` header): `GET /api/health` (`{ "ok": true }`), `GET /api/login` (302 to `/`, `cache-control: no-store`), `GET /api/export` (JSON dump, or one CSV per `kind` or `entry_type`, `worker/export.ts`), `GET /api/sync` and `POST /api/sync` (contract in brainstorm §3.3). An unknown `/api/` path is a 404.
 4. `POST /api/sync` first passes the cross-origin check of [§6.4](#64-jwt-verification-in-the-worker), then the body is parsed and applied (`worker/sync.ts`, brainstorm §3.7).
 5. Errors return generic JSON (`{ "error": "<code>" }`, or the `Rejection` shape for sync); an unhandled exception logs only its error name and returns 500. No stack traces or emails in responses or logs.
 
+**Design pages** (**built**, pull request 12). `GET` or `HEAD` on `/design/<name>` or `/design/<name>/`, where `<name>` matches `^[a-z0-9][a-z0-9-]{0,39}$`, returns the text stored under the key `<name>` in the KV namespace `wp-design`, as `text/html; charset=utf-8` with `cache-control: private, no-store`, `x-robots-tag: noindex, nofollow` and `x-content-type-options: nosniff`. Any other method is a 405 with `allow: GET, HEAD`; a name that does not match, a missing key or a deeper path is a 404 JSON. The authentication of step 2 runs first, so no valid JWT means no page, and the Access application protects the same path before the Worker is reached ([§6](#6-auth)). The namespace is bound as `DESIGN` in `wrangler.jsonc`: the namespace id is at the top level, `env.dev` keeps an all-zero placeholder. A page is one self-contained HTML document: the Worker sends the stored text unchanged, and a relative link to another file would be a deeper path, which is a 404. Pages are never committed to the repository. The supervisor uploads and removes them with the Cloudflare CLI; the wrangler commands for the same work are `wrangler kv key put` and `wrangler kv key delete` ([KV commands](https://developers.cloudflare.com/workers/wrangler/commands/kv/); this page was not fetched in this pass, so their exact flags are **unverified**). The steps are in [bootstrap, Design pages](bootstrap.md#design-pages). KV is eventually consistent: a change can take "up to 60 seconds or more" to show in other locations ([how KV works](https://developers.cloudflare.com/kv/concepts/how-kv-works/), quoted in brainstorm §3.2), so a 404 right after an upload does not prove the key is missing.
+
 **Dev mode without Access.** The earlier plan used `wrangler dev --var AUTH_MODE:dev ...`; the Vite dev server doesn't take that flag, so the dev-only variables live in the `env.dev` block of `wrangler.jsonc` ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)) and `npm run dev` selects it with `CLOUDFLARE_ENV=dev`. The plugin applies `CLOUDFLARE_ENV` to `vite dev` and `vite build`, and "specifying `CLOUDFLARE_ENV` when running `vite preview` or `wrangler deploy` will have no effect" ([docs](https://developers.cloudflare.com/workers/vite-plugin/reference/cloudflare-environments/), 23 April 2026). Production fails closed because the production build never selects that environment: **verified locally**, `dist/wp/wrangler.json` from a plain `vite build` has empty `vars`, and from `CLOUDFLARE_ENV=dev vite build` it has `AUTH_MODE` and the worker name `wp-dev`. `npm run check` greps the production output for `AUTH_MODE` ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). Details:
 
-- Bindings are not inherited by an environment, so `env.dev` repeats the `d1_databases` entry; without it `env.DB` is `undefined` in dev (**verified locally**). The repeated entry keeps the all-zero placeholder `database_id`: a local D1 does not need the real id (`test/sync-integration.test.ts` applies the migrations to it and runs the dev server), and the production id exists only at the top level. `"routes": []` stops wrangler warning that the environment inherits the custom domain.
+- Bindings are not inherited by an environment, so `env.dev` repeats the `d1_databases` entry; without it `env.DB` is `undefined` in dev (**verified locally**). The `kv_namespaces` entry is repeated the same way, with a placeholder id (**unverified**: not run for the KV binding). The repeated entry keeps the all-zero placeholder `database_id`: a local D1 does not need the real id (`test/sync-integration.test.ts` applies the migrations to it and runs the dev server), and the production id exists only at the top level. `"routes": []` stops wrangler warning that the environment inherits the custom domain.
 - `.dev.vars` is not an alternative: with `secrets.required` defined, only the three registered keys are loaded from it (**verified locally**: `AUTH_MODE` set in `.dev.vars` was not visible to the Worker; the same rule is in the [secrets docs](https://developers.cloudflare.com/workers/configuration/secrets/)). `.dev.vars` is only needed to give the three secrets placeholder values when you run `vite preview` on the production build (**unverified**, not run); `.dev.vars.example` holds those placeholders. In dev mode `authenticate` accepts only `DEV_WHO` equal to `a` or `b`, and the committed value is `a`.
-- `database_id` is a UUID, not a credential (useless without a token); that's my judgement, not a docs claim, and it is why the production id is committed in `wrangler.jsonc`. `workers_dev` and `preview_urls` are turned off explicitly: `workers_dev` defaults to `false` when there are `routes`, and for `preview_urls` "If omitted, Wrangler does not change an existing setting" ([config docs](https://developers.cloudflare.com/workers/wrangler/configuration/)).
+- `database_id` is a UUID, not a credential (useless without a token); that's my judgement, not a docs claim, and it is why the production id is committed in `wrangler.jsonc`. The KV namespace id is treated the same way, by the same judgement. `workers_dev` and `preview_urls` are turned off explicitly: `workers_dev` defaults to `false` when there are `routes`, and for `preview_urls` "If omitted, Wrangler does not change an existing setting" ([config docs](https://developers.cloudflare.com/workers/wrangler/configuration/)).
 
 ### 5.4 Each dependency and why
 
-Versions and publish dates are from the npm registry on 6 October 2026. The versions in this table are a snapshot of 6 October 2026, and they match `package.json` on `main` at that date; `package.json` and the lockfile are the source of truth, the policy is the latest version of everything, and daily Dependabot keeps them current, so they will drift. `npm ci --ignore-scripts` of the real lockfile (all eleven packages below, `jose` included) resolves to **62 packages and 301 MB** in `node_modules` (mostly `workerd` and `wrangler`), **built**.
+Versions and publish dates are from the npm registry on 6 October 2026. The versions in this table are a snapshot of 6 October 2026, and they matched `package.json` on `main` at that date; `package.json` and the lockfile are the source of truth, the policy is the latest version of everything, and daily Dependabot keeps them current, so they drift: on 7 October 2026 `package.json` has `@cloudflare/vite-plugin` 1.63.0 and `wrangler` 4.148.0, and the two rows below still show the earlier versions. `npm ci --ignore-scripts` of the lockfile of 6 October (all eleven packages that existed then, `jose` included) resolved to **62 packages and 301 MB** in `node_modules` (mostly `workerd` and `wrangler`), **built**. The two font packages were added after that measurement and it was not repeated (unverified).
 
 | Package | Kind | Reason | Rejected alternatives |
 |---|---|---|---|
 | [`react`](https://www.npmjs.com/package/react) 19.3.0 (9 September 2026), [`react-dom`](https://www.npmjs.com/package/react-dom) 19.3.0 (9 September 2026) | runtime (browser) | The UI, the operator's choice. React supplies `useSyncExternalStore` itself, so no state library is needed | |
+| [`@fontsource-variable/mona-sans`](https://www.npmjs.com/package/@fontsource-variable/mona-sans) 5.3.0, [`@fontsource-variable/hanken-grotesk`](https://www.npmjs.com/package/@fontsource-variable/hanken-grotesk) 5.3.0 (publish dates not checked) | runtime (`dependencies`, but only font files that the CSS bundles) | Self-hosted variable fonts for the display and text type, so the public shell asks no font host for anything. `src/tokens.css` points its `@font-face` rules at the packages' `latin` `.woff2` files. The lockfile lists both under OFL-1.1 (**verified locally**, read from `package-lock.json`) | A `<link>` to a font host (a third-party request on a public page); system fonts only (no chosen type) |
 | [`jose`](https://www.npmjs.com/package/jose) 6.2.12 (5 September 2026) | runtime (Worker) | Access JWT verification: signature, `iss`, `aud`, `exp`, remote JWKS with caching and key rotation. A security path, don't write it yourself. The [Cloudflare docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/) give a Workers example with `jose` | Manual WebCrypto (±40 lines, but key rotation and subtle mistakes become your burden); `hono/jwk` (pulls in Hono) |
 | [`vite`](https://www.npmjs.com/package/vite) 8.3.3 (6 October 2026) | dev | Dev server with HMR and the production build, for both the SPA and the Worker | Bundling by hand: no |
 | [`@cloudflare/vite-plugin`](https://www.npmjs.com/package/@cloudflare/vite-plugin) 1.62.5 (2 October 2026) | dev | Runs the Worker in workerd inside the Vite dev server, builds Worker and assets together, writes the deploy config ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). Its npm dependencies include an alpha `miniflare` 5.x | Two toolchains (Vite for the SPA, plain `wrangler dev` for the Worker): two dev servers and no shared build |
@@ -403,16 +415,16 @@ One `shared/` folder, plain TypeScript, imported by relative path from `src/` an
 
 - **`shared/tables.ts`:** the specs of the three synced tables (`items`, `budget_entries`, `settings`) and the `kind` registry of `items` (which statuses and `data` keys each kind has), as `const` objects. The row types, the `Mutation` contract and the API request and response types are derived from them. It is the SQL whitelist on the server and the generic list screen's configuration on the client. Built today: the kinds `task`, `vendor` and `guest` and the entry types `planned` and `payment`; the other kinds of `docs/features.md` §7.2 are added as registry entries when their screens are built. The data model itself (SQL in `docs/brainstorm.md` §7, rationale in `docs/features.md` §7.2) is one generic `items` table plus one `budget_entries` table, so this file stays small and a new kind of list is a registry entry, not a migration. Its contents are a public spec, not data.
 - **`shared/api.ts`:** the sync contract (`Mutation`, `SyncResponse`, `SyncResult`, `Rejection`; both success responses carry `epoch`), the limits `MAX_MUTATIONS` (20) and `MAX_BODY_BYTES` (1 MiB), and the `applyPatch` that both sides use to merge a patch into a row.
-- **`shared/validate.ts`:** the validation function. The SPA runs it before queueing a mutation; the Worker runs it again at the trust boundary and is the authority.
+- **`shared/validate.ts`:** the validation function. The SPA runs it before queueing a mutation; the Worker runs it again at the trust boundary and is the authority. It checks a settings value against the type of its key, and the type `stages` has its own rules in `stageProblems` (1 to 12 stages, each with a unique key and a unique name of at most 40 characters, a month range from -36 to 12 relative to the akad month, every stage starting after the one before); the stage editor calls the same function to show the problems before saving, so the screen and the Worker cannot disagree.
 - **Rules for `shared/`:** no DOM globals, no Workers globals, no JSX, so it compiles in both projects and runs under `node --test`. Imports use the `.ts` extension and `import type` for types; `erasableSyntaxOnly` forbids syntax Node can't strip (such as `enum`).
 
 Three TypeScript projects, referenced from a root `tsconfig.json` with `"files": []`, as in Cloudflare's [React SPA tutorial](https://developers.cloudflare.com/workers/vite-plugin/tutorial/) (which adds a separate `tsconfig.worker.json`):
 
 | File | Includes | Library and types |
 |---|---|---|
-| `tsconfig.app.json` | `src`, `shared` | `lib` ES2023 + DOM, `jsx: react-jsx`, `types: ["vite/client"]` |
+| `tsconfig.app.json` | `src`, `shared` | `lib` ES2023 + DOM + DOM.Iterable, `jsx: react-jsx`, `types: ["vite/client"]` |
 | `tsconfig.worker.json` | `worker`, `shared`, `worker-configuration.d.ts` | `lib` ES2023 only, `types: []` (the Workers types come from `wrangler types`) |
-| `tsconfig.node.json` | `vite.config.ts`, `test`, `src/domain`, `shared` | `lib` ES2023, `types: ["node"]` |
+| `tsconfig.node.json` | `vite.config.ts`, `test`, `src/domain`, `shared` | `lib` ES2023 + DOM, `types: ["node"]` |
 
 All three set `strict`, `noEmit`, `moduleResolution: "bundler"`, `allowImportingTsExtensions`, `verbatimModuleSyntax` and `erasableSyntaxOnly`. **verified locally:** `tsc -b` with TypeScript 7.0.2 passes on a scratch project with this layout. Separate DOM and Workers projects are my choice for keeping each global type set out of the other's code; I did not test what a single combined project would do.
 
@@ -420,18 +432,18 @@ All three set `strict`, `noEmit`, `moduleResolution: "bundler"`, `allowImporting
 
 The `store/` and `domain/` split from brainstorm §6.1 carries over unchanged; only the bridge to the view layer is now concrete. All of it is **built**.
 
-- **`src/domain/`:** pure functions: budget totals per line and per event, "this week", date arithmetic in the saved time zone (`settings.timezone`, `Asia/Jakarta` when missing or unsupported), guest headcount, phone and rupiah parsing, the screen and badge state, ordering, the settings reader. No DOM, no React, tested with `node --test`. Savings progress is not built yet.
-- **`src/store/`:** `persistence.ts` (the storage interface and its types), `db.ts` (a hand-written promise wrapper over IndexedDB, about 50 lines: one object store per table, plus `outbox` and `meta`; `meta` holds `rev`, `me`, `epoch` and `generation`, and `reset` clears every store in one transaction that is a compare-and-set on `generation`, brainstorm §5.2), `memory.ts` (the same interface in memory, used by the tests), `outbox.ts` (the pure parts: batching, the overlay of pending mutations on the server rows, field diffs), `api.ts` (`fetch` with `redirect: "manual"` and the login detection of brainstorm §5.5), `store.ts` (the immutable snapshot, `subscribe`, the writes, the sync cycle: push the outbox, then pull, with a pull first when the session has not verified the epoch, and the reset when the epoch or the revision shows another history) and `browser.ts` (wires the store to IndexedDB and `fetch`, and triggers a sync on `visibilitychange` to visible and on `online`). There is no `sync.ts`. No React import.
+- **`src/domain/`:** pure functions, one file per concern: `budget.ts` (totals per line and per event, what is due in 30 days), `week.ts` (what is late, due in the next seven days or undated), `stages.ts` (the route to the akad: the default stages, the stage state for today, and add, remove and move for the editor), `lately.ts` (the five latest changes with who made them), `dates.ts` (date arithmetic in the saved time zone, `settings.timezone`, `Asia/Jakarta` when missing or unsupported), `hijri.ts` (the Hijri date through `Intl`), `guests.ts` (headcount), `draft.ts` (the quick-add parser, [brainstorm §5.2](brainstorm.md#52-reading-and-writing-offline)), `phone.ts` and `money.ts` (phone and rupiah parsing), `status.ts` (the screen and badge state, including the sign-in screen), `access.ts` (the `?access=denied` marker of the Access deny URL), `order.ts`, `groups.ts`, `owner.ts` and `names.ts` (ordering, sections, the owner filter, nicknames), `field.ts` and `changes.ts` (form values and field diffs), `viewport.ts` (the keyboard inset for the Add sheet), `once.ts` (runs one action at a time, so a double tap does not write twice) and `settings.ts` (the settings reader and its keys). No DOM, no React, tested with `node --test`. Savings progress is not built yet.
+- **`src/store/`:** `persistence.ts` (the storage interface and its types), `db.ts` (a hand-written promise wrapper over IndexedDB, about 50 lines: one object store per table, plus `outbox` and `meta`; `meta` holds `rev`, `me`, `epoch` and `generation`, and `reset` clears every store in one transaction that is a compare-and-set on `generation`, brainstorm §5.2), `memory.ts` (the same interface in memory, used by the tests), `outbox.ts` (the pure parts: batching, the overlay of pending mutations on the server rows, field diffs), `api.ts` (`fetch` with `redirect: "manual"` and the login detection of brainstorm §5.5), `store.ts` (the immutable snapshot, `subscribe`, the writes, one outbox entry per setting however often it is changed before the push, the sync cycle: push the outbox, then pull, with a pull first when the session has not verified the epoch, and the reset when the epoch or the revision shows another history) and `browser.ts` (wires the store to IndexedDB and `fetch`, and triggers a sync on `visibilitychange` to visible and on `online`). There is no `sync.ts`. No React import.
 - **`src/hooks/use-store.ts`:** the only adapter (with the store's actions), `useSyncExternalStore(store.subscribe, store.getSnapshot)` ([React docs](https://react.dev/reference/react/useSyncExternalStore)). The docs require that "while the store has not changed, repeated calls to `getSnapshot` must return the same value" and that the snapshot is immutable, which is why the store replaces its snapshot object on change instead of mutating it.
 - **No state library.** The IndexedDB store plus outbox is already the source of truth for the UI; a server-state cache such as TanStack Query would be a second cache that disagrees with it about what is pending.
 - **No `idb`.** The wrapper is about 50 lines; [`idb`](https://www.npmjs.com/package/idb) 8.0.3 (7 May 2025, 3.4 KB gzip measured earlier) is the drop-in if Partner B prefers it.
-- **Routing:** `src/router.ts` is a `useSyncExternalStore` hook over `hashchange` returning the current hash path, plus a `switch` in `main.tsx`; links are `<a href="#/budget">`.
+- **Routing:** `src/router.ts` is a `useSyncExternalStore` hook over `hashchange` returning the current hash path, plus a `switch` in `main.tsx`; links are `<a href="#/money">`; the word-to-screen table is `src/ui/routes.ts`, and a screen's detail is the second segment (`#/tasks/<id>`, `#/guests/<id>`).
 
 `npm run check` fails if anything under `src/domain`, `src/store`, `shared` or `worker` imports React, or if `src/views`, `src/ui` or `src/hooks` call `fetch` or touch IndexedDB (the `grep` guards in [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). That is what keeps a later framework change limited to `views/`, `ui/`, `hooks/` and `main.tsx`.
 
 ### 5.7 PWA and service worker
 
-**Status: the service worker is not built.** `main` has no `src/sw.js`, no `src/pwa.ts` and no build plugin: `vite.config.ts` has only the React and Cloudflare plugins, `src/main.tsx` registers nothing and `dist/client` has no `sw.js`. What exists is the manifest (`public/manifest.webmanifest`, `display: standalone`, 192 and 512 px icons), `apple-touch-icon.png` and the `<link rel="manifest" crossorigin="use-credentials">` in `index.html`, so the app is installable by the manifest alone. Without a service worker the shell does not open offline: the data is in IndexedDB and the outbox works while the page is loaded, but a cold start with no signal fails. The decision, the plugin and the sketch below are the plan; they stay as the design to build next, before M9 can test offline start.
+**Status: the service worker is not built.** `main` has no `src/sw.js`, no `src/pwa.ts` and no build plugin: `vite.config.ts` has only the React and Cloudflare plugins, `src/main.tsx` registers nothing and `dist/client` has no `sw.js`. What exists is the manifest (`public/manifest.webmanifest`, `display: standalone`, 192 and 512 px icons), `apple-touch-icon.png` and the `<link rel="manifest" href="/manifest.webmanifest">` in `index.html` (no `crossorigin` attribute: the manifest is public, [§6.5](#65-manifest-and-service-worker-with-a-public-shell-rechecking-the-caveats)), so the app is installable by the manifest alone. Without a service worker the shell does not open offline: the data is in IndexedDB and the outbox works while the page is loaded, but a cold start with no signal fails. The decision, the plugin and the sketch below are the plan; they stay as the design to build next, before M9 can test offline start.
 
 **Decision: a hand-written service worker plus a small Vite plugin, not `vite-plugin-pwa`.**
 
@@ -441,7 +453,7 @@ The `store/` and `domain/` split from brainstorm §6.1 carries over unchanged; o
 | Code you own (planned) | `src/sw.js` (about 25 lines), the plugin in `vite.config.ts` (about 20 lines), `src/pwa.ts` (about 12 lines) | Config only (a few lines) |
 | Precache with versioned revisions, old-cache cleanup, update prompt | To be written by hand ([brainstorm §5.1](brainstorm.md#51-service-worker-strategy)); the cache name changes on every build, so `sw.js` changes byte for byte and the browser sees an update | Built in |
 | Works with `@cloudflare/vite-plugin` | Yes (**verified locally**: `dist/client/sw.js` lists `/`, the hashed bundle and `manifest.webmanifest`) | Yes, with a wart (**verified locally**): it also writes `registerSW.js` and `manifest.webmanifest` into the Worker output, and `wrangler deploy --dry-run` then reported "Attaching additional modules: registerSW.js" (0.13 KiB, harmless) |
-| Manifest `crossorigin` | Your own `<link>` in `index.html`; Vite keeps `use-credentials` (**verified locally**) | Injects its own `<link rel="manifest">` into `index.html` ([guide](https://vite-pwa-org.netlify.app/guide/)); the option `useCredentials: true` is in its type definitions and, with it, the build output carries `crossorigin="use-credentials"` (**verified locally**). A hand-written link next to it gives two link tags, so you would drop yours |
+| Manifest `crossorigin` | Your own `<link>` in `index.html`, with no `crossorigin` now that the manifest is public (the earlier `use-credentials` test, **verified locally**, is no longer needed) | Injects its own `<link rel="manifest">` into `index.html` ([guide](https://vite-pwa-org.netlify.app/guide/)); the option `useCredentials: true` is in its type definitions and, with it, the build output carries `crossorigin="use-credentials"` (**verified locally**), which the check of [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker) now rejects, so it would stay off. A hand-written link next to it gives two link tags, so you would drop yours |
 | Maturity | Your own code, tested only by M9 | Mature library, but major version 2.0.0 is 3 days old as of 6 October 2026 |
 | Offline correctness (the app's core promise) | **unverified** until tested on two phones ([§8.2](#82-bootstrap-checklist) M9) | Better trodden, also **unverified** in this setup |
 
@@ -473,7 +485,7 @@ const serviceWorker = (): Plugin => ({
 });
 ```
 
-It is added to the `plugins` array next to `react()` and `cloudflare()`. It runs only for the `client` environment, so the Worker build is untouched. It writes `sw.js` as `self.WP = { cache, files }` followed by `src/sw.js`, which is plain JavaScript (the one file outside the TypeScript projects, because the plugin prepends it as text), where `files` = `/` + every file Vite emitted (all chunks, so lazy-loaded chunks are covered; I assume old hashed files vanish from the server after a deploy, **unverified**, which is why the whole set is precached) + every non-dot file in `public/` (manifest, icons). The service worker itself is in [brainstorm §5.1](brainstorm.md#51-service-worker-strategy).
+It is added to the `plugins` array next to `react()` and `cloudflare()`. It runs only for the `client` environment, so the Worker build is untouched. It writes `sw.js` as `self.WP = { cache, files }` followed by `src/sw.js`, which is plain JavaScript (the one file outside the TypeScript projects, because the plugin prepends it as text), where `files` = `/` + every file Vite emitted (all chunks, so lazy-loaded chunks are covered; I assume old hashed files vanish from the server after a deploy, **unverified**, which is why the whole set is precached) + every non-dot file in `public/` (manifest, icons). The service worker itself is in [brainstorm §5.1](brainstorm.md#51-service-worker-strategy). Because every navigation is answered with the cached `/`, it has to leave `/api/*` and also `/design/*` to the network; a design page is a navigation to `/design/<name>/`, and a service worker that answered it from the cache would show the app shell instead (a consequence of the plan and of pull request 12, not tested).
 
 **Triggers to switch to `vite-plugin-pwa`:** `src/sw.js` grows past about 60 lines, you need runtime caching strategies beyond the fixed shell, you want generated icons, or M9 finds a stale or broken-offline bug that Workbox's precache would not have.
 
@@ -485,7 +497,18 @@ It is added to the `plugins` array next to `react()` and `cloudflare()`. It runs
 
 A short answer to your question: **yes, Cloudflare can do it**. Access + a Google identity provider + an `allow` policy containing exactly two emails. Google only proves who logged in; what restricts it to two accounts is the Access policy.
 
-**Status, 6 October 2026:** Access is live on `wp.atqamz.com` as a hostname-based self-hosted application (30-day session, SameSite `lax` cookie); every path answers 302 to the Cloudflare Access login. The **Google identity provider is live**: the operator made the Web client in the Google Cloud console and the supervisor created the identity provider from it ([bootstrap, Adding the Google sign-in](bootstrap.md#adding-the-google-sign-in)). The application allows **only the Google identity provider**, with `auto_redirect_to_identity` on, so there is no chooser and One-time PIN is no longer offered; its single policy includes exactly the two allowed emails and nothing else (no email domain, no "everyone"). One-time PIN can be restored as a fallback with one Cloudflare CLI command. The Worker verifies the same Access JWT whichever provider signed the user in, so none of this changes code (expected; confirm in M9).
+**Status, 7 October 2026:** Access is live on `wp.atqamz.com` as a self-hosted application (30-day session, SameSite `lax` cookie) whose destinations are the two paths `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*`, with the custom deny URL `https://wp.atqamz.com/?access=denied` (pull request 15; before it the application covered the whole host, and every path answered 302 to the Cloudflare Access login). Every other path, `/` included, is public: it is the app shell (code, icons, manifest), with no data in it. The **Google identity provider is live**: the operator made the Web client in the Google Cloud console and the supervisor created the identity provider from it ([bootstrap, Adding the Google sign-in](bootstrap.md#adding-the-google-sign-in)). The application allows **only the Google identity provider**, with `auto_redirect_to_identity` on, so there is no chooser and One-time PIN is no longer offered; its single policy includes exactly the two allowed emails and nothing else (no email domain, no "everyone"). One-time PIN can be restored as a fallback with one Cloudflare CLI command. The Worker verifies the same Access JWT whichever provider signed the user in, so none of this changes code (expected; confirm in M9).
+
+**What a visitor sees** (the code is **built**; none of it has been tried on a phone, M9):
+
+| Visitor | What happens |
+|---|---|
+| Opens `https://wp.atqamz.com/` with no session and nothing stored on the device | The shell loads without any login redirect. The first `GET /api/sync` is answered by Access with a redirect, which `src/store/api.ts` reads as "expired", and the app shows its own sign-in screen ("Continue with Google", a link to `/api/login`). Access then sends the browser to Google, and the Worker answers `/api/login` with a 302 to `/` |
+| Opens it on a phone that already holds data | The app opens on that data. If the session has expired, the sync badge says "Log in again" (also a navigation to `/api/login`) and nothing is lost |
+| Cannot reach the server and holds nothing | The "connect" screen: retry only. It appears when the first pull fails for any reason other than an expired session |
+| Signs in with a Google account that the policy does not allow | Access refuses and sends the browser to the deny URL, `/?access=denied`. The shell loads, `src/domain/access.ts` removes the parameter from the address (`history.replaceState`) and the app shows the wrong-account screen, whose button ("Try another account") is again a link to `/api/login`. Whether Google offers a chooser on that second attempt is **unverified** |
+| Taps "Sign out" in Settings | A link to `/cdn-cgi/access/logout`, which ends the Access session on that device; data already synced to the phone stays readable. Whether that endpoint answers on a host whose Access application has only path destinations is **unverified** ([session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/), which was not re-read for this) |
+| Asks for `/api/*` or `/design/*` without a session, with a script rather than a browser | Access answers first (a redirect, 401 or 403); if it were missing, the Worker answers 401 itself |
 
 ### 6.1 Google IdP vs one-time PIN
 
@@ -509,14 +532,14 @@ A short answer to your question: **yes, Cloudflare can do it**. Access + a Googl
 | 3 | Fill in the Authorized JavaScript origin `https://<team>.cloudflareaccess.com` and the redirect URI `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback`. **Done** | M | Exactly as in the Cloudflare docs above |
 | 4 | Consent screen status **Testing**, add `<email-partner-a>` and `<email-partner-b>` as test users. **Done** | M | Testing is limited to 100 test users and "authorizations by a test user will expire seven days from the time of consent" ([Google](https://support.google.com/cloud/answer/15549945)), **except** when the app requests only the `openid`, `email` and `profile` scopes. The Cloudflare Google page does not list the scopes it requests, so whether you will be asked to consent every week is **unverified**. The alternative is "Publish app"; Google says verification is not mandatory for non-sensitive scopes ([Google](https://support.google.com/cloud/answer/13463073)). Details in [bootstrap M3](bootstrap.md#m3-google-oauth-client) |
 | 5 | Create the `google` IdP in Zero Trust (`client_id`, `client_secret`, optional PKCE). **Done (supervisor)** from the console-made client; the client file was consumed and deleted | C | The Cloudflare CLI or the dashboard (no script exists). The fields are in the [API reference](https://developers.cloudflare.com/api/resources/zero_trust/subresources/identity_providers/methods/create/) |
-| 6 | Create a `self_hosted` Access app for `wp.atqamz.com`, `session_duration` = `720h`, an inline `allow` policy with two `email` rules, and the allowed identity providers. **Done:** created with One-time PIN, then Google added, then `allowed_idps` = Google only with `auto_redirect_to_identity` = true | C | Created once through the Cloudflare CLI ([bootstrap M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud)). The app session can go up to "one month" ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)); 720h = 30 days. Instant auth is recommended when there's only one IdP ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)) |
+| 6 | Create a `self_hosted` Access app whose destinations are `wp.atqamz.com/api/*` and `wp.atqamz.com/design/*`, with the custom deny URL `https://wp.atqamz.com/?access=denied`, `session_duration` = `720h`, an inline `allow` policy with two `email` rules, and the allowed identity providers. **Done:** created for the whole host with One-time PIN, then Google added, then `allowed_idps` = Google only with `auto_redirect_to_identity` = true, then (pull request 15) the destinations and the deny URL as written here | C | Created once through the Cloudflare CLI ([bootstrap M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud); the destinations and deny URL fields are in the [API reference](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/), which was not re-read in this pass: **unverified**). The app session can go up to "one month" ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)); 720h = 30 days. Instant auth is recommended when there's only one IdP ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)) |
 | 7 | Note the app's AUD tag. **Done** | C | The creation response carries it (it's also in the dashboard: Applications → Additional settings) |
 | 8 | Set three Worker secrets: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `ALLOWED_EMAILS`. **Done** by the first deploy, run by hand with `wrangler deploy --secrets-file <file>` ([docs](https://developers.cloudflare.com/workers/configuration/secrets/)) | M, once | `secrets.required` makes a deploy fail if any is missing, and wrangler refuses a first deploy of a Worker that does not exist yet when `secrets.required` is set and no secrets file is given, which is why CI could not do the first deploy; later deploys keep the secrets |
 | 9 | Custom Domain `wp.atqamz.com`. **Done** | C | The `routes` block in `wrangler.jsonc`, deployed by CI with a token that has no DNS or routes permission ([§7.3](#73-tokens-and-secrets)). Wrangler creates the DNS record and certificate; it can't be done on a hostname that already has a CNAME ([docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/), 29 September 2026) |
 | 10 | Turn off `workers.dev` and preview URLs. **Done** | C | `wrangler.jsonc` (above) |
 | 11 | Test on two phones. **Pending (M9)** | M | See §6.5 |
 
-**The Access app is hostname-based, not Worker-level.** The [Workers + Access docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) describe two paths. Worker-level (destination `worker` + `worker_id`) protects all the Worker's domains at once, but is tied to the Worker ID and only offers a basic policy in the dashboard. Hostname-based protects exactly one URL. I chose hostname because `workers.dev` and preview are already turned off in the config, and the Worker still verifies the JWT itself on `/api/*` as a second layer.
+**The Access app has path destinations on one hostname, not Worker-level.** The [Workers + Access docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) describe two paths. Worker-level (destination `worker` + `worker_id`) protects all the Worker's domains at once, but is tied to the Worker ID and only offers a basic policy in the dashboard. A self-hosted application with public destinations protects exactly the URLs it lists. I chose a hostname because `workers.dev` and preview are already turned off in the config. The application first covered the whole host; pull request 15 narrowed it to `/api/*` and `/design/*` so that the app can show its own sign-in screen on `/` instead of Access's login page, and so that the shell, the service worker script and the manifest are fetched with no login redirect. The cost is that anyone can read the shell: static code, icons and a manifest, with no data (the repository is public anyway). The Worker still verifies the JWT itself on every `/api/*` and `/design/*` request as a second layer.
 
 ### 6.3 Where the two emails are stored
 
@@ -530,7 +553,7 @@ The emails **never** go into the repo and **never into D1**: not in `wrangler.js
 
 **How `a` and `b` are derived:** after `jwtVerify` succeeds ([§6.4](#64-jwt-verification-in-the-worker)), the Worker compares the verified `email` claim with the two entries of `ALLOWED_EMAILS` and maps position 1 to `a` and position 2 to `b`. Everything stored in D1 (`updated_by`, the default of `who`) uses `a`, `b` or `import`; the SQL has a `CHECK` that rejects any other `updated_by` value, so an email can't end up there by mistake (**verified locally**). The display names (`partner_a_label`, `partner_b_label`) are in `settings`; they are not emails. Swapping the order of the secret swaps who is `a`; do it before the first data, not after.
 
-Deliberately **not** copied into GitHub Actions secrets: the deploy workflow doesn't need them ("Wrangler will not delete your secrets unless you run `wrangler secret delete`", [docs](https://developers.cloudflare.com/workers/wrangler/configuration/); `secrets.required` only checks existence). Tests and fixtures use made-up addresses on the reserved `example.test` domain (two entries in `ALLOWED_EMAILS` order). The `.gitignore` on `main` holds `node_modules/`, `dist/`, `.wrangler/`, `.dev.vars*` (with `!.dev.vars.example`) and `.env*`. The data patterns of brainstorm §8 (`*.ods`, `*.xlsx`, `*.csv`, `import*.sql`, `wp-private/`) are not in it yet: add them before the first import.
+Deliberately **not** copied into GitHub Actions secrets: the deploy workflow doesn't need them ("Wrangler will not delete your secrets unless you run `wrangler secret delete`", [docs](https://developers.cloudflare.com/workers/wrangler/configuration/); `secrets.required` only checks existence). Tests and fixtures use made-up addresses on the reserved `example.test` domain (two entries in `ALLOWED_EMAILS` order). The `.gitignore` on `main` holds `node_modules/`, `dist/`, `.wrangler/`, `.dev.vars*` (with `!.dev.vars.example`), `.env*` and the data patterns of brainstorm §8: `*.ods`, `*.xlsx`, `*.xls`, `*.csv`, `import*.sql`, `wp-private/` and `export-*.json`.
 
 ### 6.4 JWT verification in the Worker
 
@@ -583,26 +606,26 @@ Notes: `ctx.access` is **not available** to a Worker with static assets: "the ro
 - **`RS256` is unverified against a live token.** The tests sign tokens with a generated RS256 key (`test/auth.test.ts`); that Access signs with `RS256` is the value this code assumes, and the first real login (M9) is its check.
 - **Dev mode.** If `AUTH_MODE` is `dev` (set only by `env.dev`, [§5.3](#53-worker-structure-and-dev-auth)), `authenticate` returns `DEV_WHO` when it is `a` or `b` and `null` otherwise, with no JWT check. The production build never selects `env.dev`, and `npm run check` greps the production config for `AUTH_MODE`.
 - **Cross-origin writes (CSRF).** Access's cookie is `SameSite=lax` and sibling subdomains of `atqamz.com` are same-site, so `POST /api/sync` (the only state-changing route) refuses what does not look like the app, after authentication: a `Content-Type` other than `application/json` is a 415, an `Origin` header that is present and differs from the request's own origin is a 403, and a `Sec-Fetch-Site` header that is present and is not `same-origin` or `none` is a 403. The Worker never emits CORS headers. The client treats a 401, a 403 and a redirect alike as "log in again" (`src/store/api.ts`), so a refused write shows as an expired session rather than as a rule violation.
-- If Access is missing or misconfigured, the static files (frontend code, no data) are open, but `/api/*` is still 401. That's intentional.
+- The static files (frontend code, no data) are public by design. If the Access application is missing or misconfigured for `/api/*` or `/design/*`, the Worker still answers 401 without a valid token. That's intentional, and the smoke test of [§7.2](#72-workflow) checks the Access side after each deploy.
 
-### 6.5 Manifest and service worker behind Access: rechecking the caveats
+### 6.5 Manifest and service worker with a public shell: rechecking the caveats
 
-The old caveats were written for a hand-written `public/` folder. They were rechecked against the Vite build output of [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker); "verified locally" means a scratch build, not a browser. The rows about the service worker describe the plan: the service worker is not built ([§5.7](#57-pwa-and-service-worker)). Nothing in this table has been tested on a phone yet (M9).
+The old caveats were written for a hand-written `public/` folder. They were rechecked against the Vite build output of [§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker); "verified locally" means a scratch build, not a browser. The rows about the service worker describe the plan: the service worker is not built ([§5.7](#57-pwa-and-service-worker)). Nothing in this table has been tested on a phone yet (M9). The table was written while Access covered the whole host; since pull request 15 (7 October 2026) the shell, the manifest and any service worker script are public and only `/api/*` and `/design/*` are behind Access, so the rows that depended on Access in front of the shell now say so.
 
-| Caveat | Status 6 October 2026 | Action |
+| Caveat | Status 7 October 2026 | Action |
 |---|---|---|
-| The manifest needs `crossorigin="use-credentials"` | **Confirmed, and survives the build.** MDN: "If the manifest requires credentials to fetch, the `crossorigin` attribute must be set to `use-credentials`, even if the manifest file is in the same origin as the current page" ([MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest)). **verified locally:** a `<link rel="manifest" ... crossorigin="use-credentials">` in the root `index.html` is kept as is in `dist/client/index.html`, and `public/manifest.webmanifest` is copied unchanged | Keep the link in the root `index.html`; `npm run check` greps the built file for it ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)) |
-| **NEW:** Vite adds `crossorigin` to the module script and preload tags | `<script type="module" crossorigin src="/assets/index-<hash>.js">` (**verified locally**). A plain `crossorigin` means `anonymous`, which still sends credentials for same-origin requests: "no exchange of user credentials ... unless destination is the same origin" ([MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/crossorigin)) | None: the Access cookie is sent with the bundle request |
+| The manifest needs `crossorigin="use-credentials"` | **No longer applies; kept as the record.** It held while Access was in front of the shell. MDN: "If the manifest requires credentials to fetch, the `crossorigin` attribute must be set to `use-credentials`, even if the manifest file is in the same origin as the current page" ([MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest)). **verified locally:** a `<link rel="manifest" ... crossorigin="use-credentials">` in the root `index.html` is kept as is in `dist/client/index.html`, and `public/manifest.webmanifest` is copied unchanged. The manifest is public now, so `index.html` has `<link rel="manifest" href="/manifest.webmanifest">` with no `crossorigin` (**built**) | Keep the link without the attribute; `npm run check` greps the built file for the link and fails if `use-credentials` is in it ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). Why the guard rejects the attribute rather than ignoring it is not recorded here |
+| **NEW:** Vite adds `crossorigin` to the module script and preload tags | `<script type="module" crossorigin src="/assets/index-<hash>.js">` (**verified locally**). A plain `crossorigin` means `anonymous`, which still sends credentials for same-origin requests: "no exchange of user credentials ... unless destination is the same origin" ([MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/crossorigin)) | None: the bundle is public and needs no cookie. For the `/api/*` requests the cookie is sent because they are same-origin |
 | `ctx.access` isn't there with static assets | **Confirmed**, and now also stated on the Vite plugin's static-assets page (§6.4) | Manual JWT verification in `worker/auth.ts` |
-| **NEW:** `/api/login` must reach the Worker although the app is an SPA | In SPA mode, a browser navigation to an unmatched path gets `index.html` ([docs](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)). **verified locally** in `vite dev`: with `run_worker_first: ["/api/*"]` a navigation to `/api/login` reached the Worker and a navigation to `/budget/x` got the HTML | Keep `run_worker_first: ["/api/*"]` ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). The production edge behaviour is **unverified** until M9 |
-| Navigation is served by the SW from the cache, never reaching Access | Will apply once the SW exists; the planned hand-written SW answers every navigation with the cached `/` (brainstorm §5.1) | The "Log in again" button navigates to `/api/login`; the `/api/*` path is skipped by the SW |
+| **NEW:** `/api/login` must reach the Worker although the app is an SPA | In SPA mode, a browser navigation to an unmatched path gets `index.html` ([docs](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)). **verified locally** in `vite dev`: with `run_worker_first: ["/api/*"]` a navigation to `/api/login` reached the Worker and a navigation to `/budget/x` got the HTML. Pull request 12 added `"/design/*"` to the list for the same reason | Keep `run_worker_first: ["/api/*", "/design/*"]` ([§5.2](#52-frontend-build-a-vite-react-spa-on-the-worker)). The production edge behaviour is **unverified** until M9 |
+| Navigation is served by the SW from the cache, never reaching Access | **Moot for `/`:** `/` is public and never reaches Access, with or without a service worker. It still applies to the way back in, and to `/design/*`: the planned hand-written SW answers every navigation with the cached `/` (brainstorm §5.1) | The sign-in screen's "Continue with Google" and the badge's "Log in again" navigate to `/api/login`; the `/api/*` and `/design/*` paths are skipped by the SW |
 | Session expires during a `fetch` to the API | Access answers with a redirect to the team domain (cross-origin). Whether a browser `fetch` gets a 302 or a 401 is **unverified**: the 401 toggle in the docs is only for the Cloudflare One Client and service auth ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)). With the default `fetch` (follow), the redirect to the team domain probably ends up as a network error that's hard to tell apart from offline (inference; [Access CORS docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/cors/), 25 August 2026, which only covers cross-origin requests *to* the Access domain) | **Built** in `src/store/api.ts`: every call uses `redirect: "manual"`; a redirect, a 401 or a 403, or a 2xx answer that is not JSON, becomes "expired" (the badge asks to log in again); a 5xx, a timeout (15 s) or a network error becomes "offline". **Test on a real phone** |
-| Service worker script fetch when the session has expired | Once built, `sw.js` will be a file in `dist/client`, served by the asset layer behind the hostname-based Access app, so it is protected like any other path. The SW spec sets redirect mode `error` for fetching the SW script ([W3C](https://w3c.github.io/ServiceWorker/)): if Access redirects `sw.js` to the login, the update check fails | Harmless: the old SW keeps running. The "new version" banner only shows after logging in again |
-| **NEW:** the SW install fetches the whole precache list (planned) | `install` calls `cache.addAll(files)` for `/`, the hashed bundle and the manifest. With an expired session those requests are redirected to the team domain; as cross-origin redirects without CORS headers they should fail, `addAll` rejects and the install fails, leaving the old SW and its cache in place (inference from the Fetch and SW specs, **unverified** in a browser) | Nothing to build; test in M9 by letting the session expire, then deploying a new version |
-| The iOS PWA cookie jar is separate from Safari | A secondary source says Home Screen app storage is isolated from Safari ([MagicBell](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)); **unverified** from Apple's docs. The Access login also leaves the app's origin (the team domain), and the behaviour of redirects out of and back into scope in iOS standalone is **unverified** | This is risk #1 in §9.1. Test on day one, before writing features |
+| Service worker script fetch when the session has expired | **Closed by the public shell.** Once built, `sw.js` will be a file in `dist/client`, served by the asset layer outside the two Access destinations, so Access never redirects it. The SW spec sets redirect mode `error` for fetching the SW script ([W3C](https://w3c.github.io/ServiceWorker/)); that only matters if a redirect happens, which the path destinations avoid (inference, **unverified** in a browser) | Nothing to build. Keep `sw.js` out of `/api/*` and `/design/*`, which it is by its path |
+| **NEW:** the SW install fetches the whole precache list (planned) | `install` calls `cache.addAll(files)` for `/`, the hashed bundle, the fonts and the manifest. Every file on that list is public now, so an expired session no longer redirects them to the team domain and `addAll` no longer fails for that reason (inference from the Fetch and SW specs, **unverified** in a browser). The list must never contain `/api/*` or `/design/*` | Nothing to build; test in M9 by letting the session expire, then deploying a new version |
+| The iOS PWA cookie jar is separate from Safari | A secondary source says Home Screen app storage is isolated from Safari ([MagicBell](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)); **unverified** from Apple's docs. The Access login also leaves the app's origin (the team domain), now only when the user taps "Continue with Google" or "Log in again" (a navigation to `/api/login`), and the behaviour of redirects out of and back into scope in iOS standalone is **unverified** | This is risk #1 in §9.1. Test on day one, before writing features |
 | Default 24-hour session | Up to "one month" ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)) | **Done:** the live application has a 30-day session |
 | CORS and OPTIONS | The app is same-origin, so not needed. But if the frontend is opened from another origin (e.g. `localhost` calling the production API), the preflight gets a 403 ([docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/cors/)) | Partner B develops against the local Worker that runs inside the Vite dev server (`npm run dev`), not against production |
-| `workers.dev` and preview URLs open | Hostname-based Access only protects that URL ([docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)); preview URLs are "public by default" ([Previews](https://developers.cloudflare.com/workers/previews/)) | Both are turned off in the config |
+| `workers.dev` and preview URLs open | The Access application only protects the destinations on `wp.atqamz.com` ([docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)); preview URLs are "public by default" ([Previews](https://developers.cloudflare.com/workers/previews/)) | Both are turned off in the config |
 
 ---
 
@@ -702,12 +725,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
-          for path in / /api/health; do
+          for path in / /api/health /design/round2/; do
             ok=
             for _ in 1 2 3 4 5 6 7 8 9 10; do
-              res=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 20 "https://wp.atqamz.com$path" 2>/dev/null) || res=
-              case "$res" in
-                30[1-8]\ https://*.cloudflareaccess.com/* | 401\ * | 403\ *) ok=1; break ;;
+              res=$(curl -sS -o /dev/null -w '%{http_code} %{content_type} %{redirect_url}' --max-time 20 "https://wp.atqamz.com$path" 2>/dev/null) || res=
+              case "$path:$res" in
+                /:200\ text/html*) ok=1; break ;;
+                /:*) ;;
+                *:30[1-8]\ *\ https://*.cloudflareaccess.com/* | *:401\ * | *:403\ *) ok=1; break ;;
               esac
               sleep 10
             done
@@ -722,7 +747,7 @@ How it works:
 - **Secrets are scoped per step.** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set in the `env` of the migration step and of the deploy step only, so `npm ci`, the build and the smoke test never see them. The checkout uses `persist-credentials: false` (no repository token is left in `.git`), and the install is `npm ci --ignore-scripts`, so no dependency install script runs in the job that goes on to hold the Cloudflare token. The job has a 15 minute timeout and a `wp-deploy` concurrency group with `cancel-in-progress: false`, so deploys queue and none is cancelled half way.
 - **Head-of-main guard.** The second step of `deploy` compares `git ls-remote origin refs/heads/main` with `$GITHUB_SHA` and fails if `main` has moved on. Because deploys queue, an older run that wakes up after a newer merge stops instead of deploying older code over newer code.
 - **Order.** Migrations run before the build so a fresh checkout reads the root `wrangler.jsonc`; the build then writes `.wrangler/deploy/config.json`, which `wrangler deploy` follows (**built**: the deploy job runs this way). `vite build` prints a "Missing required secrets" warning when the three secrets aren't in the CI environment and still exits 0 (**built**: it is in the `check` log); the real check is `secrets.required` at deploy, which holds because the Worker already has its secrets from the first deploy (§7.3). Whether `wrangler d1 migrations apply` follows the redirect after a build is **unverified**; the generated config keeps `migrations_dir` pointing at the source folder either way.
-- **Smoke test.** After the deploy, `/` and `/api/health` on `wp.atqamz.com` are requested up to ten times, ten seconds apart. The step passes for a path only when the answer is a redirect (301 to 308) to a `cloudflareaccess.com` URL, a 401 or a 403, and fails with "unprotected or unreachable" otherwise. It proves that Access is in front of the app after each deploy; it does not log in, so it says nothing about whether the app works.
+- **Smoke test.** After the deploy, `/`, `/api/health` and `/design/round2/` on `wp.atqamz.com` are requested up to ten times each, ten seconds apart. `/` passes only on a 200 answer whose content type starts with `text/html`: the public shell. `/api/health` and `/design/round2/` pass only on a redirect (301 to 308) to a `cloudflareaccess.com` URL, a 401 or a 403. A path that never passes fails the step with "unprotected or unreachable" and its name, whichever of the two ways it failed, so a `/` that is still behind a login redirect also reads "unprotected". The check on `/design/round2/` holds whether or not a page of that name exists, because Access (or, failing that, the Worker's 401) answers before KV is read (my reading of the Worker code). It proves the shell is public and the two protected paths are protected after each deploy; it does not log in, so it says nothing about whether the app works, and it does not see a change made in the Access dashboard between deploys.
 - **Dependabot.** `dependabot-metadata` (only for a Dependabot pull request) reads the update type with `dependabot/fetch-metadata`. `dependabot-merge` runs after `check` and `dependabot-metadata` and squash-merges only `version-update:semver-minor` and `version-update:semver-patch` updates, with `--match-head-commit` so the merge is of the commit that `check` tested; major updates stay open for the supervisor to review. A merge made with `GITHUB_TOKEN` does not start the `push` workflow, except that `workflow_dispatch` and `repository_dispatch` events do start one ([GitHub docs](https://docs.github.com/en/actions/concepts/security/github_token)), so the same job then runs `gh workflow run ci.yml --ref main` (the job has `actions: write` for that), and the dispatch deploys the merged `main`.
 - The pattern from the other two repos: actions pinned to SHAs, with Dependabot bumping them (daily, minor and patch updates grouped per ecosystem, `.github/dependabot.yml`).
 
@@ -730,7 +755,7 @@ How it works:
 
 | Name | Place | Contents / scope | Notes |
 |---|---|---|---|
-| `CLOUDFLARE_API_TOKEN` | GitHub Actions secret | Account API token `wp-ci`: Account **Workers Scripts Write** and **D1 Write** ("Edit" in the dashboard), limited to one account, plus **Zone Read** on the one `atqamz.com` zone | **No zone DNS or routes permission is needed:** the first CI deploy, which attached the Custom Domain, ran green with exactly these permissions. Zone Read is part of the token; whether wrangler needs it to look the zone up is not stated in a page I read. Permission group names are in the [permission list](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) |
+| `CLOUDFLARE_API_TOKEN` | GitHub Actions secret | Account API token `wp-ci`: Account **Workers Scripts Write** and **D1 Write** ("Edit" in the dashboard), limited to one account, plus **Zone Read** on the one `atqamz.com` zone | **No zone DNS or routes permission is needed:** the first CI deploy, which attached the Custom Domain, ran green with exactly these permissions. Zone Read is part of the token; whether wrangler needs it to look the zone up is not stated in a page I read. Permission group names are in the [permission list](https://developers.cloudflare.com/fundamentals/api/reference/permissions/). The token has no Workers KV permission. Whether `wrangler deploy` needs one to bind the existing namespace `wp-design` is not recorded in these documents (**unverified**); the design pages themselves are uploaded by the supervisor with the Cloudflare CLI, not by CI |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub Actions secret | The account ID | The Cloudflare docs say to store it as a secret; whether the account ID is secret isn't stated in the docs I read, so it is treated as a secret and kept out of the repo |
 | Token `wp-access-setup` | **Not** in GitHub; local, temporary | Account: **Access: Apps and Policies Edit** and **Access: Organizations, Identity Providers, and Groups Edit** (the API reference for creating an identity provider names this combined group, not "Identity Providers Edit") | **Not needed so far:** the Access application was created through the Cloudflare CLI logged in as the operator. Should a token be made for the Google switch, keep it separate from the deploy token so a leaked GitHub secret doesn't give the power to change the Access policy, and revoke it afterwards |
 | Worker secrets (3) | Cloudflare | See §6.2 step 8 | Set by the first deploy (by hand, with a secrets file); they survive later deploys |
@@ -788,22 +813,31 @@ wp/
     validate.ts
   src/
     domain/
+      access.ts
       budget.ts
       changes.ts
       dates.ts
+      draft.ts
       field.ts
+      groups.ts
       guests.ts
+      hijri.ts
+      lately.ts
       money.ts
       names.ts
       once.ts
       order.ts
+      owner.ts
       phone.ts
       settings.ts
+      stages.ts
       status.ts
+      viewport.ts
       week.ts
     hooks/
       use-busy.ts
       use-plan.ts
+      use-room.ts
       use-store.ts
     store/
       api.ts
@@ -814,6 +848,11 @@ wp/
       persistence.ts
       store.ts
     ui/
+      add-sheet.tsx
+      avatar.tsx
+      capture.tsx
+      contact.tsx
+      due.tsx
       error-boundary.tsx
       failure.ts
       field.tsx
@@ -822,52 +861,102 @@ wp/
       item-form.tsx
       item-line.tsx
       labels.ts
+      money.tsx
+      nav.ts
+      overlay.ts
+      owner-filter.tsx
       payment-line.tsx
       quick-add.tsx
+      recovery-screen.tsx
       recovery.ts
       registry.ts
+      routes.ts
+      setting-row.tsx
+      sheet.css
       shell.tsx
+      split.tsx
+      stage-editor.tsx
       sync-badge.tsx
       text.ts
+      theme-color.ts
+      theme.ts
       title.tsx
       ui.css
     views/
-      budget-line.tsx
-      budget.tsx
       connect.tsx
+      entry.css
+      entry.tsx
       generic-item.tsx
-      generic-list.tsx
+      home.css
       home.tsx
+      money-line.tsx
+      money.css
+      money.tsx
+      people.css
+      people.tsx
+      person.tsx
+      settings.css
       settings.tsx
       sync.tsx
+      tasks.tsx
     main.tsx
     router.ts
     style.css
+    tokens.css
   test/
+    access.test.ts
     auth.test.ts
+    check-script.test.ts
     copy.test.ts
     domain-budget.test.ts
+    domain-draft-limits.test.ts
+    domain-draft-net.test.ts
+    domain-draft.test.ts
     domain-format.test.ts
+    domain-hijri.test.ts
+    domain-lately.test.ts
+    domain-lists.test.ts
     domain-misc.test.ts
     domain-names.test.ts
+    domain-phone.test.ts
     domain-rows.ts
+    domain-stages.test.ts
     domain-status.test.ts
+    domain-viewport.test.ts
     domain-week.test.ts
+    entry-source.test.ts
     export.test.ts
+    format-zone.test.ts
+    layout.test.ts
     migration.test.ts
+    nav.test.ts
+    oklch.ts
+    scrollbars.test.ts
+    settings-copy.test.ts
     shared.test.ts
+    sheet-chips.test.ts
+    sheet-draft.test.ts
+    stages-contract.test.ts
     store-client.ts
     store-epoch.test.ts
     store-failure.test.ts
+    store-fold-order.test.ts
     store-indexeddb.test.ts
+    store-lately.test.ts
     store-persistence.test.ts
     store-rows.test.ts
     store-server.ts
+    store-settings-model.test.ts
+    store-settings.test.ts
     store-sync.test.ts
     store-write.test.ts
     sync-db.ts
     sync-integration.test.ts
+    sync-lately.test.ts
     sync.test.ts
+    theme-color.test.ts
+    theme.test.ts
+    tokens.test.ts
     worker.test.ts
     zone-fallback.test.ts
   worker/
@@ -891,11 +980,11 @@ wp/
   wrangler.jsonc
 ```
 
-`docs/` is not in this tree: the four documents live on the orphan `docs` branch, which holds only them, and `main` holds none (the README points to `git show docs:docs/infra.md`). Notes: `dist/` and `.wrangler/` are build and dev output and are gitignored, so they are not in the tree. `index.html` sits in the project root (Vite's entry) and holds the `<link rel="manifest" crossorigin="use-credentials">`. `public/` is copied as is into `dist/client`. The planned `src/sw.js` will not be in `public/`, because the build will stamp it ([§5.7](#57-pwa-and-service-worker)); `src/sw.js`, `src/pwa.ts`, `scripts/` (`access.sh`, `seed.sql`) and `test/domain.test.ts` of the earlier layout do not exist, and `tsc -b` covers the tests through `tsconfig.node.json`. `src/domain/`, `src/store/` and `shared/` import nothing from React. `.dev.vars.example` holds placeholders for the three secrets (`example.test`); it is only used for `vite preview` of the production build. `README.md` agrees with `wrangler.jsonc`: the top level holds the real `database_id` and the placeholder is only in `env.dev`. A Nix flake + direnv like `atqamz/github` is deliberately **deferred**: Partner B needs to run locally with `npm ci`, and Nix could be an obstacle. Add it later if you want full consistency. The earlier layout (`public/app/`, `public/vendor/`, `public/shared/`, `src/worker.ts`) is gone.
+`docs/` is not in this tree: the four documents live on the orphan `docs` branch, which holds only them, and `main` holds none (the README points to `git show docs:docs/infra.md`). Notes: `dist/` and `.wrangler/` are build and dev output and are gitignored, so they are not in the tree. `index.html` sits in the project root (Vite's entry) and holds `<link rel="manifest" href="/manifest.webmanifest">` (no `crossorigin`, [§6.5](#65-manifest-and-service-worker-with-a-public-shell-rechecking-the-caveats)) and the inline script that applies the saved theme before the first paint. `src/tokens.css` holds the design tokens and the font faces ([§5.1](#51-decisions), Look). The tree above was regenerated from `git ls-files` on `main` at commit `e9a3e39`. `public/` is copied as is into `dist/client`. The planned `src/sw.js` will not be in `public/`, because the build will stamp it ([§5.7](#57-pwa-and-service-worker)); `src/sw.js`, `src/pwa.ts`, `scripts/` (`access.sh`, `seed.sql`) and `test/domain.test.ts` of the earlier layout do not exist, and `tsc -b` covers the tests through `tsconfig.node.json`. `src/domain/`, `src/store/` and `shared/` import nothing from React. `.dev.vars.example` holds placeholders for the three secrets (`example.test`); it is only used for `vite preview` of the production build. `README.md` agrees with `wrangler.jsonc`: the top level holds the real `database_id` and the placeholder is only in `env.dev`. A Nix flake + direnv like `atqamz/github` is deliberately **deferred**: Partner B needs to run locally with `npm ci`, and Nix could be an obstacle. Add it later if you want full consistency. The earlier layout (`public/app/`, `public/vendor/`, `public/shared/`, `src/worker.ts`) is gone.
 
 ### 8.2 Bootstrap checklist
 
-**Manual** (once). Each step M1 to M8 is written out, with verification, what to record and what to do on failure, in [`docs/bootstrap.md`](bootstrap.md); this table only keeps the list, the order and the outcome. **Status, 6 October 2026: M0 to M8 are done, M10 is done, and M9 (the on-phone test) remains.** The Google sign-in is described in [bootstrap, Adding the Google sign-in](bootstrap.md#adding-the-google-sign-in); making Google the only provider is the one step left there.
+**Manual** (once). Each step M1 to M8 is written out, with verification, what to record and what to do on failure, in [`docs/bootstrap.md`](bootstrap.md); this table only keeps the list, the order and the outcome. **Status, 7 October 2026: M0 to M8 are done, M10 is done, and M9 (the on-phone test) remains.** The Google sign-in is described in [bootstrap, Adding the Google sign-in](bootstrap.md#adding-the-google-sign-in); Google is the only provider. The Access application has the path destinations of §6 since pull request 15, and the design pages have their own steps in [bootstrap, Design pages](bootstrap.md#design-pages).
 
 | # | Step | Status and notes |
 |---|---|---|
@@ -905,10 +994,10 @@ wp/
 | M3 | Google Cloud: project, External consent screen, test users, Web OAuth client, origin and redirect URI | **Done** after the first deploy: the operator made the client in the console, the supervisor created the Google identity provider and added it to the Access application ([Runbook M3](bootstrap.md#m3-google-oauth-client), [Adding the Google sign-in](bootstrap.md#adding-the-google-sign-in)); §6.2 steps 2 to 5. Google is now the only provider |
 | M4 | Create the deploy token `wp-ci` | **Done:** Workers Scripts Write, D1 Write and Zone Read ([Runbook M4](bootstrap.md#m4-cloudflare-api-tokens); §7.3). `wp-access-setup` was not needed |
 | M5 | `wrangler d1 create wp`, copy `database_id` into `wrangler.jsonc` | **Done:** the id is at the top level only; `env.dev` keeps the placeholder; the database was wiped and migrated again once on day one ([Runbook M5](bootstrap.md#m5-create-the-d1-database)) |
-| M6 | Create the Access app and policy, note the AUD | **Done** through the Cloudflare CLI (first with One-time PIN, then Google added, then Google only) ([Runbook M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud)) |
+| M6 | Create the Access app and policy, note the AUD | **Done** through the Cloudflare CLI (first with One-time PIN, then Google added, then Google only, then the path destinations `/api/*` and `/design/*` with the deny URL) ([Runbook M6](bootstrap.md#m6-create-the-access-app-and-note-the-aud)) |
 | M7 | Set the three Worker secrets | **Done** by the first deploy, run by hand with `wrangler deploy --secrets-file` ([Runbook M7](bootstrap.md#m7-set-the-three-worker-secrets)) |
 | M8 | `gh secret set` for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` | **Done** ([Runbook M8](bootstrap.md#m8-set-the-github-actions-secrets)) |
-| M9 | Test on Android and iPhone: install, login, offline start (airplane mode), offline edit, session expiry, the log in again button, and a service-worker update (deploy a second version, see the update prompt, apply it; once more with an expired session) | **Remains.** The offline start and the update prompt need the service worker, which is not built (§5.7); the rest can be tested now; §6.5; risk #1 |
+| M9 | Test on Android and iPhone: install, the first visit with no session (the sign-in screen, then Google, then back in the app), the wrong-account screen with a third Google account, sign out, login, offline start (airplane mode), offline edit, session expiry, the log in again button, and a service-worker update (deploy a second version, see the update prompt, apply it; once more with an expired session) | **Remains.** The offline start and the update prompt need the service worker, which is not built (§5.7); the rest can be tested now; §6.5; risk #1 |
 | M10 | ~~Add the `wp` row to `atqamz/github`, enable secret scanning and push protection~~ | **Done** (the row is merged and applied; secret scanning and push protection are enabled), §7.5 |
 
 **Automatic** (CI, every push to `main` and every dispatch of `main`):
@@ -926,10 +1015,10 @@ wp/
 
 ### 9.1 Risks (most important first)
 
-1. **Access login inside the iOS PWA** (and Android). A separate cookie jar and a redirect to the team domain outside the app's scope (§6.5). Open: nothing has been tested on a phone yet (M9). Mitigation: test on two phones before building more features; if it's annoying, move to the brainstorm's Plan B (device-key cookie), or keep OTP attached to the same app.
-2. **Leaks through the public repo**: emails in fixtures, CI logs, artifacts, `.dev.vars`, D1 exports, screenshots. Mitigation: secret scanning and push protection (on), fake data, no data artifacts. Open: the data patterns (`*.ods`, `*.csv`, `import*.sql`, `wp-private/`) are not yet in `.gitignore` (§6.3).
+1. **Access login inside the iOS PWA** (and Android). A separate cookie jar and a redirect to the team domain outside the app's scope (§6.5); since pull request 15 that redirect only happens when the user taps "Continue with Google" or "Log in again" (a navigation to `/api/login`), because the shell itself is public. Open: nothing has been tested on a phone yet (M9). Mitigation: test on two phones before building more features; if it's annoying, move to the brainstorm's Plan B (device-key cookie), or keep OTP attached to the same app.
+2. **Leaks through the public repo**: emails in fixtures, CI logs, artifacts, `.dev.vars`, D1 exports, screenshots. Mitigation: secret scanning and push protection (on), fake data, no data artifacts. The data patterns (`*.ods`, `*.csv`, `import*.sql`, `wp-private/`, `export-*.json`) are in `.gitignore` (§6.3). Open: the design pages are uploaded by hand and never pass through git, so nothing but the supervisor's care keeps real data out of them.
 3. **A leaked deploy token** gives the power to deploy code to a Worker connected to D1. Mitigation: `wp-ci` has the minimum scope (§7.3), the Cloudflare token is visible only to the migration and deploy steps (§7.2), only first-party and Dependabot-maintained actions pinned to SHAs, 7-day D1 Time Travel ([docs](https://developers.cloudflare.com/d1/reference/time-travel/)).
-4. **A Google consent in Testing status may expire every 7 days** (Google exempts apps that request only `openid`, `email` and `profile`; whether Cloudflare's Google integration stays within those is unverified, [bootstrap M3](bootstrap.md#m3-google-oauth-client)). Friction, not a failure; it matters now that the Google sign-in is live, and One-time PIN stays attached until Google is the only provider. The earlier risk of Zero Trust onboarding asking for a card is closed: the account already had an organisation.
+4. **A Google consent in Testing status may expire every 7 days** (Google exempts apps that request only `openid`, `email` and `profile`; whether Cloudflare's Google integration stays within those is unverified, [bootstrap M3](bootstrap.md#m3-google-oauth-client)). Friction, not a failure; it matters now that Google is the only sign-in, and One-time PIN is not attached any more (one command re-adds it). The earlier risk of Zero Trust onboarding asking for a card is closed: the account already had an organisation.
 5. **The dev `AUTH_MODE` leaks into production.** Mitigation: the variable lives only in `env.dev`, which the production build never selects, and `npm run check` fails if the production config contains `AUTH_MODE`.
 6. **Account quota** (§2.5): a polling bug or another Worker in the same account.
 7. **Toolchain churn and unattended deploys:** the policy is the latest version of everything, so a new release can turn a build red without a repo change, and a green minor or patch update is merged and deployed to production without a human review. wrangler 4.x releases very often; `@cloudflare/vite-plugin` pulls in an alpha `miniflare` 5.x ([npm](https://www.npmjs.com/package/@cloudflare/vite-plugin)); Vite is on major 8 and TypeScript on major 7; CI installs the newest Node on every run (`.node-version` is `latest`). Mitigation: the lockfile, `check` before every merge, the smoke test after every deploy, and major updates left open for the supervisor.
@@ -937,6 +1026,7 @@ wp/
 9. **The offline promise is not delivered yet, and the hand-written service worker may serve a stale or broken shell once built.** Today the service worker does not exist (§5.7), so a cold start without signal fails. The cost of a bad one is the wedding-day offline rundown. Mitigation: the cache name is stamped on every build, the M9 checklist tests offline start and update, and the switch triggers to `vite-plugin-pwa` are in §5.7.
 10. **React turns out to be the wrong choice.** Mitigation: the layer rules in brainstorm §6.1, enforced by the greps in `npm run check`; only `views/`, `ui/`, `hooks/` and `main.tsx` would change.
 11. **After the event:** who maintains it, and whether the Worker is shut down after exporting the data. Unchanged from the brainstorm.
+12. **The Access destinations are two path patterns, so a typo or an edit in the dashboard can leave `/api/*` or `/design/*` open at the Access layer without any deploy.** The Worker's own JWT check still answers 401 (§6.4), and the smoke test (§7.2) only runs after a deploy. Mitigation: the second layer; check the application's destinations in the dashboard after any change to it. Open: nothing watches them between deploys. Also new with the public shell: anyone can read the shell's code (no data in it) and can see that the app exists.
 
 ### 9.2 Open questions for you
 
@@ -970,6 +1060,10 @@ Statements from the earlier version of this document, removed or rewritten in pl
 | §7.2: deploy = migrations then `wrangler deploy` | migrations, `vite build`, then `wrangler deploy` (§7.2) |
 | §8.1: layout with `public/app/`, `public/vendor/`, `public/shared/`, `src/worker.ts` | New layout (§8.1) |
 | §8.2: A1 `tsc --noEmit` | `npm run check` (§8.2) |
+| Decision #16, §6 status, §6.2 step 6 and §6.5 (7 October 2026): "hostname-based app", "every path answers 302 to the login", the manifest needs `use-credentials` | An application with the destinations `/api/*` and `/design/*` and a deny URL; `/` and the rest are public; the manifest has no `crossorigin` (§6) |
+| §5.2 and §5.3 (7 October 2026): `run_worker_first: ["/api/*"]`, "only `/api/*` reaches the Worker", the smoke test of `/` and `/api/health` behind a login redirect | `["/api/*", "/design/*"]`, design pages from KV, a smoke test of a public `/` and two protected paths (§5.3, §7.2) |
+| §5.4 and decision #21 (7 October 2026): 3 runtime dependencies | 5, with two self-hosted font packages (§5.4) |
+| §6.3 and §9.1 risk 2 (7 October 2026): the data patterns are not in `.gitignore` yet | They are, with `export-*.json` (§6.3) |
 
 ### 9.4 Parts of `docs/brainstorm.md` that are superseded
 
@@ -979,9 +1073,9 @@ Statements from the earlier version of this document, removed or rewritten in pl
 |---|---|
 | Summary paragraph at the top | **Rewritten:** React + TypeScript + Vite, Google IdP |
 | §3.3 API: one Worker, manual router | **Stays**, plus the `run_worker_first` detail and the file structure (§5.3) |
-| §3.4 Architecture overview | **Rewritten:** hostname-based Access with Google IdP, assets from the Vite build |
+| §3.4 Architecture overview | **Rewritten:** Access with Google IdP in front of `/api/*` and `/design/*` only, public assets from the Vite build |
 | §3.5 Free plan limits | **Stays**, re-verified in §2.5 (Worker size: "There is no compressed size limit", only 64 MiB uncompressed, [docs](https://developers.cloudflare.com/workers/platform/limits/)) |
-| §4 Auth (OTP recommendation and the "Worker-level" Access setup) | **Marked superseded** at the top of the section; the replacement is §6 here (Google IdP, hostname-based app, inline policy, JWT verification on `/api/*`). The text of the OTP comparison is kept as the record of the options |
+| §4 Auth (OTP recommendation and the "Worker-level" Access setup) | **Marked superseded** at the top of the section; the replacement is §6 here (Google IdP, an application with path destinations, inline policy, JWT verification on `/api/*` and `/design/*`). The text of the OTP comparison is kept as the record of the options |
 | §5.1 Service Worker strategy | **Rewritten:** the precache list is generated at build time; the service worker sketch is updated (§5.7 here); the service worker itself is not built yet |
 | §5.2 Reading and writing offline | **Updated:** own IndexedDB wrapper instead of `idb`, file locations |
 | §5.5 Access + offline | **Partly replaced:** 302-vs-401 is still unverified; adds the SW update (§6.5) and the 720h session |
